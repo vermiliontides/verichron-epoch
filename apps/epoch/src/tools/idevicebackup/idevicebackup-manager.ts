@@ -7,7 +7,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { extract } from 'tar';
 import AdmZip from 'adm-zip';
-import { IDEVICEBACKUP2_TOOL } from './idevicebackup2-config';
+import { IDEVICEBACKUP2_TOOL } from './idevicebackup-config';
 import { ToolDefinition } from './tool-types';
 
 export interface BackupProgress {

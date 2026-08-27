@@ -11,7 +11,7 @@ already ingested, counted it a success, and never wrote its records. Evidence
 vanished from a chain-of-custody database and nothing reported an error.
 
 These tests run the real `ingest()` code against a SQLite double with real
-transactions (see packages-py/testing/pg_double.py) and assert the outcome by
+transactions (see libs/testing/testing/pg_double.py) and assert the outcome by
 querying the database, rather than asserting that commit() was called in a
 particular order. The distinction matters: the old code called commit() exactly
 when its author intended, and was still wrong.

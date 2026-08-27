@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "verichron-illeap-bridge"
+name = "verichron-ileapp-bridge"
 version = "0.1.0"
 description = "Extractor: bridges iLEAPP extraction output into forensic_records."
 requires-python = ">=3.10"
@@ -22,7 +22,7 @@ verichron-db = { workspace = true }
 verichron-contracts = { workspace = true }
 
 [tool.setuptools]
-packages = ["illeap_bridge"]
+packages = ["ileapp_bridge"]
 
 [tool.setuptools.package-dir]
-illeap_bridge = "."
+ileapp_bridge = "."

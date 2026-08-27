@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://verichron-epoch/contracts/stage-manifest.schema.json",
+  "title": "Stage Manifest",
+  "description": "Declares how apps/orchestrator discovers and runs one pipeline stage. Every directory directly under apps/extractors/, plus apps/reporting/, must contain a stage.json matching this schema for the orchestrator to pick it up. A directory with no stage.json is not a stage and is skipped (with a warning) rather than silently guessed at. The stage's name is always its directory's basename -- it is not declared in this file -- so a stage can never register under a name that disagrees with where it lives on disk.",
+  "type": "object",
+  "required": ["entrypoint", "runtime", "order", "requiresResultsPath", "enabled"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional relative path back to this schema, for editor tooling only."
+    },
+    "entrypoint": {
+      "type": "string",
+      "description": "Path to the stage's executable entrypoint, relative to the stage's own directory. Must exist on disk -- the orchestrator fails startup if it doesn't."
+    },
+    "runtime": {
+      "type": "string",
+      "enum": ["python", "node"],
+      "description": "How the orchestrator invokes entrypoint. 'python' resolves the repo-root .venv interpreter; 'node' uses the orchestrator's own Node runtime. Extend this enum (not a per-stage command string) if a third runtime is ever needed, so the orchestrator keeps control of how each is invoked."
+    },
+    "order": {
+      "type": "integer",
+      "description": "Run order among enabled stages, ascending. Two enabled stages sharing an order value is a startup error, not a silent tiebreak. Convention: leave gaps of 10 between existing stages (10, 20, 30...) so a new stage can be inserted at a specific point later without renumbering its neighbors. apps/reporting is expected to sort last (order 1000) since it aggregates what every extractor stage wrote; the orchestrator enforces that no extractor stage's order exceeds it."
+    },
+    "requiresResultsPath": {
+      "type": "boolean",
+      "description": "If true, the orchestrator treats a missing --results-path as a hard failure for this stage BEFORE spawning it, with a clear 'results path required but not derivable from --backup-path' error -- instead of the subprocess failing later with a less obvious missing-argument or file-not-found error. Set true only for stages reading mvt-ios's own output (results/<n>/), not the decrypted backup itself."
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Set false to keep a stage's directory (and its stage.json) in the repo without the orchestrator running it -- e.g. a stubbed-out extractor that isn't ready yet. Preferred over deleting or renaming the directory, since the directory and its stage.json are also what CI / extractor-contract tests key off of."
+    }
+  }
+}

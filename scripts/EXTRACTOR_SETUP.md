@@ -22,13 +22,13 @@ Wait for Postgres to become healthy (the compose healthcheck uses pg_isready). T
 
   postgresql://forensics:forensics_dev_only@localhost:5432/forensics
 
-If you need to run migrations manually (outside compose), check packages-py/db/migrations and apply with your preferred tool (psql/psycopg2-based script).
+If you need to run migrations manually (outside compose), check packages/db/migrations and apply with your preferred tool (psql/psycopg2-based script).
 
 2) Ensure the iLEAPP submodule is populated
 
-The repo uses a submodule at packages-py/extractors/ileapp_bridge/iLEAPP. Initialize and update the submodule:
+The repo uses a submodule at apps/extractors/ileapp_bridge/iLEAPP. Initialize and update the submodule:
 
-  git submodule update --init --recursive -- packages-py/extractors/ileapp_bridge/iLEAPP
+  git submodule update --init --recursive -- apps/extractors/ileapp_bridge/iLEAPP
 
 3) Create the Python virtual environment (repo-root .venv)
 
@@ -39,16 +39,16 @@ The orchestrator expects a Python interpreter at .venv/bin/python by default. Cr
   python3 -m venv .venv
   . .venv/bin/activate
   pip install --upgrade pip
-  pip install -r packages-py/requirements.txt
+  pip install -r requirements.txt
 
 Note: individual extractor folders (e.g., ileapp_bridge) may have additional requirements; inspect their README or requirements files.
 
 4) Running the iLEAPP bridge directly (example)
 
-The iLEAPP bridge entrypoint is packages-py/extractors/ileapp_bridge/main.py. It expects a run id, path to a decrypted backup or extraction directory, and a Postgres URL.
+The iLEAPP bridge entrypoint is apps/extractors/ileapp_bridge/main.py. It expects a run id, path to a decrypted backup or extraction directory, and a Postgres URL.
 
   . .venv/bin/activate
-  python packages-py/extractors/ileapp_bridge/main.py \
+  python apps/extractors/ileapp_bridge/main.py \
     --run-id mytest-run-1 \
     --backup-path /path/to/decrypted_backup_or_extraction_dir \
     --db-url "postgresql://forensics:forensics_dev_only@localhost:5432/forensics" \

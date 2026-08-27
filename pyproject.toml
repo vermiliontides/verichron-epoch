@@ -15,7 +15,7 @@ dependencies = [
     "verichron-testing",
     "verichron-mvt-iocs",
     "verichron-crash",
-    "verichron-illeap-bridge",
+    "verichron-ileapp-bridge",
     "verichron-analysis",
     "verichron-reporting",
     "pytest>=8.0",
@@ -43,7 +43,7 @@ verichron-etl-run = { workspace = true }
 verichron-testing = { workspace = true }
 verichron-mvt-iocs = { workspace = true }
 verichron-crash = { workspace = true }
-verichron-illeap-bridge = { workspace = true }
+verichron-ileapp-bridge = { workspace = true }
 verichron-analysis = { workspace = true }
 verichron-reporting = { workspace = true }
 

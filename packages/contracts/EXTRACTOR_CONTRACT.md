@@ -19,3 +19,11 @@ Every extractor, regardless of language, must:
 3. Register any new `source_type` in the canonical schema first, then run
    `python3 scripts/sync_contracts.py --write` to propagate it to both
    mirrors.
+4. Ship a `stage.json` in the extractor's own directory
+   (`apps/extractors/<name>/stage.json`), matching
+   `packages/contracts/stage-manifest.schema.json`. `apps/orchestrator`
+   discovers stages by scanning `apps/extractors/*` for this file at
+   startup -- it does not hardcode a stage list, and a directory without
+   `stage.json` is skipped (with a warning), not run. The stage's name is
+   always its directory's basename; there is no separate name field to
+   drift out of sync with where the extractor actually lives.

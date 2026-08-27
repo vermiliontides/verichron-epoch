@@ -27,8 +27,8 @@ import sqlite3
 import pytest
 
 from db_writer import compute_file_hash
-from illeap_bridge.main import normalize_record
-from illeap_bridge.normalizer import (
+from ileapp_bridge.main import normalize_record
+from ileapp_bridge.normalizer import (
     EXCLUDED_TABLE_PREFIXES,
     _find_timestamp_key,
     is_excluded_table,

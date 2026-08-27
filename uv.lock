@@ -14,7 +14,7 @@ members = [
     "verichron-db",
     "verichron-epoch",
     "verichron-etl-run",
-    "verichron-illeap-bridge",
+    "verichron-ileapp-bridge",
     "verichron-mvt-iocs",
     "verichron-reporting",
     "verichron-runtime-env",
@@ -957,7 +957,7 @@ dependencies = [
     { name = "verichron-crash" },
     { name = "verichron-db" },
     { name = "verichron-etl-run" },
-    { name = "verichron-illeap-bridge" },
+    { name = "verichron-ileapp-bridge" },
     { name = "verichron-mvt-iocs" },
     { name = "verichron-reporting" },
     { name = "verichron-runtime-env" },
@@ -974,7 +974,7 @@ requires-dist = [
     { name = "verichron-crash", editable = "apps/extractors/crash" },
     { name = "verichron-db", editable = "packages/db" },
     { name = "verichron-etl-run", editable = "libs/etl-run" },
-    { name = "verichron-illeap-bridge", editable = "apps/extractors/illeap_bridge" },
+    { name = "verichron-ileapp-bridge", editable = "apps/extractors/ileapp_bridge" },
     { name = "verichron-mvt-iocs", editable = "apps/extractors/mvt_iocs" },
     { name = "verichron-reporting", editable = "apps/reporting" },
     { name = "verichron-runtime-env", editable = "libs/verichron-runtime-env" },
@@ -987,9 +987,9 @@ version = "0.1.0"
 source = { editable = "libs/etl-run" }
 
 [[package]]
-name = "verichron-illeap-bridge"
+name = "verichron-ileapp-bridge"
 version = "0.1.0"
-source = { editable = "apps/extractors/illeap_bridge" }
+source = { editable = "apps/extractors/ileapp_bridge" }
 dependencies = [
     { name = "psycopg2-binary" },
     { name = "verichron-contracts" },

@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "runtime-env"
+version = "0.1.0"
+description = "Shared Python runtime guard for repo-local virtualenv usage"
+requires-python = ">=3.10"
+dependencies = []

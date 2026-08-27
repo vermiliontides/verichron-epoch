@@ -1,0 +1,71 @@
+services:
+  # VictoriaMetrics: metrics TSDB (Prometheus remote_write compatible)
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics-single:latest
+    container_name: victoria-metrics
+    ports:
+      - '8428:8428'
+    volumes:
+      - vm-data:/var/lib/victoria-metrics
+    restart: unless-stopped
+
+  # Loki: logs store
+  loki:
+    image: grafana/loki:2.8.2
+    container_name: loki
+    ports:
+      - '3100:3100'
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    restart: unless-stopped
+
+  # Grafana: dashboards
+  grafana:
+    image: grafana/grafana:9.6.0
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - '3000:3000'
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-datasource.yml:/etc/grafana/provisioning/datasources/all.yml:ro
+    restart: unless-stopped
+
+  # Vector: collector & processor (redaction + forward to Loki/VM)
+  vector:
+    # Pinned, multi-arch manifest -- Docker pulls the right platform image
+    # automatically, so no host-architecture substitution is needed. The
+    # previous `nightly-debian-$(uname -m)` tag was not valid: Compose does
+    # not execute shell command substitution inside YAML values, so that tag
+    # resolved literally to the string "nightly-debian-$(uname -m)" and the
+    # pull would fail.
+    image: timberio/vector:0.57.0-debian
+    container_name: vector
+    ports:
+      - '8686:8686' # Vector API
+    volumes:
+      - ./vector.yaml:/etc/vector/vector.yaml:ro
+      - ../logs:/var/log/epoch:rw
+    command: ["vector", "-c", "/etc/vector/vector.yaml"]
+    restart: unless-stopped
+
+volumes:
+  vm-data:
+  loki-data:
+  grafana-data:
+
+# Notes:
+#  - This compose file is targeted at a local/offline deployment. All ports are
+#    bound to localhost by default when using Docker on a single-host system.
+#  - This file lives in infra/, alongside loki-config.yaml, grafana-datasource.yml,
+#    and vector.yaml -- their mounts above are sibling-relative. The logs volume
+#    is repo-root-relative (../logs), matching where the product writes logs.
+#  - Configure the product to write logs under <repo-root>/logs (mounted into Vector
+#    at /var/log/epoch, matching vector.yaml's source path).
+#  - Grafana provisioning is mounted directly from this directory; add a
+#    dashboards provider here too if dashboards are added later.

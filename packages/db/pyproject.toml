@@ -1,0 +1,18 @@
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+ 
+[project]
+name = "verichron-db"
+version = "0.1.0"
+description = "Schema-bound, transaction-safe Postgres write helpers (atomic ingest) for ingested_files/forensic_records, alongside the migrations that define them."
+requires-python = ">=3.10"
+dependencies = [
+    "psycopg2-binary>=2.9",
+    "verichron-contracts",
+]
+ 
+[tool.uv.sources]
+verichron-contracts = { workspace = true }
+ 

@@ -1,0 +1,14 @@
+[tool.uv.workspace]
+members = [
+    "libs/runtime-env",
+    "libs/etl-run",
+    "packages/db",
+    "packages/contracts",
+    "apps/extractors/mvt_iocs",
+    # Append each future extractor here as it's built:
+    # "apps/extractors/crash",
+    # "apps/extractors/safari",
+    # "apps/extractors/sms",
+    # "apps/extractors/network",
+    # "apps/extractors/gcloud",
+]

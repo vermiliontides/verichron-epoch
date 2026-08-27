@@ -1,0 +1,48 @@
+# Vector configuration: collect logs from product log dir, redact PII, forward to Loki and VictoriaMetrics
+
+data_dir: /var/lib/vector
+
+sources:
+  epoch_logs:
+    type: file
+    include:
+      - /var/log/epoch/*.log
+    ignore_older: 86400s
+
+transforms:
+  parse_json:
+    type: remap
+    inputs: [epoch_logs]
+    source: |
+      . = parse_json!(string!(.message)) ?? {message: .message}
+
+  redact_pii:
+    type: remap
+    inputs: [parse_json]
+    source: |
+      # Example redaction rules; tune to your schema
+      if has(.message) {
+        .message = del(.message.email)
+        .message = del(.message.phone)
+        .message = del(.message.content)
+      }
+
+sinks:
+  loki_sink:
+    type: loki
+    inputs: [redact_pii]
+    uri: http://loki:3100/loki/api/v1/push
+    encoding.timestamp_format: RFC3339
+    labels:
+      job: "epoch_app"
+
+  vm_remote_write:
+    type: prometheus_remote_write
+    inputs: [redact_pii]
+    endpoint: http://victoria-metrics:8428/api/v1/write
+
+healthchecks:
+  enabled: true
+
+# Note: This is an example pipeline. Tune redaction rules and fields to fit the
+# product's log schema. Avoid shipping raw user content.

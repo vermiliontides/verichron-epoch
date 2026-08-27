@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://internal/contracts/normalized-record.schema.json",
+  "title": "NormalizedForensicRecord",
+  "description": "The shared envelope every extractor (any language) must produce before writing to forensic_records. THIS FILE IS THE SINGLE SOURCE OF TRUTH. The language mirrors -- normalized_record.py (Pydantic) and normalizedRecord.ts (Zod), both siblings of this file in packages/contracts/ -- have their source_type enum GENERATED from this file by scripts/sync_contracts.py. Do not hand-edit the enum in a mirror: add the value here and run `python3 scripts/sync_contracts.py --write`. CI runs `--check` and fails the build on drift.",
+  "type": "object",
+  "required": ["source_type", "fields"],
+  "properties": {
+    "incident_id": {
+      "type": ["string", "null"],
+      "description": "Correlation key when the source format provides one (e.g. crash report UUID). Null for source types without a natural incident concept (e.g. a single syslog line)."
+    },
+    "source_type": {
+      "type": "string",
+      "description": "Which extractor produced this record. Add new values here FIRST when introducing a new extractor -- this enum is the registration point, and the language mirrors are generated from it.",
+      "enum": [
+        "crash_report",
+        "siri_feedback",
+        "sfa_analytics",
+        "xp_amp_telemetry",
+        "safari_history",
+        "sms_attachment",
+        "network_usage",
+        "gcloud_log",
+        "syslog_line",
+        "mvt_ioc_detection",
+        "timestamp_anomaly",
+        "ileapp_record"
+      ]
+    },
+    "event_time": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO-8601, normalized to a consistent timezone (UTC recommended) by the extractor. This is the field that makes cross-domain correlation possible -- every extractor must convert its native timestamp format into this shape, not pass it through raw."
+    },
+    "bug_type": {
+      "type": ["string", "null"],
+      "description": "Crash-domain specific (Apple's .ips bug_type code). Null for all other source types."
+    },
+    "process_name": { "type": ["string", "null"] },
+    "pid": { "type": ["integer", "null"] },
+    "bundle_id": { "type": ["string", "null"] },
+    "fields": {
+      "type": "object",
+      "description": "Type-specific normalized data. Schema for this object's contents is owned by the extractor for that source_type (e.g. crash_report's fields carry exception/termination/lineage; safari_history's fields carry url/visit_count/last_visit). Not validated by this top-level schema on purpose -- each extractor documents its own fields shape in its own README."
+    }
+  },
+  "additionalProperties": false
+}

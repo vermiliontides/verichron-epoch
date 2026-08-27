@@ -1,0 +1,14 @@
+{
+    "name": "@verichron/orchestrator",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "tsc",
+        "investigate": "tsx main.ts"
+    },
+    "dependencies": {
+        "@verichron/contracts": "workspace:*",
+        "pg": "^8.11.0"
+    }
+}

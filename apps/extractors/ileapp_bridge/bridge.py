@@ -33,14 +33,16 @@ def run_ileapp_extraction(artifact_path: str, output_dir: str) -> dict:
         print(f"[-] Missing required forensic markers (Manifest.db or Info.plist). Check your input path.", file=sys.stderr)
         return {"status": "error", "output_directory": str(out_path), "error": "Invalid iOS backup structure: missing Manifest.db or Info.plist."}
 
-    if not _module_available("ileapp"):
-        local_module = Path(__file__).resolve().parent / "iLEAPP"
-        if local_module.exists() and any(local_module.iterdir()):
-            sys.path.insert(0, str(local_module))
-        if not _module_available("ileapp"):
-            msg = "iLEAPP is not installed or the bundled iLEAPP checkout is missing. Install the dependency and retry."
-            print(f"[-] {msg}", file=sys.stderr)
-            return {"status": "error", "output_directory": str(out_path), "error": msg}
+    ileapp_script = Path(__file__).resolve().parent / "iLEAPP" / "ileapp.py"
+    if not ileapp_script.exists():
+        msg = "iLEAPP is not installed or the bundled iLEAPP checkout is missing. Install the dependency and retry."
+        print(f"[-] {msg}", file=sys.stderr)
+        return {"status": "error", "output_directory": str(out_path), "error": msg}
+
+    # iLEAPP's -t determines how it walks the input:
+    #   itunes = hashed-name iTunes/Finder backup (has Manifest.db)
+    #   fs     = plain folder of extracted files with normal names (Info.plist, no Manifest.db)
+    input_type = "itunes" if has_manifest else "fs"
 
     print(f"[*] Executing iLEAPP extraction on: {target_path}")
     print(f"[*] Output destination: {out_path}")
@@ -49,16 +51,22 @@ def run_ileapp_extraction(artifact_path: str, output_dir: str) -> dict:
     try:
         cmd = [
             sys.executable,
-            "-m",
-            "ileapp",
+            str(ileapp_script),
+            "-t",
+            input_type,
             "-i",
             str(target_path),
             "-o",
             str(out_path),
-            "-p",
-            "none",
         ]
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+            cwd=str(ileapp_script.parent),
+        )
         print("[+] iLEAPP execution completed successfully.")
         return {"status": "success", "output_directory": str(out_path), "stdout": result.stdout}
     except subprocess.CalledProcessError as exc:

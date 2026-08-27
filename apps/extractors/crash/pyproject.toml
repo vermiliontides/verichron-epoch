@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "verichron-mvt-iocs"
+name = "verichron-crash"
 version = "0.1.0"
-description = "Extractor: normalizes mvt-ios's own check-backup output (alerts.json, timeline.csv) into forensic_records."
+description = "Extractor: parses iOS .ips crash and telemetry files into forensic_records."
 requires-python = ">=3.10"
 dependencies = [
     "psycopg2-binary>=2.9",
@@ -22,7 +22,7 @@ verichron-db = { workspace = true }
 verichron-contracts = { workspace = true }
 
 [tool.setuptools]
-packages = ["mvt_iocs"]
+packages = ["crash"]
 
 [tool.setuptools.package-dir]
-mvt_iocs = "."
+crash = "."

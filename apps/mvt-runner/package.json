@@ -9,12 +9,11 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/main.js",
-    "dev": "tsx main.ts",
+    "dev": "tsx src/main.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@verichron/contracts": "workspace:*",
-    "@verichron/tsconfig": "workspaace:*"
+    "@verichron/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

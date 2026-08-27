@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "verichron-analysis"
+version = "0.1.0"
+description = "Forensic analysis and LLM-assisted triage engine"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+    "verichron-runtime-env",
+]
+
+[tool.uv.sources]
+verichron-runtime-env = { workspace = true }
+
+[tool.setuptools]
+packages = ["analysis"]
+
+[tool.setuptools.package-dir]
+analysis = "."

@@ -1,10 +1,10 @@
 {
-  "extends": "@verichron/tsconfig/base.json",
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "."
   },
   "include": [
-    "./main.ts"
+    "./*.ts"
   ]
 }

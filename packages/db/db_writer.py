@@ -196,7 +196,7 @@ def ingest(
  
     try:
         yield unit
-    except Exception:
+    except BaseException:
         conn.rollback()
         raise
  
@@ -295,9 +295,9 @@ def write_records(conn: Any, run_id: str, file_hash: str, records: list[Normaliz
     return len(records)
  
  
-def incomplete_ingests(conn: Any) -> list[dict[str, str]]:
+def incomplete_ingests(conn: Any) -> list[tuple[str, str]]:
     """Ledger rows that were started and never finished.
- 
+
     Expected to be empty. Non-empty means a hard kill mid-unit. Either way
     the next run retries them; this exists so an operator can see them
     rather than infer them.
@@ -311,5 +311,4 @@ def incomplete_ingests(conn: Any) -> list[dict[str, str]]:
              ORDER BY ingested_at
             """
         )
-        rows = cur.fetchall()
-    return [{"file_hash": r[0], "file_path": r[1]} for r in rows]
+        return [(row[0], row[1]) for row in cur.fetchall()]

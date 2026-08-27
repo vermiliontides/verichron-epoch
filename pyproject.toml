@@ -1,14 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "verichron-epoch"
+version = "0.1.0"
+description = "Privacy-first local desktop forensic client and incident response orchestration engine"
+requires-python = ">=3.10"
+dependencies = [
+    "verichron-contracts",
+    "verichron-db",
+    "verichron-runtime-env",
+    "verichron-etl-run",
+    "verichron-testing",
+    "verichron-mvt-iocs",
+    "verichron-crash",
+    "verichron-illeap-bridge",
+    "verichron-analysis",
+    "verichron-reporting",
+    "pytest>=8.0",
+    "jsonschema>=4.0",
+    "requests>=2.31",
+]
+
+[tool.setuptools]
+py-modules = []
+
 [tool.uv.workspace]
 members = [
-    "libs/runtime-env",
-    "libs/etl-run",
-    "packages/db",
-    "packages/contracts",
-    "apps/extractors/mvt_iocs",
-    # Append each future extractor here as it's built:
-    # "apps/extractors/crash",
-    # "apps/extractors/safari",
-    # "apps/extractors/sms",
-    # "apps/extractors/network",
-    # "apps/extractors/gcloud",
+    "packages/*",
+    "libs/*",
+    "apps/extractors/*",
+    "apps/analysis",
+    "apps/reporting",
 ]
+
+[tool.uv.sources]
+verichron-contracts = { workspace = true }
+verichron-db = { workspace = true }
+verichron-runtime-env = { workspace = true }
+verichron-etl-run = { workspace = true }
+verichron-testing = { workspace = true }
+verichron-mvt-iocs = { workspace = true }
+verichron-crash = { workspace = true }
+verichron-illeap-bridge = { workspace = true }
+verichron-analysis = { workspace = true }
+verichron-reporting = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["packages", "scripts", "apps"]
+norecursedirs = ["iLEAPP", "node_modules", ".venv", "dist", ".git", "infra"]

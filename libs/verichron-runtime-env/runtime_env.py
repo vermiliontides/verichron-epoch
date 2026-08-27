@@ -49,4 +49,3 @@ def fatal_if_missing_venv() -> None:
     except Exception as exc:  # pragma: no cover - CLI guard behavior
         print(f"[env] {exc}", file=sys.stderr)
         raise
- 

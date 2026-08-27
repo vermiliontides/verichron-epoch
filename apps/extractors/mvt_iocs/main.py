@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
 apps/extractors/mvt_iocs/main.py
+(directory was misnamed `mvc_iocs` on disk; corrected to match the module name
+used by root pyproject.toml's uv workspace member, orchestrator/main.ts's
+stage list, and this file's own imports)
+
+Consumes mvt-ios's OWN analysis output as primary evidence:
 
 Consumes mvt-ios's OWN analysis output as primary evidence:
 

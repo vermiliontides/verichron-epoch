@@ -1,3 +1,4 @@
+
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
@@ -7,5 +8,18 @@ name = "verichron-contracts"
 version = "0.1.0"
 description = "Shared NormalizedRecord schema (Python + TypeScript twins) for forensic_records ingestion."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "pydantic>=2.0",
+]
+ 
+# Same flat-layout ambiguity as packages/db: four top-level .py files here
+# (adapter.py, conftest.py, normalized_record.py, test_contract_sync.py)
+# means setuptools' auto-discovery can't pick one and silently falls back to
+# node_modules/ as a bogus namespace package instead. normalized_record is
+# the module other workspace members actually import; adapter is imported
+# by this package's own tests (see conftest.py) and kept importable for the
+# same reason. conftest.py and test_contract_sync.py are pytest's concern,
+# not something other packages import, so they're left out.
+[tool.setuptools]
+py-modules = ["normalized_record", "adapter"]
  

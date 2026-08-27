@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@verichron/contracts": "workspace:*"
+    "@verichron/contracts": "workspace:*",
+    "@verichron/tsconfig": "workspaace:*"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

@@ -1,11 +1,17 @@
 {
-    "extends": "@verichron/tsconfig/base.json",
-    "compilerOptions": {
-        "outDir": "./dist",
-        "rootDir": "./src",
-        "composite": true,
-        "declaration": true,
-        "declarationMap": true
-    },
-    "include": ["./src/**/*.ts"]
+  "extends": "@verichron/tsconfig",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "paths": {
+      "@verichron/*": [
+        "../../libs/*",
+        "../../packages/*"
+      ]
+    }
+  },
+  "include": ["./src/**/*.ts"]
 }

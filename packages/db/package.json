@@ -1,0 +1,30 @@
+{
+  "name": "@verichron/db-writer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Schema-bound, transaction-safe Postgres write helpers (atomic ingest) for ingested_files/forensic_records -- the TypeScript mirror of verichron-db (db_writer.py). Not used by apps/orchestrator, which owns pipeline_runs/pipeline_stage_status directly; this package exists for a future TypeScript extractor writing forensic_records.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@verichron/contracts": "workspace:*"
+  },
+  "peerDependencies": {
+    "pg": "^8.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/pg": "^8.11.0",
+    "pg": "^8.11.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,6 +1,6 @@
 /**
  * Postgres write helpers for TypeScript callers — the mirror of
- * packages-py/extractors/db_writer.py, and deliberately semantically identical
+ * packages/db/db_writer.py, and deliberately semantically identical
  * to it rather than merely similar.
  *
  * Why `ingest()` takes a callback instead of exposing `ingestFile()`

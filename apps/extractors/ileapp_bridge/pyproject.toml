@@ -13,6 +13,51 @@ dependencies = [
     "verichron-etl-run",
     "verichron-db",
     "verichron-contracts",
+    # Everything below is apps/extractors/ileapp_bridge/iLEAPP's own
+    # requirements.txt (git submodule, pinned to v2026.3.1). bridge.py invokes
+    # ileapp.py via `subprocess.run([sys.executable, ...])` -- the SAME
+    # interpreter running this package -- so iLEAPP's dependencies have to
+    # live in this workspace's one shared venv, not iLEAPP's own separate
+    # environment. Declaring them here (rather than installing them by hand
+    # into .venv) is what makes them survive `uv sync`: anything not in the
+    # resolved dependency graph gets pruned as untracked on the next sync.
+    #
+    # The submodule's Windows-only local wheel-file entries for pyliblzfse
+    # (whl_files/pyliblzfse-*.whl, gated on platform_system == "Windows") are
+    # intentionally omitted -- they're relative paths into the submodule and
+    # irrelevant on this dev machine's Linux; the unmarked `pyliblzfse` below
+    # covers Linux by building from its sdist. nska_deserialize/nska-deserialize
+    # is also collapsed to one entry -- PyPI treats the hyphen and underscore
+    # forms as the same package; the submodule's requirements.txt lists both
+    # as a harmless duplicate.
+    #
+    # Update this block (and re-run `uv lock`) whenever the iLEAPP submodule
+    # pin changes and its requirements.txt has moved.
+    "astc-decomp-faster",
+    "pytypedstream",
+    "bencoding",
+    "biplist",
+    "bs4",
+    "certifi",
+    "ijson",
+    "mmh3",
+    "mdplistlib",
+    "nska-deserialize>=1.3.1",
+    "numpy==1.26.4; python_version < '3.13'",
+    "numpy>=2.1; python_version >= '3.13'",
+    "packaging==24.1",
+    "pandas",
+    "pathlib2==2.3.5",
+    "pgpy>=0.6.0",
+    "standard-imghdr; python_version >= '3.13'",
+    "pillow",
+    "pillow-heif",
+    "protobuf==5.29.6",
+    "pycryptodome",
+    "pyinstaller",
+    "pyliblzfse",
+    "pytz",
+    "simplekml",
 ]
 
 [tool.uv.sources]

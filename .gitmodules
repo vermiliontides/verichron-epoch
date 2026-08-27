@@ -1,0 +1,3 @@
+[submodule "apps/extractors/ileapp_bridge/iLEAPP"]
+	path = apps/extractors/ileapp_bridge/iLEAPP
+	url = https://github.com/abrignoni/iLEAPP.git

@@ -1,0 +1,595 @@
+From 171e5df0182c21c7583678321aaeb6c0a8f89fc5 Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Thu, 27 Aug 2026 18:16:58 +0000
+Subject: [PATCH] Fix ileapp_bridge typo and replace hardcoded orchestrator
+ stage list with manifest-based discovery
+
+- Rename apps/extractors/illeap_bridge -> ileapp_bridge (matches the
+  spelling used everywhere else: ileapp_record source_type, orchestrator
+  stage name, schema, tests, docs). Update the package name and internal
+  imports accordingly.
+
+- apps/orchestrator/src/main.ts no longer hardcodes a STAGES array
+  pointing at a packages-py/ directory that hasn't existed since the
+  extractors moved to apps/extractors/ (this is why "investigate" could
+  not run any stage). Stages are now discovered at startup by scanning
+  apps/extractors/*/stage.json (+ the single apps/reporting/stage.json),
+  validated against packages/contracts/stage-manifest.schema.json. A
+  stage's name is always its directory's basename, so the orchestrator's
+  stage list can no longer disagree with what's on disk. Startup fails
+  fast (before any stage runs) on: an invalid manifest, a missing
+  entrypoint file, two enabled stages sharing an order value, or an
+  extractor stage ordered after the reporting stage.
+
+- Add stage.json to the three existing extractors (crash, ileapp_bridge,
+  mvt_iocs) and to apps/reporting. mvt_iocs is marked
+  requiresResultsPath: true; runStage() now fails that stage early with a
+  clear message instead of spawning a subprocess that fails on a missing
+  argument.
+
+- Document the stage.json requirement as rule 4 in EXTRACTOR_CONTRACT.md.
+
+- Fix stale packages-py/ paths left over from the apps/ move in
+  scripts/EXTRACTOR_SETUP.md and a comment in scripts/test_db_writer.py.
+
+Not included: uv.lock still references the old verichron-illeap-bridge
+package name and apps/extractors/illeap_bridge editable path. That is a
+generated file -- run "uv lock" after applying this patch to regenerate
+it rather than hand-editing it.
+---
+ apps/extractors/crash/stage.json              |   8 +
+ .../README.md                                 |   0
+ .../__init__.py                               |   0
+ .../bridge.py                                 |   0
+ .../{illeap_bridge => ileapp_bridge}/iLEAPP   |   0
+ .../{illeap_bridge => ileapp_bridge}/main.py  |   0
+ .../normalizer.py                             |   0
+ .../pipeline.py                               |   0
+ .../pyproject.toml                            |   6 +-
+ apps/extractors/ileapp_bridge/stage.json      |   8 +
+ .../test_integration.py                       |   4 +-
+ apps/extractors/mvt_iocs/stage.json           |   8 +
+ apps/orchestrator/src/main.ts                 | 175 +++++++++++++++---
+ apps/reporting/stage.json                     |   8 +
+ packages/contracts/EXTRACTOR_CONTRACT.md      |   8 +
+ packages/contracts/stage-manifest.schema.json |  36 ++++
+ pyproject.toml                                |   4 +-
+ scripts/EXTRACTOR_SETUP.md                    |  12 +-
+ scripts/test_db_writer.py                     |   2 +-
+ 19 files changed, 237 insertions(+), 42 deletions(-)
+ create mode 100644 apps/extractors/crash/stage.json
+ rename apps/extractors/{illeap_bridge => ileapp_bridge}/README.md (100%)
+ rename apps/extractors/{illeap_bridge => ileapp_bridge}/__init__.py (100%)
+ rename apps/extractors/{illeap_bridge => ileapp_bridge}/bridge.py (100%)
+ rename apps/extractors/{illeap_bridge => ileapp_bridge}/iLEAPP (100%)
+ rename apps/extractors/{illeap_bridge => ileapp_bridge}/main.py (100%)
+ rename apps/extractors/{illeap_bridge => ileapp_bridge}/normalizer.py (100%)
+ rename apps/extractors/{illeap_bridge => ileapp_bridge}/pipeline.py (100%)
+ rename apps/extractors/{illeap_bridge => ileapp_bridge}/pyproject.toml (88%)
+ create mode 100644 apps/extractors/ileapp_bridge/stage.json
+ rename apps/extractors/{illeap_bridge => ileapp_bridge}/test_integration.py (99%)
+ create mode 100644 apps/extractors/mvt_iocs/stage.json
+ create mode 100644 apps/reporting/stage.json
+ create mode 100644 packages/contracts/stage-manifest.schema.json
+
+diff --git a/apps/extractors/crash/stage.json b/apps/extractors/crash/stage.json
+new file mode 100644
+index 0000000..ab80b49
+--- /dev/null
++++ b/apps/extractors/crash/stage.json
+@@ -0,0 +1,8 @@
++{
++  "$schema": "../../../packages/contracts/stage-manifest.schema.json",
++  "entrypoint": "main.py",
++  "runtime": "python",
++  "order": 10,
++  "requiresResultsPath": false,
++  "enabled": true
++}
+diff --git a/apps/extractors/illeap_bridge/README.md b/apps/extractors/ileapp_bridge/README.md
+similarity index 100%
+rename from apps/extractors/illeap_bridge/README.md
+rename to apps/extractors/ileapp_bridge/README.md
+diff --git a/apps/extractors/illeap_bridge/__init__.py b/apps/extractors/ileapp_bridge/__init__.py
+similarity index 100%
+rename from apps/extractors/illeap_bridge/__init__.py
+rename to apps/extractors/ileapp_bridge/__init__.py
+diff --git a/apps/extractors/illeap_bridge/bridge.py b/apps/extractors/ileapp_bridge/bridge.py
+similarity index 100%
+rename from apps/extractors/illeap_bridge/bridge.py
+rename to apps/extractors/ileapp_bridge/bridge.py
+diff --git a/apps/extractors/illeap_bridge/iLEAPP b/apps/extractors/ileapp_bridge/iLEAPP
+similarity index 100%
+rename from apps/extractors/illeap_bridge/iLEAPP
+rename to apps/extractors/ileapp_bridge/iLEAPP
+diff --git a/apps/extractors/illeap_bridge/main.py b/apps/extractors/ileapp_bridge/main.py
+similarity index 100%
+rename from apps/extractors/illeap_bridge/main.py
+rename to apps/extractors/ileapp_bridge/main.py
+diff --git a/apps/extractors/illeap_bridge/normalizer.py b/apps/extractors/ileapp_bridge/normalizer.py
+similarity index 100%
+rename from apps/extractors/illeap_bridge/normalizer.py
+rename to apps/extractors/ileapp_bridge/normalizer.py
+diff --git a/apps/extractors/illeap_bridge/pipeline.py b/apps/extractors/ileapp_bridge/pipeline.py
+similarity index 100%
+rename from apps/extractors/illeap_bridge/pipeline.py
+rename to apps/extractors/ileapp_bridge/pipeline.py
+diff --git a/apps/extractors/illeap_bridge/pyproject.toml b/apps/extractors/ileapp_bridge/pyproject.toml
+similarity index 88%
+rename from apps/extractors/illeap_bridge/pyproject.toml
+rename to apps/extractors/ileapp_bridge/pyproject.toml
+index f50daa9..57bd732 100644
+--- a/apps/extractors/illeap_bridge/pyproject.toml
++++ b/apps/extractors/ileapp_bridge/pyproject.toml
+@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
+ build-backend = "setuptools.build_meta"
+ 
+ [project]
+-name = "verichron-illeap-bridge"
++name = "verichron-ileapp-bridge"
+ version = "0.1.0"
+ description = "Extractor: bridges iLEAPP extraction output into forensic_records."
+ requires-python = ">=3.10"
+@@ -22,7 +22,7 @@ verichron-db = { workspace = true }
+ verichron-contracts = { workspace = true }
+ 
+ [tool.setuptools]
+-packages = ["illeap_bridge"]
++packages = ["ileapp_bridge"]
+ 
+ [tool.setuptools.package-dir]
+-illeap_bridge = "."
++ileapp_bridge = "."
+diff --git a/apps/extractors/ileapp_bridge/stage.json b/apps/extractors/ileapp_bridge/stage.json
+new file mode 100644
+index 0000000..2ef5814
+--- /dev/null
++++ b/apps/extractors/ileapp_bridge/stage.json
+@@ -0,0 +1,8 @@
++{
++  "$schema": "../../../packages/contracts/stage-manifest.schema.json",
++  "entrypoint": "main.py",
++  "runtime": "python",
++  "order": 20,
++  "requiresResultsPath": false,
++  "enabled": true
++}
+diff --git a/apps/extractors/illeap_bridge/test_integration.py b/apps/extractors/ileapp_bridge/test_integration.py
+similarity index 99%
+rename from apps/extractors/illeap_bridge/test_integration.py
+rename to apps/extractors/ileapp_bridge/test_integration.py
+index 812ac1f..9520c76 100644
+--- a/apps/extractors/illeap_bridge/test_integration.py
++++ b/apps/extractors/ileapp_bridge/test_integration.py
+@@ -27,8 +27,8 @@ import sqlite3
+ import pytest
+ 
+ from db_writer import compute_file_hash
+-from illeap_bridge.main import normalize_record
+-from illeap_bridge.normalizer import (
++from ileapp_bridge.main import normalize_record
++from ileapp_bridge.normalizer import (
+     EXCLUDED_TABLE_PREFIXES,
+     _find_timestamp_key,
+     is_excluded_table,
+diff --git a/apps/extractors/mvt_iocs/stage.json b/apps/extractors/mvt_iocs/stage.json
+new file mode 100644
+index 0000000..fbd8968
+--- /dev/null
++++ b/apps/extractors/mvt_iocs/stage.json
+@@ -0,0 +1,8 @@
++{
++  "$schema": "../../../packages/contracts/stage-manifest.schema.json",
++  "entrypoint": "main.py",
++  "runtime": "python",
++  "order": 70,
++  "requiresResultsPath": true,
++  "enabled": true
++}
+diff --git a/apps/orchestrator/src/main.ts b/apps/orchestrator/src/main.ts
+index 2a77cbf..d94c6e2 100644
+--- a/apps/orchestrator/src/main.ts
++++ b/apps/orchestrator/src/main.ts
+@@ -1,5 +1,5 @@
+ /**
+- * apps/orchestration/src/main.ts
++ * apps/orchestrator/src/main.ts
+  *
+  * Conductor for a full investigation run. Creates a pipeline_run PER BACKUP,
+  * invokes each extractor as an isolated subprocess stage, records per-stage
+@@ -33,13 +33,25 @@
+  * that need it fail with their own clear error rather than the
+  * orchestrator guessing.
+  *
+- * Python interpreter resolution: every stage below is a Python subprocess.
++ * Python interpreter resolution: every Python stage below is a subprocess.
+  * We resolve <repo-root>/.venv/bin/python once at startup rather than
+  * spawning bare "python3" per stage. A bare "python3" on PATH is not
+  * guaranteed to be the project's virtualenv —
+  * on a dev machine with both a system Python and a project venv, every
+  * stage would fail with ModuleNotFoundError: psycopg2, and nothing about
+  * that error would point back at "wrong interpreter" as the cause.
++ *
++ * Stage discovery: stages are NOT hardcoded here. Each stage is a directory
++ * under apps/extractors/ (plus the single apps/reporting/ directory) that
++ * contains a stage.json matching packages/contracts/stage-manifest.schema.json.
++ * A stage's name is always its directory's basename, never a field inside
++ * the manifest -- this makes "the code's stage list disagrees with what's
++ * on disk" (the class of bug this file used to have: it pointed at a
++ * packages-py/ directory that no longer existed, and its hardcoded stage
++ * names didn't match several extractor directory names) structurally
++ * impossible instead of something to remember to keep in sync. Adding a
++ * new extractor is: create the directory, add stage.json, done -- no edit
++ * to this file. See discoverStages() below.
+  */
+  
+ import { spawn } from "node:child_process";
+@@ -53,28 +65,117 @@ import { fileURLToPath } from "node:url";
+ const __filename = fileURLToPath(import.meta.url);
+ const __dirname = path.dirname(__filename);
+  
+-// This file lives at apps/orchestration/src/main.ts, so repo root is three levels
+-// up to reach the monorepo root.
++// This file lives at apps/orchestrator/src/main.ts, so repo root is three
++// levels up to reach the monorepo root.
+ const REPO_ROOT = path.resolve(__dirname, "../../..");
+-const PACKAGES_PY = path.join(REPO_ROOT, "packages-py");
+- 
++const EXTRACTORS_DIR = path.join(REPO_ROOT, "apps", "extractors");
++const REPORTING_DIR = path.join(REPO_ROOT, "apps", "reporting");
++
++interface StageManifest {
++  entrypoint: string;
++  runtime: "python" | "node";
++  order: number;
++  requiresResultsPath: boolean;
++  enabled: boolean;
++}
++
+ interface StageDefinition {
+   name: string;
+-  command: string;
+-  args: string[];
++  dir: string;
++  manifest: StageManifest;
+ }
+- 
+-const STAGES: StageDefinition[] = [
+-  { name: "crash", command: "python3", args: [path.join(PACKAGES_PY, "extractors", "crash", "main.py")] },
+-  { name: "ileapp", command: "python3", args: [path.join(PACKAGES_PY, "extractors", "ileapp_bridge", "main.py")] },
+-  { name: "safari", command: "python3", args: [path.join(PACKAGES_PY, "extractors", "safari", "main.py")] },
+-  { name: "sms", command: "python3", args: [path.join(PACKAGES_PY, "extractors", "sms", "main.py")] },
+-  { name: "network", command: "python3", args: [path.join(PACKAGES_PY, "extractors", "network", "main.py")] },
+-  { name: "gcloud", command: "python3", args: [path.join(PACKAGES_PY, "extractors", "gcloud", "main.py")] },
+-  { name: "mvt_iocs", command: "python3", args: [path.join(PACKAGES_PY, "extractors", "mvt_iocs", "main.py")] },
+-  { name: "report", command: "python3", args: [path.join(PACKAGES_PY, "reporting", "generate_report.py")] },
+-];
+- 
++
++function isStageManifest(value: unknown): value is StageManifest {
++  if (typeof value !== "object" || value === null) return false;
++  const v = value as Record<string, unknown>;
++  return (
++    typeof v.entrypoint === "string" &&
++    (v.runtime === "python" || v.runtime === "node") &&
++    typeof v.order === "number" &&
++    typeof v.requiresResultsPath === "boolean" &&
++    typeof v.enabled === "boolean"
++  );
++}
++
++async function loadStageFromDir(dir: string, name: string): Promise<StageDefinition | null> {
++  const manifestPath = path.join(dir, "stage.json");
++  let raw: string;
++  try {
++    raw = await fsp.readFile(manifestPath, "utf-8");
++  } catch {
++    console.warn(`[orchestrator] ${dir} has no stage.json — skipping, not treated as a stage.`);
++    return null;
++  }
++
++  let parsed: unknown;
++  try {
++    parsed = JSON.parse(raw);
++  } catch (err) {
++    throw new Error(`[orchestrator] ${manifestPath} is not valid JSON: ${(err as Error).message}`);
++  }
++  if (!isStageManifest(parsed)) {
++    throw new Error(
++      `[orchestrator] ${manifestPath} does not match stage-manifest.schema.json ` +
++        `(need entrypoint: string, runtime: "python"|"node", order: number, ` +
++        `requiresResultsPath: boolean, enabled: boolean).`
++    );
++  }
++
++  const entrypointPath = path.join(dir, parsed.entrypoint);
++  const entrypointExists = await fsp.access(entrypointPath).then(() => true).catch(() => false);
++  if (!entrypointExists) {
++    throw new Error(`[orchestrator] ${manifestPath} declares entrypoint "${parsed.entrypoint}" but ${entrypointPath} does not exist.`);
++  }
++
++  return { name, dir, manifest: parsed };
++}
++
++/**
++ * Discovers every enabled stage from disk: each subdirectory of
++ * apps/extractors/ with a stage.json, plus apps/reporting/ itself.
++ * Fails fast (before any stage runs) on: an invalid manifest, a missing
++ * entrypoint file, two enabled stages sharing an `order` value, or an
++ * extractor stage whose `order` is not strictly less than the reporting
++ * stage's -- reporting is expected to run last since it aggregates what
++ * every extractor stage wrote.
++ */
++async function discoverStages(): Promise<StageDefinition[]> {
++  const extractorEntries = await fsp.readdir(EXTRACTORS_DIR, { withFileTypes: true });
++  const candidateDirs = extractorEntries
++    .filter((e) => e.isDirectory())
++    .map((e) => ({ dir: path.join(EXTRACTORS_DIR, e.name), name: e.name }));
++  candidateDirs.push({ dir: REPORTING_DIR, name: path.basename(REPORTING_DIR) });
++
++  const loaded = await Promise.all(candidateDirs.map((c) => loadStageFromDir(c.dir, c.name)));
++  const stages = loaded.filter((s): s is StageDefinition => s !== null && s.manifest.enabled);
++
++  const orderCounts = new Map<number, string[]>();
++  for (const s of stages) {
++    orderCounts.set(s.manifest.order, [...(orderCounts.get(s.manifest.order) ?? []), s.name]);
++  }
++  for (const [order, names] of orderCounts) {
++    if (names.length > 1) {
++      throw new Error(`[orchestrator] stages ${names.join(", ")} all declare order ${order} — orders must be unique among enabled stages.`);
++    }
++  }
++
++  const reportStage = stages.find((s) => s.dir === REPORTING_DIR);
++  const maxExtractorOrder = Math.max(
++    0,
++    ...stages.filter((s) => s.dir !== REPORTING_DIR).map((s) => s.manifest.order)
++  );
++  if (reportStage && reportStage.manifest.order <= maxExtractorOrder) {
++    throw new Error(
++      `[orchestrator] apps/reporting/stage.json declares order ${reportStage.manifest.order}, ` +
++        `which is not after every extractor stage (max ${maxExtractorOrder}). Reporting must run last.`
++    );
++  }
++
++  stages.sort((a, b) => a.manifest.order - b.manifest.order);
++  console.log(`[orchestrator] discovered ${stages.length} enabled stage(s): ${stages.map((s) => `${s.name}(${s.manifest.order})`).join(", ")}`);
++  return stages;
++}
++
+ interface RunConfig {
+   backupPath: string;
+   resultsPath?: string;
+@@ -120,13 +221,13 @@ async function hasSucceededRun(client: Client, backupPath: string): Promise<bool
+   return rows.length > 0;
+ }
+  
+-async function createRun(client: Client, backupPath: string): Promise<string> {
++async function createRun(client: Client, backupPath: string, stages: StageDefinition[]): Promise<string> {
+   const runId = randomUUID();
+   await client.query(
+     `INSERT INTO pipeline_runs (run_id, backup_source) VALUES ($1, $2)`,
+     [runId, backupPath]
+   );
+-  for (const stage of STAGES) {
++  for (const stage of stages) {
+     await client.query(
+       `INSERT INTO pipeline_stage_status (run_id, stage_name, status) VALUES ($1, $2, 'pending')`,
+       [runId, stage.name]
+@@ -156,13 +257,24 @@ function runStage(
+   config: RunConfig,
+   runId: string
+ ): Promise<{ success: boolean; stderr: string }> {
++  if (stage.manifest.requiresResultsPath && !config.resultsPath) {
++    // Fail before spawning: a confusing missing-argument/file-not-found error
++    // from the subprocess is worse than catching it here, per this stage's
++    // own manifest declaring it needs results/<name>/ and none was derivable.
++    return Promise.resolve({
++      success: false,
++      stderr: `stage "${stage.name}" requires --results-path but none could be derived from --backup-path`,
++    });
++  }
++
+   return new Promise((resolve) => {
+     const extraArgs = ["--run-id", runId, "--backup-path", config.backupPath, "--db-url", config.dbUrl];
+     if (config.resultsPath) {
+       extraArgs.push("--results-path", config.resultsPath);
+     }
+-    const bin = stage.command === "python3" ? config.pythonBin : stage.command;
+-    const child = spawn(bin, [...stage.args, ...extraArgs], {
++    const entrypointPath = path.join(stage.dir, stage.manifest.entrypoint);
++    const bin = stage.manifest.runtime === "python" ? config.pythonBin : process.execPath;
++    const child = spawn(bin, [entrypointPath, ...extraArgs], {
+       stdio: ["ignore", "pipe", "pipe"],
+     });
+  
+@@ -236,13 +348,14 @@ async function runPipelineForBackup(
+   client: Client,
+   backupPath: string,
+   dbUrl: string,
+-  pythonBin: string
++  pythonBin: string,
++  stages: StageDefinition[]
+ ): Promise<{ runId: string; results: { stage: string; success: boolean }[] }> {
+-  const runId = await createRun(client, backupPath);
++  const runId = await createRun(client, backupPath, stages);
+   const resultsPath = deriveResultsPath(backupPath);
+   const results: { stage: string; success: boolean }[] = [];
+  
+-  for (const stage of STAGES) {
++  for (const stage of stages) {
+     await markStage(client, runId, stage.name, "running");
+     const { success, stderr } = await runStage(stage, { backupPath, resultsPath, dbUrl, pythonBin }, runId);
+  
+@@ -261,13 +374,19 @@ async function runPipelineForBackup(
+ async function main() {
+   const cfg = await parseCliConfig();
+   const pythonBin = await resolvePythonBin();
++  const stages = await discoverStages();
++  if (stages.length === 0) {
++    console.error("[orchestrator] no enabled stages discovered under apps/extractors/ or apps/reporting/ — nothing to run.");
++    process.exit(1);
++  }
++
+   const client = new Client({ connectionString: cfg.dbUrl });
+   await client.connect();
+  
+   for (const backupPath of cfg.backupPaths) {
+     if (await hasSucceededRun(client, backupPath)) continue;
+     try {
+-      await runPipelineForBackup(client, backupPath, cfg.dbUrl, pythonBin);
++      await runPipelineForBackup(client, backupPath, cfg.dbUrl, pythonBin, stages);
+     } catch (err) {
+       console.error(`[orchestrator] failure for ${backupPath}:`, err);
+     }
+diff --git a/apps/reporting/stage.json b/apps/reporting/stage.json
+new file mode 100644
+index 0000000..7d10f0f
+--- /dev/null
++++ b/apps/reporting/stage.json
+@@ -0,0 +1,8 @@
++{
++  "$schema": "../../packages/contracts/stage-manifest.schema.json",
++  "entrypoint": "generate_report.py",
++  "runtime": "python",
++  "order": 1000,
++  "requiresResultsPath": false,
++  "enabled": true
++}
+diff --git a/packages/contracts/EXTRACTOR_CONTRACT.md b/packages/contracts/EXTRACTOR_CONTRACT.md
+index b9bb54d..5e598e2 100644
+--- a/packages/contracts/EXTRACTOR_CONTRACT.md
++++ b/packages/contracts/EXTRACTOR_CONTRACT.md
+@@ -19,3 +19,11 @@ Every extractor, regardless of language, must:
+ 3. Register any new `source_type` in the canonical schema first, then run
+    `python3 scripts/sync_contracts.py --write` to propagate it to both
+    mirrors.
++4. Ship a `stage.json` in the extractor's own directory
++   (`apps/extractors/<name>/stage.json`), matching
++   `packages/contracts/stage-manifest.schema.json`. `apps/orchestrator`
++   discovers stages by scanning `apps/extractors/*` for this file at
++   startup -- it does not hardcode a stage list, and a directory without
++   `stage.json` is skipped (with a warning), not run. The stage's name is
++   always its directory's basename; there is no separate name field to
++   drift out of sync with where the extractor actually lives.
+diff --git a/packages/contracts/stage-manifest.schema.json b/packages/contracts/stage-manifest.schema.json
+new file mode 100644
+index 0000000..0ef2638
+--- /dev/null
++++ b/packages/contracts/stage-manifest.schema.json
+@@ -0,0 +1,36 @@
++{
++  "$schema": "http://json-schema.org/draft-07/schema#",
++  "$id": "https://verichron-epoch/contracts/stage-manifest.schema.json",
++  "title": "Stage Manifest",
++  "description": "Declares how apps/orchestrator discovers and runs one pipeline stage. Every directory directly under apps/extractors/, plus apps/reporting/, must contain a stage.json matching this schema for the orchestrator to pick it up. A directory with no stage.json is not a stage and is skipped (with a warning) rather than silently guessed at. The stage's name is always its directory's basename -- it is not declared in this file -- so a stage can never register under a name that disagrees with where it lives on disk.",
++  "type": "object",
++  "required": ["entrypoint", "runtime", "order", "requiresResultsPath", "enabled"],
++  "additionalProperties": false,
++  "properties": {
++    "$schema": {
++      "type": "string",
++      "description": "Optional relative path back to this schema, for editor tooling only."
++    },
++    "entrypoint": {
++      "type": "string",
++      "description": "Path to the stage's executable entrypoint, relative to the stage's own directory. Must exist on disk -- the orchestrator fails startup if it doesn't."
++    },
++    "runtime": {
++      "type": "string",
++      "enum": ["python", "node"],
++      "description": "How the orchestrator invokes entrypoint. 'python' resolves the repo-root .venv interpreter; 'node' uses the orchestrator's own Node runtime. Extend this enum (not a per-stage command string) if a third runtime is ever needed, so the orchestrator keeps control of how each is invoked."
++    },
++    "order": {
++      "type": "integer",
++      "description": "Run order among enabled stages, ascending. Two enabled stages sharing an order value is a startup error, not a silent tiebreak. Convention: leave gaps of 10 between existing stages (10, 20, 30...) so a new stage can be inserted at a specific point later without renumbering its neighbors. apps/reporting is expected to sort last (order 1000) since it aggregates what every extractor stage wrote; the orchestrator enforces that no extractor stage's order exceeds it."
++    },
++    "requiresResultsPath": {
++      "type": "boolean",
++      "description": "If true, the orchestrator treats a missing --results-path as a hard failure for this stage BEFORE spawning it, with a clear 'results path required but not derivable from --backup-path' error -- instead of the subprocess failing later with a less obvious missing-argument or file-not-found error. Set true only for stages reading mvt-ios's own output (results/<n>/), not the decrypted backup itself."
++    },
++    "enabled": {
++      "type": "boolean",
++      "description": "Set false to keep a stage's directory (and its stage.json) in the repo without the orchestrator running it -- e.g. a stubbed-out extractor that isn't ready yet. Preferred over deleting or renaming the directory, since the directory and its stage.json are also what CI / extractor-contract tests key off of."
++    }
++  }
++}
+diff --git a/pyproject.toml b/pyproject.toml
+index d451abe..22218e8 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -15,7 +15,7 @@ dependencies = [
+     "verichron-testing",
+     "verichron-mvt-iocs",
+     "verichron-crash",
+-    "verichron-illeap-bridge",
++    "verichron-ileapp-bridge",
+     "verichron-analysis",
+     "verichron-reporting",
+     "pytest>=8.0",
+@@ -43,7 +43,7 @@ verichron-etl-run = { workspace = true }
+ verichron-testing = { workspace = true }
+ verichron-mvt-iocs = { workspace = true }
+ verichron-crash = { workspace = true }
+-verichron-illeap-bridge = { workspace = true }
++verichron-ileapp-bridge = { workspace = true }
+ verichron-analysis = { workspace = true }
+ verichron-reporting = { workspace = true }
+ 
+diff --git a/scripts/EXTRACTOR_SETUP.md b/scripts/EXTRACTOR_SETUP.md
+index 1315ebe..a604a16 100644
+--- a/scripts/EXTRACTOR_SETUP.md
++++ b/scripts/EXTRACTOR_SETUP.md
+@@ -22,13 +22,13 @@ Wait for Postgres to become healthy (the compose healthcheck uses pg_isready). T
+ 
+   postgresql://forensics:forensics_dev_only@localhost:5432/forensics
+ 
+-If you need to run migrations manually (outside compose), check packages-py/db/migrations and apply with your preferred tool (psql/psycopg2-based script).
++If you need to run migrations manually (outside compose), check packages/db/migrations and apply with your preferred tool (psql/psycopg2-based script).
+ 
+ 2) Ensure the iLEAPP submodule is populated
+ 
+-The repo uses a submodule at packages-py/extractors/ileapp_bridge/iLEAPP. Initialize and update the submodule:
++The repo uses a submodule at apps/extractors/ileapp_bridge/iLEAPP. Initialize and update the submodule:
+ 
+-  git submodule update --init --recursive -- packages-py/extractors/ileapp_bridge/iLEAPP
++  git submodule update --init --recursive -- apps/extractors/ileapp_bridge/iLEAPP
+ 
+ 3) Create the Python virtual environment (repo-root .venv)
+ 
+@@ -39,16 +39,16 @@ The orchestrator expects a Python interpreter at .venv/bin/python by default. Cr
+   python3 -m venv .venv
+   . .venv/bin/activate
+   pip install --upgrade pip
+-  pip install -r packages-py/requirements.txt
++  pip install -r requirements.txt
+ 
+ Note: individual extractor folders (e.g., ileapp_bridge) may have additional requirements; inspect their README or requirements files.
+ 
+ 4) Running the iLEAPP bridge directly (example)
+ 
+-The iLEAPP bridge entrypoint is packages-py/extractors/ileapp_bridge/main.py. It expects a run id, path to a decrypted backup or extraction directory, and a Postgres URL.
++The iLEAPP bridge entrypoint is apps/extractors/ileapp_bridge/main.py. It expects a run id, path to a decrypted backup or extraction directory, and a Postgres URL.
+ 
+   . .venv/bin/activate
+-  python packages-py/extractors/ileapp_bridge/main.py \
++  python apps/extractors/ileapp_bridge/main.py \
+     --run-id mytest-run-1 \
+     --backup-path /path/to/decrypted_backup_or_extraction_dir \
+     --db-url "postgresql://forensics:forensics_dev_only@localhost:5432/forensics" \
+diff --git a/scripts/test_db_writer.py b/scripts/test_db_writer.py
+index 04694d2..b5e6512 100644
+--- a/scripts/test_db_writer.py
++++ b/scripts/test_db_writer.py
+@@ -11,7 +11,7 @@ already ingested, counted it a success, and never wrote its records. Evidence
+ vanished from a chain-of-custody database and nothing reported an error.
+ 
+ These tests run the real `ingest()` code against a SQLite double with real
+-transactions (see packages-py/testing/pg_double.py) and assert the outcome by
++transactions (see libs/testing/testing/pg_double.py) and assert the outcome by
+ querying the database, rather than asserting that commit() was called in a
+ particular order. The distinction matters: the old code called commit() exactly
+ when its author intended, and was still wrong.
+-- 
+2.43.0
+

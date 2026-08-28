@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Device Name</key>
+	<string>Andre's iPhone</string>
+	<key>GUID</key>
+	<string>00008140-00145CA91E83801C</string>
+	<key>ICCID</key>
+	<string>15580278519279</string>
+	<key>IMEI</key>
+	<string>58962375624172</string>
+	<key>IMSI</key>
+	<string>41230566005185</string>
+	<key>ISIN</key>
+	<string>03661458980806</string>
+	<key>Lockdown</key>
+	<dict>
+		<key>BuildVersion</key>
+		<string>18.0</string>
+		<key>DeviceClass</key>
+		<string>iPhone</string>
+		<key>ModelNumber</key>
+		<string>A3123</string>
+		<key>ProductName</key>
+		<string>iPhone</string>
+		<key>ProductType</key>
+		<string>iPhone15,3</string>
+		<key>ProductVersion</key>
+		<string>18.0</string>
+		<key>SerialNumber</key>
+		<string>k2N6a2S7x2C1o</string>
+		<key>UniqueBuildID</key>
+		<string>ea5e818defd75d4802aaaf3837c2358f196d38156f698d1503dc2fe8c87d0b16</string>
+	</dict>
+</dict>
+</plist>

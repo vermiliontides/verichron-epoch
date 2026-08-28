@@ -1,0 +1,277 @@
+[
+  {
+    "id": 1,
+    "first_name": "Zachary",
+    "last_name": "Ortiz",
+    "phones": [
+      "7286209088"
+    ],
+    "emails": [
+      "williamthomas@example.org"
+    ]
+  },
+  {
+    "id": 2,
+    "first_name": "Frank",
+    "last_name": "Yu",
+    "phones": [
+      "9616958306"
+    ],
+    "emails": [
+      "hahnmatthew@example.org"
+    ]
+  },
+  {
+    "id": 3,
+    "first_name": "Michael",
+    "last_name": "Browning",
+    "phones": [
+      "204.740.3166"
+    ],
+    "emails": [
+      "gordon88@example.org"
+    ]
+  },
+  {
+    "id": 4,
+    "first_name": "Michael",
+    "last_name": "Farrell",
+    "phones": [
+      "+1-725-773-6613x7775"
+    ],
+    "emails": [
+      "dudleymark@example.net"
+    ]
+  },
+  {
+    "id": 5,
+    "first_name": "Mark",
+    "last_name": "Thompson",
+    "phones": [
+      "897-762-2283x2651"
+    ],
+    "emails": [
+      "kevin94@example.org"
+    ]
+  },
+  {
+    "id": 6,
+    "first_name": "Ashlee",
+    "last_name": "Jackson",
+    "phones": [
+      "(636)291-6894x22667"
+    ],
+    "emails": [
+      "williamlewis@example.org"
+    ]
+  },
+  {
+    "id": 7,
+    "first_name": "Michael",
+    "last_name": "Perry",
+    "phones": [
+      "246.981.1200x071"
+    ],
+    "emails": [
+      "lauren88@example.com"
+    ]
+  },
+  {
+    "id": 8,
+    "first_name": "Shelley",
+    "last_name": "Martin",
+    "phones": [
+      "+1-227-441-5690x6775"
+    ],
+    "emails": [
+      "davidpennington@example.net"
+    ]
+  },
+  {
+    "id": 9,
+    "first_name": "Lauren",
+    "last_name": "Craig",
+    "phones": [
+      "(567)835-6056"
+    ],
+    "emails": [
+      "reeseryan@example.com"
+    ]
+  },
+  {
+    "id": 10,
+    "first_name": "Rachel",
+    "last_name": "Haney",
+    "phones": [
+      "750-291-8037x345"
+    ],
+    "emails": [
+      "jessica42@example.org"
+    ]
+  },
+  {
+    "id": 11,
+    "first_name": "Paul",
+    "last_name": "Jones",
+    "phones": [
+      "790-855-9053"
+    ],
+    "emails": [
+      "jenniferjones@example.com"
+    ]
+  },
+  {
+    "id": 12,
+    "first_name": "Philip",
+    "last_name": "Stein",
+    "phones": [
+      "001-414-923-6880x54275"
+    ],
+    "emails": [
+      "ethompson@example.com"
+    ]
+  },
+  {
+    "id": 13,
+    "first_name": "Melissa",
+    "last_name": "Cannon",
+    "phones": [
+      "+1-562-710-3925"
+    ],
+    "emails": [
+      "virginia59@example.com"
+    ]
+  },
+  {
+    "id": 14,
+    "first_name": "Joshua",
+    "last_name": "Blake",
+    "phones": [
+      "(628)507-8552x3223"
+    ],
+    "emails": [
+      "scott21@example.org"
+    ]
+  },
+  {
+    "id": 15,
+    "first_name": "Angela",
+    "last_name": "Mills",
+    "phones": [
+      "473.477.2014"
+    ],
+    "emails": [
+      "aaron31@example.net"
+    ]
+  },
+  {
+    "id": 16,
+    "first_name": "Jessica",
+    "last_name": "Johnson",
+    "phones": [
+      "328.604.3127x87353"
+    ],
+    "emails": [
+      "elizabeth87@example.org"
+    ]
+  },
+  {
+    "id": 17,
+    "first_name": "Stacie",
+    "last_name": "Noble",
+    "phones": [
+      "(857)276-1707"
+    ],
+    "emails": [
+      "nathancardenas@example.org"
+    ]
+  },
+  {
+    "id": 18,
+    "first_name": "Wendy",
+    "last_name": "Love",
+    "phones": [
+      "001-989-383-0154"
+    ],
+    "emails": [
+      "pmartin@example.org"
+    ]
+  },
+  {
+    "id": 19,
+    "first_name": "Nicholas",
+    "last_name": "Hardy",
+    "phones": [
+      "909-656-6445x11297"
+    ],
+    "emails": [
+      "pagesteven@example.org"
+    ]
+  },
+  {
+    "id": 20,
+    "first_name": "Richard",
+    "last_name": "Hawkins",
+    "phones": [
+      "001-211-679-0330"
+    ],
+    "emails": [
+      "davisstephanie@example.org"
+    ]
+  },
+  {
+    "id": 21,
+    "first_name": "Robert",
+    "last_name": "Marquez",
+    "phones": [
+      "+1-360-634-3592x9925"
+    ],
+    "emails": [
+      "josephpatricia@example.net"
+    ]
+  },
+  {
+    "id": 22,
+    "first_name": "Tracy",
+    "last_name": "Roberts",
+    "phones": [
+      "697.984.4610x8599"
+    ],
+    "emails": [
+      "llee@example.net"
+    ]
+  },
+  {
+    "id": 23,
+    "first_name": "Andrew",
+    "last_name": "Aguirre",
+    "phones": [
+      "+1-811-809-1408x49801"
+    ],
+    "emails": [
+      "brownmonica@example.com"
+    ]
+  },
+  {
+    "id": 24,
+    "first_name": "Kristen",
+    "last_name": "Gaines",
+    "phones": [
+      "+1-318-819-1745"
+    ],
+    "emails": [
+      "sarah77@example.net"
+    ]
+  },
+  {
+    "id": 25,
+    "first_name": "Cynthia",
+    "last_name": "Williams",
+    "phones": [
+      "4569659354"
+    ],
+    "emails": [
+      "hamiltonalyssa@example.com"
+    ]
+  }
+]

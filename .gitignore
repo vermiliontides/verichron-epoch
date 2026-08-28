@@ -6,6 +6,7 @@ node_modules/
 jspm_packages/
 web_modules/
 ileapp_raw_output/
+scripts/fixtures/
 
 
 # Build and compilation outputs

@@ -7,7 +7,9 @@
     "build": "pnpm -r --if-present run build",
     "build:contracts": "pnpm --filter @verichron/contracts build",
     "sync:contracts": "python3 scripts/sync_contracts.py --write",
-    "check:contracts": "python3 scripts/sync_contracts.py --check"
+    "check:contracts": "python3 scripts/sync_contracts.py --check",
+    "gen:fake-iocs": "python3 scripts/generate_fake_iocs.py",
+    "gen:fake-stix": "pnpm gen:fake-iocs && cd scripts/fixtures/fake_iocs && python3 ../../generate_stix.py"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

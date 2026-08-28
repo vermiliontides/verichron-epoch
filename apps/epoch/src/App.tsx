@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import './App.css';
+import './index.css';
 
 interface PipelineRun {
   id: string;

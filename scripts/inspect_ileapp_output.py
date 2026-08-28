@@ -71,6 +71,43 @@ def inspect_tabular(path: Path) -> None:
         print(f"    [ERROR    ] failed to parse: {exc}")
 
 
+def probe_unknown_file(path: Path) -> None:
+    """Best-effort identification of a file whose suffix isn't in
+    SUPPORTED_SUFFIXES, without assuming its format. Prints the first bytes'
+    signature and tries opening it as SQLite -- SQLite only checks for the
+    16-byte "SQLite format 3\\0" header, not the extension, so a real SQLite
+    database saved under a made-up extension (e.g. iLEAPP's own .lava) will
+    open successfully here even though normalizer.py would currently skip
+    it on suffix alone.
+    """
+    try:
+        with open(path, "rb") as fh:
+            header = fh.read(32)
+    except OSError as exc:
+        print(f"    [ERROR] could not read file: {exc}")
+        return
+
+    printable = "".join(chr(b) if 32 <= b < 127 else "." for b in header)
+    print(f"    first 32 bytes (hex): {header.hex()}")
+    print(f"    first 32 bytes (ascii): {printable}")
+
+    if header.startswith(b"SQLite format 3\x00"):
+        print("    -> SQLite header detected despite the extension. This IS a SQLite database;")
+        print("       normalizer.py's suffix filter is skipping it purely on file extension.")
+        inspect_sqlite(path)
+    elif header.startswith(b"PK\x03\x04"):
+        print("    -> ZIP header detected (could be an .xlsx, or a zip archive under a different name).")
+    elif header.startswith(b"\x1f\x8b"):
+        print("    -> gzip header detected.")
+    elif header.startswith(b"{") or header.startswith(b"["):
+        print("    -> looks like it may be JSON (starts with '{' or '['). Try parsing it directly.")
+    else:
+        print("    -> no recognized signature (not SQLite/zip/gzip/JSON-looking). Could be a custom")
+        print("       binary format, pickle, msgpack, or similar -- check the iLEAPP source for how")
+        print("       it writes this file (search the vendored apps/extractors/ileapp_bridge/iLEAPP/")
+        print("       checkout for the string 'lava' to find the writer).")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("output_dir", help="Path to an iLEAPP output directory")
@@ -110,9 +147,11 @@ def main() -> None:
         print()
 
     if unsupported:
-        print(f"{len(unsupported)} file(s) present but skipped (suffix not in {sorted(SUPPORTED_SUFFIXES)}):")
+        print(f"{len(unsupported)} file(s) present but skipped (suffix not in {sorted(SUPPORTED_SUFFIXES)}):\n")
         for p in unsupported:
-            print(f"  {p.relative_to(out_dir)}")
+            print(f"{p.relative_to(out_dir)}:")
+            probe_unknown_file(p)
+            print()
 
 
 if __name__ == "__main__":

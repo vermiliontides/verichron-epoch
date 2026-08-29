@@ -48,9 +48,9 @@ app.disableHardwareAcceleration();
 const dbPool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'verichron_db',
-  user: process.env.DB_USER || 'verichron',
-  password: process.env.DB_PASSWORD || 'verichron',
+  database: process.env.DB_NAME || 'forensics',
+  user: process.env.DB_USER || 'forensics',
+  password: process.env.DB_PASSWORD || 'forensics_dev_only',
   max: 10,
 });
 

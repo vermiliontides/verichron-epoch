@@ -25,6 +25,7 @@
   "license": "MIT",
   "devDependencies": {
     "@verichron/db-reader": "workspace:*",
+    "@verichron/db-writer": "workspace:*",
     "@electron-forge/cli": "^7.11.2",
     "@electron-forge/maker-deb": "^7.11.2",
     "@electron-forge/maker-rpm": "^7.11.2",

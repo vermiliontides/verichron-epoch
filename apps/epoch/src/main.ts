@@ -3,7 +3,7 @@ import electron from 'electron';
 import path from 'path';
 import { Pool } from 'pg';
 import { getPipelineRuns, getStageStatus, getForensicRecords } from '@verichron/db-reader';
-import type BrowserViewConstructorOptions  from 'electron/renderer';
+import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
 
 const { app, BrowserWindow, ipcMain } = electron;
 
@@ -79,6 +79,8 @@ ipcMain.handle('epoch:getForensicRecords', async (_event, runId: string, sourceT
   }
 });
 
+let mainWindow: BrowserWindowType | null = null;
+
 const createWindow = (): void => {
   const windowOptions: BrowserWindowConstructorOptions = {
     width: 1400,
@@ -95,7 +97,7 @@ const createWindow = (): void => {
     },
   };
 
-  let mainWindow = new BrowserWindow(windowOptions);
+  mainWindow = new BrowserWindow(windowOptions);
 
 // 2. Safely check for injected variables to prevent ReferenceErrors
   if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined') {

@@ -2,6 +2,7 @@
 import electron from 'electron';
 import path from 'path';
 import { Pool } from 'pg';
+import { getPipelineRuns, getStageStatus, getForensicRecords } from '@verichron/db-reader';
 import type BrowserViewConstructorOptions  from 'electron/renderer';
 
 const { app, BrowserWindow, ipcMain } = electron;
@@ -32,6 +33,16 @@ app.disableHardwareAcceleration();
 // script cannot resolve those core modules, which is why the previous
 // preload-side Pool caused the renderer to fail to load (white screen).
 // The renderer talks to this pool over IPC via the preload bridge instead.
+//
+// Query logic itself now lives in @verichron/db-reader, not inline here —
+// this file only owns the Pool/connection lifecycle and the IPC channel
+// wiring. See that package for why reads are split from
+// @verichron/db-writer's atomic-ingest boundary, and for three
+// table/column-name corrections found by checking these queries against
+// packages/db/migrations/0001_init.sql: the original inline queries here
+// referenced a nonexistent `stage_runs` table, a nonexistent
+// `pipeline_run_id` / `stage_order` / `extracted_at` / pipeline_runs
+// `created_at` -- none of which exist in the actual schema.
 const dbPool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
@@ -43,12 +54,7 @@ const dbPool = new Pool({
 
 ipcMain.handle('epoch:getPipelineRuns', async () => {
   try {
-    const result = await dbPool.query(`
-      SELECT * FROM pipeline_runs
-      ORDER BY created_at DESC
-      LIMIT 100
-    `);
-    return result.rows;
+    return await getPipelineRuns(dbPool);
   } catch (err) {
     console.error('DB error:', err);
     throw err;
@@ -57,27 +63,16 @@ ipcMain.handle('epoch:getPipelineRuns', async () => {
 
 ipcMain.handle('epoch:getStageStatus', async (_event, runId: string) => {
   try {
-    const result = await dbPool.query(`
-      SELECT * FROM stage_runs
-      WHERE pipeline_run_id = $1
-      ORDER BY stage_order ASC
-    `, [runId]);
-    return result.rows;
+    return await getStageStatus(dbPool, runId);
   } catch (err) {
     console.error('DB error:', err);
     throw err;
   }
 });
 
-ipcMain.handle('epoch:getForensicRecords', async (_event, stageRunId: string) => {
+ipcMain.handle('epoch:getForensicRecords', async (_event, runId: string, sourceType?: string) => {
   try {
-    const result = await dbPool.query(`
-      SELECT * FROM forensic_records
-      WHERE stage_run_id = $1
-      ORDER BY extracted_at ASC
-      LIMIT 500
-    `, [stageRunId]);
-    return result.rows;
+    return await getForensicRecords(dbPool, runId, { sourceType });
   } catch (err) {
     console.error('DB error:', err);
     throw err;

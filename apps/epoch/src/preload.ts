@@ -1,59 +1,19 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { Pool } from 'pg';
 
-// Create DB pool in preload (Node context)
-const dbPool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'verichron_db',
-  user: process.env.DB_USER || 'verichron',
-  password: process.env.DB_PASSWORD || 'verichron',
-  max: 10,
-});
-
+// This file previously created its own `pg.Pool` and issued its own SQL
+// directly from the preload script, bypassing main.ts's `ipcMain.handle`
+// channels entirely -- those handlers existed but nothing ever called
+// them. main.ts's comment already documented the reason this shape is
+// wrong (a sandboxed preload script can't reliably resolve the Node core
+// modules `pg` needs, which previously crashed the renderer to a white
+// screen); this file just hadn't been updated to match. There is now
+// exactly one Pool in the app, owned by main.ts, and this file only
+// relays IPC calls to it.
 const dbApi = {
-  getPipelineRuns: async () => {
-    try {
-      const result = await dbPool.query(`
-        SELECT * FROM pipeline_runs
-        ORDER BY created_at DESC
-        LIMIT 100
-      `);
-      return result.rows;
-    } catch (err) {
-      console.error('DB error:', err);
-      throw err;
-    }
-  },
-
-  getStageStatus: async (runId: string) => {
-    try {
-      const result = await dbPool.query(`
-        SELECT * FROM stage_runs
-        WHERE pipeline_run_id = $1
-        ORDER BY stage_order ASC
-      `, [runId]);
-      return result.rows;
-    } catch (err) {
-      console.error('DB error:', err);
-      throw err;
-    }
-  },
-
-  getForensicRecords: async (stageRunId: string) => {
-    try {
-      const result = await dbPool.query(`
-        SELECT * FROM forensic_records
-        WHERE stage_run_id = $1
-        ORDER BY extracted_at ASC
-        LIMIT 500
-      `, [stageRunId]);
-      return result.rows;
-    } catch (err) {
-      console.error('DB error:', err);
-      throw err;
-    }
-  },
+  getPipelineRuns: () => ipcRenderer.invoke('epoch:getPipelineRuns'),
+  getStageStatus: (runId: string) => ipcRenderer.invoke('epoch:getStageStatus', runId),
+  getForensicRecords: (runId: string, sourceType?: string) =>
+    ipcRenderer.invoke('epoch:getForensicRecords', runId, sourceType),
 };
 
 contextBridge.exposeInMainWorld('epoch', dbApi);

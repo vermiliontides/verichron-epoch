@@ -4,18 +4,16 @@
  * Query-side counterpart to `@verichron/db-writer` -- see dbReader.ts for
  * why this is a separate package rather than more exports on db-writer.
  *
- * Two open questions are flagged inline in dbReader.ts and must be resolved
- * before this package's results are trusted in a demo: the stage-status
- * table name (`stage_runs` vs `pipeline_stage_status`), and the forensic
- * records stage filter column (`stage_run_id` vs `run_id`). Both were
- * carried over unchanged from the original inline queries in
- * apps/epoch/src/main.ts rather than silently "corrected," since neither
- * has been confirmed against the actual migrations yet.
+ * Every table/column name here was verified against
+ * packages/db/migrations/0001_init.sql and 0002_ingest_completion.sql. The
+ * initial version of this package (before this revision) carried over
+ * apps/epoch's original inline queries unchanged and flagged two of their
+ * identifiers as unconfirmed; checking against the migrations found those
+ * two plus a third, previously-unnoticed one. All three are documented at
+ * the top of dbReader.ts. None of the original three queries in
+ * apps/epoch/src/main.ts would have executed successfully against this
+ * schema as written.
  */
 
-export {
-  getPipelineRuns,
-  getStageStatus,
-  getForensicRecords,
-} from './dbReader.js';
+
 export type { PipelineRunRow, StageStatusRow, ForensicRecordRow } from './dbReader.js';

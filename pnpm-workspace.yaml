@@ -2,6 +2,12 @@ packages:
   - 'packages/*'
   - 'apps/*'
   - 'libs/*'
+
+allowBuilds:
+  electron: true
+
+onlyBuiltDependencies:
+  - electron
  
 catalog:
   # Compiler — pinned exact, not caret. typescript-eslint's peer range
@@ -29,6 +35,7 @@ catalog:
   react-dom: ^19.2.5
   '@types/react': ^19.2.5
   '@types/react-dom': ^19.2.5
-  vite: ^8.2.2
  
   electron: ^44.0.0
+  vite: ^5.4.0   # or ^6.x — plugin-vite@7.11.2 is built against vite@^5.0.12; check if a 6.x line is confirmed compatible before jumping there
+  '@vitejs/plugin-react': ^4.7.0,

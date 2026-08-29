@@ -22,52 +22,52 @@
  * caller manages connections. apps/epoch's main process owns the Pool today;
  * a future NestJS service would own a different pool with the exact same
  * query functions underneath.
+ *
+ * Every table/column name below was checked against
+ * packages/db/migrations/0001_init.sql and 0002_ingest_completion.sql
+ * directly, not carried over from apps/epoch's original inline queries.
+ * That check turned up three mismatches in the original code, all fixed
+ * here:
+ *   - pipeline_runs has no `created_at` column -- only `started_at` /
+ *     `finished_at`. getPipelineRuns now orders by `started_at`.
+ *   - The table is `pipeline_stage_status`, not `stage_runs`, its FK column
+ *     is `run_id` not `pipeline_run_id`, and there is no `stage_order`
+ *     column at all -- see CANONICAL_STAGE_ORDER below for how ordering is
+ *     done instead.
+ *   - forensic_records has `run_id`, not `stage_run_id` -- there is no
+ *     stage-level FK on this table, only a run-level one. getForensicRecords
+ *     now takes `runId` and an optional `sourceType` narrowing filter
+ *     instead of a nonexistent stage-run id. Its original `ORDER BY
+ *     extracted_at` also doesn't exist; ordering is now by `event_time`,
+ *     the column the schema comment identifies as the actual cross-domain
+ *     correlation axis, falling back to `id` (insertion order) for rows
+ *     where event_time is NULL.
  */
 
 import type { Client, PoolClient } from 'pg';
 
 type Db = Client | PoolClient;
 
-/**
- * KNOWN OPEN QUESTION -- confirm before relying on this.
- *
- * apps/epoch's original inline query (before this package existed) selected
- * from a table named `stage_runs`. db-writer's own header comment and the
- * project's documented 4-table schema (pipeline_runs, pipeline_stage_status,
- * ingested_files, forensic_records) both reference `pipeline_stage_status`
- * instead. These may be the same table under an inconsistent name, two
- * genuinely different tables, or `stage_runs` may be a stale/incorrect name
- * left over from before a rename. This constant exists so that whichever one
- * is correct, fixing it is a one-line change here rather than a grep across
- * every caller.
- */
-const STAGE_STATUS_TABLE = 'stage_runs'; // TODO: confirm vs. pipeline_stage_status
-
-/**
- * SECOND OPEN QUESTION, separate from the table-name one above.
- *
- * The original inline query filtered forensic_records by `stage_run_id`.
- * But db-writer's writeRecord/writeRecords insert forensic_records with a
- * `run_id` column -- there is no `stage_run_id` in the insert list dbWriter.ts
- * defines. Either forensic_records has more columns than the writer touches
- * (plausible -- a migration could add stage_run_id later and the writer
- * simply never populates it, which would make every row NULL there and this
- * filter always return zero rows), or this filter should be `run_id`, or
- * `stage_run_id` doesn't exist on this table at all and the original query
- * was already broken. Confirm against packages/db/migrations before trusting
- * this function's results.
- */
-const FORENSIC_RECORDS_STAGE_FILTER_COLUMN = 'stage_run_id'; // TODO: confirm vs. run_id
-
 export interface PipelineRunRow {
-  [column: string]: unknown;
+  run_id: string;
+  backup_source: string;
+  started_at: string;
+  finished_at: string | null;
 }
 
+export type StageStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped';
+
 export interface StageStatusRow {
-  [column: string]: unknown;
+  run_id: string;
+  stage_name: string;
+  status: StageStatus;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
 }
 
 export interface ForensicRecordRow {
+  id: number;
   file_hash: string;
   run_id: string;
   incident_id: string | null;
@@ -78,23 +78,15 @@ export interface ForensicRecordRow {
   pid: number | null;
   bundle_id: string | null;
   fields: Record<string, unknown>;
-  [column: string]: unknown;
 }
 
 /**
  * Most recent pipeline runs, newest first.
- *
- * Row shape is intentionally untyped (`[column: string]: unknown`) rather
- * than enumerated -- pipeline_runs' columns aren't yet mirrored in
- * @verichron/contracts (see the open packages/contracts gap). Once that's
- * resolved this should return a typed row from contracts instead of
- * PipelineRunRow, the same way writeRecord/writeRecords validate against
- * NormalizedRecord on the write side.
  */
 export async function getPipelineRuns(client: Db, limit = 100): Promise<PipelineRunRow[]> {
   const result = await client.query<PipelineRunRow>(
     `SELECT * FROM pipeline_runs
-      ORDER BY created_at DESC
+      ORDER BY started_at DESC
       LIMIT $1`,
     [limit]
   );
@@ -102,40 +94,81 @@ export async function getPipelineRuns(client: Db, limit = 100): Promise<Pipeline
 }
 
 /**
- * Stage-level status rows for one pipeline run, in stage order.
- *
- * See STAGE_STATUS_TABLE above -- table name is unconfirmed.
+ * Canonical pipeline stage sequence, per the CREATE TABLE comment in
+ * 0001_init.sql. The schema has no stage_order column -- stage sequence is
+ * currently only encoded here, in application code. If this list drifts
+ * from the orchestrator's actual stage sequence, or a stage is added on one
+ * side and not the other, this is the file to update; there is nowhere else
+ * it's defined. A `stage_order SMALLINT` column on pipeline_stage_status
+ * would make this schema-enforced instead of convention-enforced -- worth
+ * revisiting if this list needs to change more than once.
+ */
+export const CANONICAL_STAGE_ORDER = ['crash', 'safari', 'sms', 'network', 'gcloud', 'report'] as const;
+
+/**
+ * Stage-level status rows for one pipeline run, sorted into canonical
+ * pipeline order rather than execution order -- so a report view always
+ * shows all configured stages in the same sequence regardless of which
+ * ones have actually started yet. Stages not present in
+ * CANONICAL_STAGE_ORDER sort after all known stages, in the order Postgres
+ * returned them, rather than being dropped -- an unrecognized stage_name is
+ * a signal this list is stale, not a reason to hide the row.
  */
 export async function getStageStatus(client: Db, runId: string): Promise<StageStatusRow[]> {
   const result = await client.query<StageStatusRow>(
-    `SELECT * FROM ${STAGE_STATUS_TABLE}
-      WHERE pipeline_run_id = $1
-      ORDER BY stage_order ASC`,
+    `SELECT * FROM pipeline_stage_status
+      WHERE run_id = $1`,
     [runId]
   );
-  return result.rows;
+
+  return result.rows.sort((a, b) => {
+    const orderA = CANONICAL_STAGE_ORDER.indexOf(a.stage_name as (typeof CANONICAL_STAGE_ORDER)[number]);
+    const orderB = CANONICAL_STAGE_ORDER.indexOf(b.stage_name as (typeof CANONICAL_STAGE_ORDER)[number]);
+    const rankA = orderA === -1 ? CANONICAL_STAGE_ORDER.length : orderA;
+    const rankB = orderB === -1 ? CANONICAL_STAGE_ORDER.length : orderB;
+    return rankA - rankB;
+  });
 }
 
 /**
- * Forensic records produced by one stage run, oldest first, capped at 500.
+ * Forensic records for one pipeline run, oldest event first, capped at 500.
+ *
+ * forensic_records has no stage-level FK -- only run_id. `sourceType` is an
+ * optional narrowing filter for callers that want just one extractor's
+ * records (source_type is set per-extractor, e.g. the crash extractor's
+ * output), which approximates "this stage's records" without pretending a
+ * stage-run relationship exists in the schema.
  *
  * The 500 cap matches the original inline query in apps/epoch/main.ts. This
  * is a UI-facing read, not an export/report path -- if a caller needs the
- * full set for a stage run, this function is the wrong tool; it should get a
+ * full set for a run, this function is the wrong tool; it should get a
  * paginated or streaming variant instead of a raised limit, since a single
- * backup's forensic_records for a busy stage run can be very large.
+ * backup's forensic_records for a busy run can be very large.
  */
 export async function getForensicRecords(
   client: Db,
-  stageRunId: string,
-  limit = 500
+  runId: string,
+  options: { sourceType?: string; limit?: number } = {}
 ): Promise<ForensicRecordRow[]> {
+  const { sourceType, limit = 500 } = options;
+
+  if (sourceType) {
+    const result = await client.query<ForensicRecordRow>(
+      `SELECT * FROM forensic_records
+        WHERE run_id = $1 AND source_type = $2
+        ORDER BY event_time ASC NULLS LAST, id ASC
+        LIMIT $3`,
+      [runId, sourceType, limit]
+    );
+    return result.rows;
+  }
+
   const result = await client.query<ForensicRecordRow>(
     `SELECT * FROM forensic_records
-      WHERE ${FORENSIC_RECORDS_STAGE_FILTER_COLUMN} = $1
-      ORDER BY extracted_at ASC
+      WHERE run_id = $1
+      ORDER BY event_time ASC NULLS LAST, id ASC
       LIMIT $2`,
-    [stageRunId, limit]
+    [runId, limit]
   );
   return result.rows;
 }

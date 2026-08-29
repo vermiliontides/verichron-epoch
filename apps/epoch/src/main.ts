@@ -1,6 +1,9 @@
 /// <reference types="@electron-forge/plugin-vite/forge-vite-env" />
-import { app, BrowserWindow } from 'electron';
+import electron from 'electron';
 import path from 'path';
+import { Pool } from 'pg';
+
+const { app, BrowserWindow, ipcMain } = electron;
 
 console.log('\n=======================================');
 console.log('MAIN PROCESS IS EXECUTING!');
@@ -22,6 +25,63 @@ process.on('unhandledRejection', (reason) => {
 // Force X11 and disable acceleration for Linux display compatibility
 app.commandLine.appendSwitch('ozone-platform', 'x11');
 app.disableHardwareAcceleration();
+
+// DB pool lives in the main process. This is the only process with full
+// Node access (net/tls/dns), which `pg` requires — a sandboxed preload
+// script cannot resolve those core modules, which is why the previous
+// preload-side Pool caused the renderer to fail to load (white screen).
+// The renderer talks to this pool over IPC via the preload bridge instead.
+const dbPool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT || '5432'),
+  database: process.env.DB_NAME || 'verichron_db',
+  user: process.env.DB_USER || 'verichron',
+  password: process.env.DB_PASSWORD || 'verichron',
+  max: 10,
+});
+
+ipcMain.handle('epoch:getPipelineRuns', async () => {
+  try {
+    const result = await dbPool.query(`
+      SELECT * FROM pipeline_runs
+      ORDER BY created_at DESC
+      LIMIT 100
+    `);
+    return result.rows;
+  } catch (err) {
+    console.error('DB error:', err);
+    throw err;
+  }
+});
+
+ipcMain.handle('epoch:getStageStatus', async (_event, runId: string) => {
+  try {
+    const result = await dbPool.query(`
+      SELECT * FROM stage_runs
+      WHERE pipeline_run_id = $1
+      ORDER BY stage_order ASC
+    `, [runId]);
+    return result.rows;
+  } catch (err) {
+    console.error('DB error:', err);
+    throw err;
+  }
+});
+
+ipcMain.handle('epoch:getForensicRecords', async (_event, stageRunId: string) => {
+  try {
+    const result = await dbPool.query(`
+      SELECT * FROM forensic_records
+      WHERE stage_run_id = $1
+      ORDER BY extracted_at ASC
+      LIMIT 500
+    `, [stageRunId]);
+    return result.rows;
+  } catch (err) {
+    console.error('DB error:', err);
+    throw err;
+  }
+});
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -63,4 +123,8 @@ app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
   }
+});
+
+app.on('before-quit', () => {
+  dbPool.end().catch((err) => console.error('Error closing DB pool:', err));
 });

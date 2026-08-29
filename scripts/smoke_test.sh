@@ -30,7 +30,7 @@ cd apps/orchestrator
 pnpm install > /dev/null 2>&1
 pnpm build > /dev/null 2>&1
 
-DB_URL="postgresql://verichron:verichron@localhost:5432/verichron_db"
+DB_URL="postgresql://forensics:forensics_dev_only@localhost:5432/forensics"
 
 npx tsx src/main.ts \
   --backup-path "$BACKUP_PATH" \
@@ -38,9 +38,9 @@ npx tsx src/main.ts \
   --db-url "$DB_URL" \
   --db-host localhost \
   --db-port 5432 \
-  --db-user verichron \
-  --db-password verichron \
-  --db-name verichron_db
+  --db-user forensics
+  --db-password forensics_dev_only
+  --db-name forensics
 
 # 4. Verify results
 echo ""
@@ -53,7 +53,7 @@ fi
 # 5. Query DB
 echo ""
 echo "✓ Querying orchestrator DB..."
-PGPASSWORD=verichron psql -h localhost -U verichron -d verichron_db -c \
+PGPASSWORD=forensics_dev_only psql -h localhost -U forensics -d forensics -c \
   "SELECT pipeline_run_id, status, stages_completed FROM pipeline_runs ORDER BY created_at DESC LIMIT 3;"
 
 echo ""

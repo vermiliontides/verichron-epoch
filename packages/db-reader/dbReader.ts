@@ -44,9 +44,9 @@
  *     where event_time is NULL.
  */
 
-import type { Client, PoolClient } from 'pg';
+import type { Client, Pool, PoolClient } from 'pg';
 
-type Db = Client | PoolClient;
+type Db = Client | PoolClient | Pool;
 
 export interface PipelineRunRow {
   run_id: string;

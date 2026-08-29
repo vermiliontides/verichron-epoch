@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@verichron/contracts": "workspace:*"
+    "@verichron/contracts": "workspace:*",
+    "@verichron/db-reader": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

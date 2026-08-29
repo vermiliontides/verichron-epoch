@@ -1,17 +1,21 @@
 services:
   postgres:
     image: postgres:16
+    env_file:
+      - ../.env
     environment:
-      POSTGRES_USER: forensics
-      POSTGRES_PASSWORD: forensics_dev_only
-      POSTGRES_DB: forensics
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_PORT: ${DB_PORT}
+      POSTGRES_HOST: ${DB_HOST}
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - forensics_pgdata:/var/lib/postgresql/data
       - ../packages/db/migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U forensics"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5

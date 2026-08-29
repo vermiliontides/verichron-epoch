@@ -16,4 +16,5 @@
  */
 
 
-export type { PipelineRunRow, StageStatusRow, ForensicRecordRow } from './dbReader.js';
+export type { PipelineRunRow, StageStatusRow, ForensicRecordRow, StageStatus } from './dbReader.js';
+export { getPipelineRuns, getStageStatus, getForensicRecords, CANONICAL_STAGE_ORDER } from './dbReader.js';

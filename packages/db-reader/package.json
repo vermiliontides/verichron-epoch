@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "pg": "catalog:"
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",

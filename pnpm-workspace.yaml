@@ -5,37 +5,43 @@ packages:
 
 allowBuilds:
   electron: true
+  electron-winstaller: true
+  esbuild: true
+  unrs-resolver: true
 
-onlyBuiltDependencies:
-  - electron
- 
 catalog:
   # Compiler — pinned exact, not caret. typescript-eslint's peer range
   # (>=4.8.4 <6.1.0) hard-blocks TS7 until 7.1 ships a stable API, so we
   # want an explicit version bump here, not an implicit one via ^.
-  typescript: 6.0.3
- 
-  # Shared schema layer (packages/contracts) — zod4, single source of truth
-  # for every consumer (mvt-runner, orchestrator, db-writer, epoch).
-  zod: ^4.4.3
- 
+  
   # Node/pg toolchain shared across mvt-runner, orchestrator, db-writer
-  '@types/node': ^20.19.43   # OPEN QUESTION — see note below
-  tsx: ^4.23.12
-  pg: ^8.23.0
+  '@types/node': ^20.19.43 # OPEN QUESTION — see note below
   '@types/pg': ^8.23.1
- 
-  # Lint stack — must move together (eslint9+ flat config <-> typescript-eslint8)
-  eslint: ^10.9.1
+  '@types/react': ^19.2.5
+  '@types/react-dom': ^19.2.5
   '@typescript-eslint/eslint-plugin': ^8.68.0
   '@typescript-eslint/parser': ^8.68.0
- 
+  '@vitejs/plugin-react': ^4.7.0,
+
+  electron: ^44.0.0
+
+  # Lint stack — must move together (eslint9+ flat config <-> typescript-eslint8)
+  eslint: ^10.9.1
+  pg: ^8.23.0
+
   # epoch renderer
   react: ^19.2.5
   react-dom: ^19.2.5
-  '@types/react': ^19.2.5
-  '@types/react-dom': ^19.2.5
- 
-  electron: ^44.0.0
-  vite: ^5.4.0   # or ^6.x — plugin-vite@7.11.2 is built against vite@^5.0.12; check if a 6.x line is confirmed compatible before jumping there
-  '@vitejs/plugin-react': ^4.7.0,
+  tsx: ^4.23.12
+  typescript: 6.0.3
+  vite: ^5.4.0 # or ^6.x — plugin-vite@7.11.2 is built against vite@^5.0.12; check if a 6.x line is confirmed compatible before jumping there
+
+  # Shared schema layer (packages/contracts) — zod4, single source of truth
+  # for every consumer (mvt-runner, orchestrator, db-writer, epoch).
+  zod: ^4.4.3
+
+onlyBuiltDependencies:
+  - electron
+
+envFiles:
+  - .env

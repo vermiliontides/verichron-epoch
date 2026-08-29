@@ -3,7 +3,8 @@ import electron from 'electron';
 import path from 'path';
 import { Pool } from 'pg';
 import { getPipelineRuns, getStageStatus, getForensicRecords } from '@verichron/db-reader';
-import type BrowserViewConstructorOptions  from 'electron/renderer';
+import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
+import dotenv from 'dotenv'
 
 const { app, BrowserWindow, ipcMain } = electron;
 
@@ -11,6 +12,7 @@ console.log('\n=======================================');
 console.log('MAIN PROCESS IS EXECUTING!');
 console.log('=======================================\n');
 
+dotenv.config({ path: '../../../.env' })
 // 1. Catch silent crashes and print them to the terminal
 process.on('uncaughtException', (error) => {
   console.error('\n--- FATAL UNCAUGHT EXCEPTION ---');
@@ -25,8 +27,8 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // Force X11 and disable acceleration for Linux display compatibility
-app.commandLine.appendSwitch('ozone-platform', 'x11');
-app.disableHardwareAcceleration();
+// app.commandLine.appendSwitch('ozone-platform', 'x11');
+// app.disableHardwareAcceleration();
 
 // DB pool lives in the main process. This is the only process with full
 // Node access (net/tls/dns), which `pg` requires — a sandboxed preload
@@ -46,9 +48,9 @@ app.disableHardwareAcceleration();
 const dbPool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'verichron_db',
-  user: process.env.DB_USER || 'verichron',
-  password: process.env.DB_PASSWORD || 'verichron',
+  database: process.env.DB_NAME || 'forensics',
+  user: process.env.DB_USER || 'forensics',
+  password: process.env.DB_PASSWORD || 'forensics_dev_only',
   max: 10,
 });
 
@@ -79,6 +81,8 @@ ipcMain.handle('epoch:getForensicRecords', async (_event, runId: string, sourceT
   }
 });
 
+let mainWindow: BrowserWindowType | null = null;
+
 const createWindow = (): void => {
   const windowOptions: BrowserWindowConstructorOptions = {
     width: 1400,
@@ -95,7 +99,7 @@ const createWindow = (): void => {
     },
   };
 
-  let mainWindow = new BrowserWindow(windowOptions);
+  mainWindow = new BrowserWindow(windowOptions);
 
 // 2. Safely check for injected variables to prevent ReferenceErrors
   if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined') {

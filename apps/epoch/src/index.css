@@ -122,19 +122,48 @@ body {
   font-family: var(--font-mono);
 }
 
-.status.completed {
-  background: hsl(var(--accent) / 0.15);
-  color: hsl(var(--accent));
-}
-
+/*
+ * Two vocabularies here, deliberately -- pipeline_runs has no status
+ * column, so App.tsx derives a two-state run-level phase (in_progress /
+ * finished) from finished_at, separate from pipeline_stage_status's real
+ * five-value enum below. Conflating them would misrepresent a run as
+ * "succeeded" when only its stages' statuses actually say that, and
+ * pipeline_runs itself makes no such claim.
+ */
 .status.in_progress {
   background: hsl(var(--flag) / 0.15);
   color: hsl(var(--flag));
 }
 
+.status.finished {
+  background: hsl(var(--accent) / 0.15);
+  color: hsl(var(--accent));
+}
+
+/* pipeline_stage_status.status CHECK constraint: pending | running | succeeded | failed | skipped */
+.status.pending {
+  background: hsl(var(--muted-foreground) / 0.12);
+  color: hsl(var(--muted-foreground));
+}
+
+.status.running {
+  background: hsl(var(--flag) / 0.15);
+  color: hsl(var(--flag));
+}
+
+.status.succeeded {
+  background: hsl(var(--accent) / 0.15);
+  color: hsl(var(--accent));
+}
+
 .status.failed {
   background: hsl(var(--flag) / 0.2);
   color: hsl(var(--flag));
+}
+
+.status.skipped {
+  background: hsl(var(--muted-foreground) / 0.08);
+  color: hsl(var(--muted-foreground));
 }
 
 .stages-list {
@@ -150,16 +179,24 @@ body {
   border-radius: 6px;
 }
 
-.stage-card.completed {
-  border-left-color: hsl(var(--accent));
+.stage-card.pending {
+  border-left-color: hsl(var(--muted-foreground));
 }
 
-.stage-card.in_progress {
+.stage-card.running {
   border-left-color: hsl(var(--flag));
+}
+
+.stage-card.succeeded {
+  border-left-color: hsl(var(--accent));
 }
 
 .stage-card.failed {
   border-left-color: hsl(var(--flag));
+}
+
+.stage-card.skipped {
+  border-left-color: hsl(var(--muted-foreground) / 0.5);
 }
 
 .stage-card h3 {

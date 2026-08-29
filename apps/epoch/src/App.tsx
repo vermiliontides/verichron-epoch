@@ -1,25 +1,41 @@
 import React, { useState, useEffect } from 'react';
+import type { PipelineRunRow, StageStatusRow } from '@verichron/db-reader';
 
-interface PipelineRun {
-  id: string;
-  backup_path: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
+/**
+ * Field names here are pulled directly from PipelineRunRow/StageStatusRow
+ * (packages/db-reader), which are themselves checked against
+ * packages/db/migrations/0001_init.sql -- not re-declared locally. The
+ * previous version of this file had its own PipelineRun/StageStatus
+ * interfaces with fields that don't exist on either table
+ * (backup_path/status/created_at/updated_at on runs; id/record_count/
+ * duration_ms on stages) and would have thrown or rendered `undefined`
+ * for every field the moment real data loaded.
+ *
+ * pipeline_runs has no `status` column at all -- run-level "did it happen"
+ * and stage-level "what succeeded" are deliberately separate per the
+ * schema's own header comment. There is no single source of truth for
+ * "is this run overall a success" without rolling up its stages, and this
+ * component doesn't fetch every run's stages just to render the table (that
+ * would be a query per row). What's shown instead is what pipeline_runs
+ * actually has: whether it's finished, and when. A real success/failure
+ * rollup at the runs-list level needs either a Postgres view aggregating
+ * worst-stage-status per run, or a second query -- worth doing, but that's
+ * a feature to design, not a naming fix.
+ */
+
+function runPhase(run: PipelineRunRow): 'in_progress' | 'finished' {
+  return run.finished_at ? 'finished' : 'in_progress';
 }
 
-interface StageStatus {
-  id: string;
-  stage_name: string;
-  status: string;
-  record_count: number;
-  duration_ms: number;
+function stageDurationMs(stage: StageStatusRow): number | null {
+  if (!stage.started_at || !stage.finished_at) return null;
+  return new Date(stage.finished_at).getTime() - new Date(stage.started_at).getTime();
 }
 
 export const App: React.FC = () => {
-  const [runs, setRuns] = useState<PipelineRun[]>([]);
-  const [selectedRun, setSelectedRun] = useState<PipelineRun | null>(null);
-  const [stages, setStages] = useState<StageStatus[]>([]);
+  const [runs, setRuns] = useState<PipelineRunRow[]>([]);
+  const [selectedRun, setSelectedRun] = useState<PipelineRunRow | null>(null);
+  const [stages, setStages] = useState<StageStatusRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,11 +47,7 @@ export const App: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await (window as any).epoch?.getPipelineRuns?.();
-      if (!data) {
-        setError('Database connection failed');
-        return;
-      }
+      const data = await window.epoch.getPipelineRuns();
       setRuns(data);
     } catch (err) {
       console.error('Failed to load runs:', err);
@@ -44,11 +56,11 @@ export const App: React.FC = () => {
     setLoading(false);
   };
 
-  const selectRun = async (run: PipelineRun) => {
+  const selectRun = async (run: PipelineRunRow) => {
     setSelectedRun(run);
     try {
-      const data = await (window as any).epoch?.getStageStatus?.(run.id);
-      setStages(data || []);
+      const data = await window.epoch.getStageStatus(run.run_id);
+      setStages(data);
     } catch (err) {
       console.error('Failed to load stages:', err);
     }
@@ -77,21 +89,23 @@ export const App: React.FC = () => {
                 <tr>
                   <th>Backup</th>
                   <th>Status</th>
-                  <th>Created</th>
+                  <th>Started</th>
                 </tr>
               </thead>
               <tbody>
                 {runs.map((run) => (
                   <tr
-                    key={run.id}
-                    className={selectedRun?.id === run.id ? 'selected' : ''}
+                    key={run.run_id}
+                    className={selectedRun?.run_id === run.run_id ? 'selected' : ''}
                     onClick={() => selectRun(run)}
                   >
-                    <td>{run.backup_path.split('/').pop()}</td>
+                    <td>{run.backup_source.split('/').pop()}</td>
                     <td>
-                      <span className={`status ${run.status}`}>{run.status}</span>
+                      <span className={`status ${runPhase(run)}`}>
+                        {runPhase(run) === 'finished' ? 'finished' : 'in progress'}
+                      </span>
                     </td>
-                    <td>{new Date(run.created_at).toLocaleString()}</td>
+                    <td>{new Date(run.started_at).toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
@@ -106,14 +120,19 @@ export const App: React.FC = () => {
               {stages.length === 0 ? (
                 <p>No stages found for this run.</p>
               ) : (
-                stages.map((stage) => (
-                  <div key={stage.id} className={`stage-card ${stage.status}`}>
-                    <h3>{stage.stage_name}</h3>
-                    <p>Status: <strong>{stage.status}</strong></p>
-                    <p>Records: <strong>{stage.record_count}</strong></p>
-                    <p>Duration: <strong>{stage.duration_ms}ms</strong></p>
-                  </div>
-                ))
+                stages.map((stage) => {
+                  const durationMs = stageDurationMs(stage);
+                  return (
+                    <div key={`${stage.run_id}-${stage.stage_name}`} className={`stage-card ${stage.status}`}>
+                      <h3>{stage.stage_name}</h3>
+                      <p>Status: <strong>{stage.status}</strong></p>
+                      {stage.error_message && <p>Error: <strong>{stage.error_message}</strong></p>}
+                      <p>
+                        Duration: <strong>{durationMs !== null ? `${durationMs}ms` : '—'}</strong>
+                      </p>
+                    </div>
+                  );
+                })
               )}
             </div>
           ) : (

@@ -2,6 +2,7 @@
 import electron from 'electron';
 import path from 'path';
 import { Pool } from 'pg';
+import type BrowserViewConstructorOptions  from 'electron/renderer';
 
 const { app, BrowserWindow, ipcMain } = electron;
 
@@ -83,16 +84,23 @@ ipcMain.handle('epoch:getForensicRecords', async (_event, stageRunId: string) =>
   }
 });
 
-let mainWindow: BrowserWindow | null = null;
-
-const createWindow = () => {
-  mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+const createWindow = (): void => {
+  const windowOptions: BrowserWindowConstructorOptions = {
+    width: 1400,
+    height: 900,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      // enableRemoteModule was removed from Electron's types in v14+ —
+      // remote module is gone entirely as of Electron 22. If tsc is
+      // flagging this line specifically, that's why: it's not a missing
+      // type, it's a property that no longer exists on
+      // BrowserWindowConstructorOptions/WebPreferences.
     },
-  });
+  };
+
+  let mainWindow = new BrowserWindow(windowOptions);
 
 // 2. Safely check for injected variables to prevent ReferenceErrors
   if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined') {

@@ -25,9 +25,10 @@ catalog:
   '@typescript-eslint/parser': ^8.68.0
  
   # epoch renderer
-  react: ^19.2.8
-  react-dom: ^19.2.8
-  '@types/react': ^19.2.18
+  react: ^19.2.5
+  react-dom: ^19.2.5
+  '@types/react': ^19.2.5
   '@types/react-dom': ^19.2.5
   vite: ^8.2.2
  
+  electron: ^44.0.0

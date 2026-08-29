@@ -300,7 +300,7 @@ interface CliConfig {
  
 function printUsage() {
   console.error(`Usage:
-  pnpm --filter @verichron/orchestration investigate -- --workspace <mvt-runner-workspace-dir>`);
+  pnpm --filter @verichron/orchestrator investigate -- --workspace <mvt-runner-workspace-dir>`);
 }
  
 async function parseCliConfig(): Promise<CliConfig> {

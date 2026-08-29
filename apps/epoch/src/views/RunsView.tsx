@@ -1,6 +1,6 @@
 import React from 'react';
 import type { PipelineRunRow, StageStatusRow } from '@verichron/db-reader';
-import { Badge } from '../ui/badge';
+import { Badge } from '../components/ui/badge';
 
 /**
  * Field names here are pulled directly from PipelineRunRow/StageStatusRow
@@ -32,34 +32,31 @@ interface RunsViewProps {
   onSelectRun: (run: PipelineRunRow) => void;
 }
 
+const thClass = 'text-left font-medium text-muted-foreground bg-surface px-3 py-2 border-b border-border text-2xs uppercase tracking-wide';
+const tdClass = 'px-3 py-2 border-b border-border';
+
 export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRun }: RunsViewProps) {
   return (
     <div className="flex flex-1 min-h-0 divide-x divide-border">
       <div className="flex-1 overflow-auto p-5">
-        <h2 className="font-display text-[15px] font-medium text-accent mb-4">Pipeline Runs</h2>
+        <h2 className="font-display text-base font-medium text-accent mb-4">Pipeline Runs</h2>
         {error ? (
-          <div className="text-flag bg-flag/10 border border-flag/30 rounded-md px-3 py-2 text-[13px]">
+          <div className="text-flag bg-flag/10 border border-flag/30 rounded-md px-3 py-2 text-sm">
             {error}
           </div>
         ) : loading ? (
-          <p className="text-muted-foreground text-[13px]">Loading...</p>
+          <p className="text-muted-foreground text-sm">Loading...</p>
         ) : runs.length === 0 ? (
-          <p className="text-muted-foreground text-[13px]">
+          <p className="text-muted-foreground text-sm">
             No pipeline runs found. Run full_pipeline.py to create one.
           </p>
         ) : (
-          <table className="w-full text-[13px] border-collapse">
+          <table className="w-full text-sm border-collapse">
             <thead>
               <tr>
-                <th className="text-left font-medium text-muted-foreground bg-surface px-3 py-2.5 border-b border-border">
-                  Backup
-                </th>
-                <th className="text-left font-medium text-muted-foreground bg-surface px-3 py-2.5 border-b border-border">
-                  Status
-                </th>
-                <th className="text-left font-medium text-muted-foreground bg-surface px-3 py-2.5 border-b border-border">
-                  Started
-                </th>
+                <th className={thClass}>Backup</th>
+                <th className={thClass}>Status</th>
+                <th className={thClass}>Started</th>
               </tr>
             </thead>
             <tbody>
@@ -74,13 +71,11 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
                       selected ? 'bg-surface shadow-[inset_2px_0_0_hsl(var(--accent))]' : ''
                     }`}
                   >
-                    <td className="px-3 py-2.5 border-b border-border font-mono text-xs">
-                      {run.backup_source.split('/').pop()}
-                    </td>
-                    <td className="px-3 py-2.5 border-b border-border">
+                    <td className={`${tdClass} font-mono text-xs`}>{run.backup_source.split('/').pop()}</td>
+                    <td className={tdClass}>
                       <Badge variant={phase}>{phase === 'finished' ? 'finished' : 'in progress'}</Badge>
                     </td>
-                    <td className="px-3 py-2.5 border-b border-border font-mono text-xs">
+                    <td className={`${tdClass} font-mono text-xs`}>
                       {new Date(run.started_at).toLocaleString()}
                     </td>
                   </tr>
@@ -92,10 +87,10 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
       </div>
 
       <div className="flex-1 overflow-auto p-5">
-        <h2 className="font-display text-[15px] font-medium text-accent mb-4">Stage Breakdown</h2>
+        <h2 className="font-display text-base font-medium text-accent mb-4">Stage Breakdown</h2>
         {selectedRun ? (
           stages.length === 0 ? (
-            <p className="text-muted-foreground text-[13px]">No stages found for this run.</p>
+            <p className="text-muted-foreground text-sm">No stages found for this run.</p>
           ) : (
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
               {stages.map((stage) => {
@@ -103,7 +98,7 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
                 return (
                   <div
                     key={`${stage.run_id}-${stage.stage_name}`}
-                    className="bg-surface rounded-md px-4 py-3.5 border-l-2"
+                    className="bg-surface rounded-md p-4 border-l-2"
                     style={{
                       borderLeftColor:
                         stage.status === 'succeeded'
@@ -113,12 +108,12 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
                             : 'hsl(var(--muted-foreground) / 0.5)',
                     }}
                   >
-                    <h3 className="font-display text-sm font-medium mb-2.5">{stage.stage_name}</h3>
-                    <p className="text-xs text-muted-foreground font-mono mb-1.5 flex items-center gap-2">
+                    <h3 className="font-display text-sm font-medium mb-2">{stage.stage_name}</h3>
+                    <p className="text-xs text-muted-foreground font-mono mb-1 flex items-center gap-2">
                       Status: <Badge variant={stage.status}>{stage.status}</Badge>
                     </p>
                     {stage.error_message && (
-                      <p className="text-xs text-flag font-mono mb-1.5">Error: {stage.error_message}</p>
+                      <p className="text-xs text-flag font-mono mb-1">Error: {stage.error_message}</p>
                     )}
                     <p className="text-xs text-muted-foreground font-mono">
                       Duration: <strong>{durationMs !== null ? `${durationMs}ms` : '—'}</strong>
@@ -129,7 +124,7 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
             </div>
           )
         ) : (
-          <p className="text-muted-foreground text-[13px]">Select a pipeline run to view stages</p>
+          <p className="text-muted-foreground text-sm">Select a pipeline run to view stages</p>
         )}
       </div>
     </div>

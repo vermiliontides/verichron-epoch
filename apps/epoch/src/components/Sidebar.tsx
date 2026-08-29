@@ -20,13 +20,13 @@ interface SidebarProps {
 export function Sidebar({ active, onSelect, dbStatus }: SidebarProps) {
   return (
     <div className="w-44 shrink-0 bg-[hsl(217_17%_12%)] border-r border-border flex flex-col py-4">
-      <div className="font-display text-[15px] font-medium px-4 pb-4">Epoch</div>
+      <div className="font-display text-base font-medium px-4 pb-4">Epoch</div>
       {NAV_ITEMS.map(({ section, label, icon: Icon }) => (
         <button
           key={section}
           onClick={() => onSelect(section)}
           className={cn(
-            'flex items-center gap-2.5 px-4 py-2.5 text-[13px] text-left border-l-2 border-transparent transition-colors',
+            'flex items-center gap-2 px-4 py-2 text-sm text-left border-l-2 border-transparent transition-colors',
             active === section
               ? 'bg-surface text-accent border-accent'
               : 'text-muted-foreground hover:bg-surface hover:text-foreground'
@@ -36,7 +36,7 @@ export function Sidebar({ active, onSelect, dbStatus }: SidebarProps) {
           {label}
         </button>
       ))}
-      <div className="mt-auto pt-3 px-4 border-t border-border flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="mt-auto pt-3 px-4 border-t border-border flex items-center gap-2 text-2xs text-muted-foreground">
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full',

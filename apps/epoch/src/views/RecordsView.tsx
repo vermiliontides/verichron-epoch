@@ -6,6 +6,9 @@ interface RecordsViewProps {
   runs: PipelineRunRow[];
 }
 
+const thClass = 'text-left font-medium text-muted-foreground bg-surface px-3 py-2 border-b border-border text-2xs uppercase tracking-wide';
+const tdClass = 'px-3 py-2 border-b border-border';
+
 export function RecordsView({ runs }: RecordsViewProps) {
   const [selectedRunId, setSelectedRunId] = useState<string>('');
   const [sourceType, setSourceType] = useState('');
@@ -41,13 +44,13 @@ export function RecordsView({ runs }: RecordsViewProps) {
 
   return (
     <div className="flex-1 overflow-auto p-5">
-      <h2 className="font-display text-[15px] font-medium text-accent mb-4">Forensic Records</h2>
+      <h2 className="font-display text-base font-medium text-accent mb-4">Forensic Records</h2>
 
       <div className="flex gap-3 mb-4">
         <select
           value={selectedRunId}
           onChange={(e) => setSelectedRunId(e.target.value)}
-          className="bg-surface border border-border rounded-md px-3 py-1.5 text-[13px] text-foreground font-mono"
+          className="bg-surface border border-border rounded-md px-3 py-2 text-sm text-foreground font-mono"
         >
           <option value="">Select a run…</option>
           {runs.map((run) => (
@@ -62,27 +65,24 @@ export function RecordsView({ runs }: RecordsViewProps) {
           onChange={(e) => setSourceType(e.target.value)}
           placeholder="Filter by source_type (optional)"
           disabled={!selectedRunId}
-          className="bg-surface border border-border rounded-md px-3 py-1.5 text-[13px] text-foreground font-mono flex-1 max-w-xs placeholder:text-muted-foreground disabled:opacity-50"
+          className="bg-surface border border-border rounded-md px-3 py-2 text-sm text-foreground font-mono flex-1 max-w-xs placeholder:text-muted-foreground disabled:opacity-50"
         />
       </div>
 
       {!selectedRunId ? (
-        <p className="text-muted-foreground text-[13px]">Select a run to view its forensic records.</p>
+        <p className="text-muted-foreground text-sm">Select a run to view its forensic records.</p>
       ) : error ? (
-        <div className="text-flag bg-flag/10 border border-flag/30 rounded-md px-3 py-2 text-[13px]">{error}</div>
+        <div className="text-flag bg-flag/10 border border-flag/30 rounded-md px-3 py-2 text-sm">{error}</div>
       ) : loading ? (
-        <p className="text-muted-foreground text-[13px]">Loading...</p>
+        <p className="text-muted-foreground text-sm">Loading...</p>
       ) : records.length === 0 ? (
-        <p className="text-muted-foreground text-[13px]">No forensic records found for this run.</p>
+        <p className="text-muted-foreground text-sm">No forensic records found for this run.</p>
       ) : (
-        <table className="w-full text-[13px] border-collapse">
+        <table className="w-full text-sm border-collapse">
           <thead>
             <tr>
               {['Event Time', 'Source Type', 'Bug Type', 'Process', 'PID', 'Bundle ID', 'Incident'].map((h) => (
-                <th
-                  key={h}
-                  className="text-left font-medium text-muted-foreground bg-surface px-3 py-2.5 border-b border-border"
-                >
+                <th key={h} className={thClass}>
                   {h}
                 </th>
               ))}
@@ -95,21 +95,17 @@ export function RecordsView({ runs }: RecordsViewProps) {
                   onClick={() => setExpandedId(expandedId === record.id ? null : record.id)}
                   className="cursor-pointer transition-colors hover:bg-surface"
                 >
-                  <td className="px-3 py-2.5 border-b border-border font-mono text-xs">
+                  <td className={`${tdClass} font-mono text-xs`}>
                     {record.event_time ? new Date(record.event_time).toLocaleString() : '—'}
                   </td>
-                  <td className="px-3 py-2.5 border-b border-border">
+                  <td className={tdClass}>
                     <Badge variant="neutral">{record.source_type}</Badge>
                   </td>
-                  <td className="px-3 py-2.5 border-b border-border font-mono text-xs">{record.bug_type ?? '—'}</td>
-                  <td className="px-3 py-2.5 border-b border-border font-mono text-xs">
-                    {record.process_name ?? '—'}
-                  </td>
-                  <td className="px-3 py-2.5 border-b border-border font-mono text-xs">{record.pid ?? '—'}</td>
-                  <td className="px-3 py-2.5 border-b border-border font-mono text-xs">{record.bundle_id ?? '—'}</td>
-                  <td className="px-3 py-2.5 border-b border-border font-mono text-xs">
-                    {record.incident_id ?? '—'}
-                  </td>
+                  <td className={`${tdClass} font-mono text-xs`}>{record.bug_type ?? '—'}</td>
+                  <td className={`${tdClass} font-mono text-xs`}>{record.process_name ?? '—'}</td>
+                  <td className={`${tdClass} font-mono text-xs`}>{record.pid ?? '—'}</td>
+                  <td className={`${tdClass} font-mono text-xs`}>{record.bundle_id ?? '—'}</td>
+                  <td className={`${tdClass} font-mono text-xs`}>{record.incident_id ?? '—'}</td>
                 </tr>
                 {expandedId === record.id && (
                   <tr>

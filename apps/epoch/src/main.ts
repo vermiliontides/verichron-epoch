@@ -27,8 +27,8 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // Force X11 and disable acceleration for Linux display compatibility
-app.commandLine.appendSwitch('ozone-platform', 'x11');
-app.disableHardwareAcceleration();
+// app.commandLine.appendSwitch('ozone-platform', 'x11');
+// app.disableHardwareAcceleration();
 
 // DB pool lives in the main process. This is the only process with full
 // Node access (net/tls/dns), which `pg` requires — a sandboxed preload

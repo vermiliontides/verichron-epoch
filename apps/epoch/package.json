@@ -6,12 +6,16 @@
   "main": ".vite/build/main.js",
   "preload": ".vite/build/preload.js",
   "private": true,
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
+    "clean:ts": "find src/ -type f \\( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' \\) ! -name 'env.d.ts' -delete",
     "start": "electron-forge start",
     "dev": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
-    "lint": "eslint --ext .ts,.tsx ."
+    "lint": "eslint ."
   },
   "keywords": [],
   "author": {
@@ -28,26 +32,27 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.2",
     "@electron-forge/plugin-fuses": "^7.11.2",
     "@electron-forge/plugin-vite": "^7.11.2",
+    "@electron-forge/shared-types": "^7.11.2",
     "@electron/fuses": "^1.8.0",
     "@types/electron-squirrel-startup": "^1.0.2",
-    "@types/node": "^20.19.0",
-    "@types/pg": "^8.23.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.11.10",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.5",
-    "@vitejs/plugin-react": "4.3.4",
-    "electron": "44.0.0",
-    "eslint-plugin-import": "^2.32.0",
-    "typescript": "6.0.3",
-    "tsx": "4.23.12",
-    "vite": "^8.2.2",
-    "eslint": "^10.9.1",
+    "@types/react-dom": "^19.2.18",
     "@typescript-eslint/eslint-plugin": "^8.68.0",
-    "@typescript-eslint/parser": "^8.68.0"
+    "@typescript-eslint/parser": "^8.68.0",
+    "@vitejs/plugin-react": "^6.0.5",
+    "electron": "44.0.0",
+    "eslint": "^10.9.1",
+    "eslint-plugin-import-x": "^4.17.1",
+    "tsx": "4.23.12",
+    "typescript": "6.0.3",
+    "vite": "^8.2.2"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
-    "pg": "^8.23.0",
+    "pg": "^8.13.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.8"
   }
 }

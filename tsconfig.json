@@ -1,4 +1,5 @@
 {
+  "name": "@verichron/tsconifg",
   "compilerOptions": {
     "target": "ES2022",
     "module": "NodeNext",

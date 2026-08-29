@@ -12,5 +12,9 @@
     "plugin:import/electron",
     "plugin:import/typescript"
   ],
-  "parser": "@typescript-eslint/parser"
+  "parser": "@typescript-eslint/parser",
+  // package.json dependency fix
+  "devDependencies": {
+    "eslint-plugin-import": "^2.31.0"
+  }
 }

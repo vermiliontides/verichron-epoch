@@ -4,6 +4,7 @@ import path from 'path';
 import { Pool } from 'pg';
 import { getPipelineRuns, getStageStatus, getForensicRecords } from '@verichron/db-reader';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
+import dotenv from 'dotenv'
 
 const { app, BrowserWindow, ipcMain } = electron;
 
@@ -11,6 +12,7 @@ console.log('\n=======================================');
 console.log('MAIN PROCESS IS EXECUTING!');
 console.log('=======================================\n');
 
+dotenv.config({ path: '../../../.env' })
 // 1. Catch silent crashes and print them to the terminal
 process.on('uncaughtException', (error) => {
   console.error('\n--- FATAL UNCAUGHT EXCEPTION ---');

@@ -105,6 +105,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.7.0
         version: 4.7.0(vite@5.4.21(@types/node@24.13.3)(terser@5.51.2))
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
       electron:
         specifier: 44.0.0
         version: 44.0.0
@@ -1685,6 +1688,10 @@ packages:
 
   dir-compare@4.2.0:
     resolution: {integrity: sha512-2xMCmOoMrdQIPHdsTawECdNPwlVFB9zGcz3kuhmBO6U3oU+UQjsue0i8ayLKpgBcm+hcXPMVSGUN9d+pvJ6+VQ==}
+
+  dotenv@17.4.2:
+    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
+    engines: {node: '>=12'}
 
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
@@ -4895,6 +4902,8 @@ snapshots:
     dependencies:
       minimatch: 3.1.5
       p-limit: 3.1.0
+
+  dotenv@17.4.2: {}
 
   eastasianwidth@0.2.0: {}
 

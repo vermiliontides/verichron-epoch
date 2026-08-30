@@ -3,7 +3,7 @@ import type { PipelineRunRow, StageStatusRow, ForensicRecordRow } from '@verichr
 import { Sidebar, type Section } from './components/Sidebar';
 import { EvidenceTag } from './components/ui/EvidenceTag';
 import { Badge } from './components/ui/Badge';
-import { TooltipProvider } from './components/Sidebar';
+import { TooltipProvider } from './components/ui/Tooltip';
 
 /**
  * Field names here are pulled directly from PipelineRunRow/StageStatusRow/
@@ -33,6 +33,26 @@ const STAGE_BADGE_VARIANT: Record<StageStatusRow['status'], 'accent' | 'flag' | 
   failed: 'flag',
   skipped: 'neutral',
 };
+
+/**
+ * Matches apps/extractors/mvt_iocs's SourceType enum (normalized_record.py)
+ * exactly -- these are ordinary forensic_records rows, not a separate
+ * table or IPC channel. IOCs panel below reuses the same `records` fetch
+ * the Records panel already makes, just filtered to these two source_types.
+ */
+const IOC_SOURCE_TYPES = ['mvt_ioc_detection', 'timestamp_anomaly'] as const;
+type IocSourceType = (typeof IOC_SOURCE_TYPES)[number];
+
+function isIocSourceType(sourceType: string): sourceType is IocSourceType {
+  return (IOC_SOURCE_TYPES as readonly string[]).includes(sourceType);
+}
+
+function formatDelta(seconds: unknown): string {
+  if (typeof seconds !== 'number') return '—';
+  const days = Math.floor(Math.abs(seconds) / 86400);
+  const hours = Math.floor((Math.abs(seconds) % 86400) / 3600);
+  return `${seconds < 0 ? '-' : '+'}${days}d ${hours}h`;
+}
 
 export const App: React.FC = () => {
   const [section, setSection] = useState<Section>('runs');
@@ -94,15 +114,18 @@ export const App: React.FC = () => {
 
   const handleSectionSelect = (next: Section) => {
     setSection(next);
-    if (next === 'records' && selectedRun && !recordsLoaded) {
+    if ((next === 'records' || next === 'iocs') && selectedRun && !recordsLoaded) {
       loadRecords(selectedRun);
     }
   };
 
-  const availableSourceTypes = Array.from(new Set(records.map((r) => r.source_type))).sort();
+  const iocRecords = records.filter((r) => isIocSourceType(r.source_type));
+  const nonIocRecords = records.filter((r) => !isIocSourceType(r.source_type));
+
+  const availableSourceTypes = Array.from(new Set(nonIocRecords.map((r) => r.source_type))).sort();
   const visibleRecords = sourceTypeFilter
-    ? records.filter((r) => r.source_type === sourceTypeFilter)
-    : records;
+    ? nonIocRecords.filter((r) => r.source_type === sourceTypeFilter)
+    : nonIocRecords;
 
   return (
     <TooltipProvider>
@@ -262,10 +285,56 @@ export const App: React.FC = () => {
             {section === 'iocs' && (
               <div>
                 <h2 className="font-display text-[15px] text-accent mb-4">Indicator Matches</h2>
-                <div className="bg-surface border border-border rounded-md p-4 text-sm text-muted-foreground">
-                  Not wired yet — no IPC channel exposes mvt_iocs output today. This section is a
-                  placeholder pending a new getIocMatches handler in main.ts and db-reader.
-                </div>
+                {!selectedRun ? (
+                  <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
+                ) : iocRecords.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    No mvt_ioc_detection or timestamp_anomaly records for this run.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {iocRecords.map((rec) => {
+                      const isDetection = rec.source_type === 'mvt_ioc_detection';
+                      const matched = isDetection && rec.fields.matched_indicator != null;
+                      return (
+                        <div
+                          key={rec.id}
+                          className={`rounded-md p-3 border ${
+                            matched ? 'bg-flag/10 border-flag/30' : 'bg-surface border-border'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <Badge variant={matched ? 'flag' : 'neutral'}>{rec.source_type}</Badge>
+                            {rec.event_time && (
+                              <span className="font-mono text-xs text-muted-foreground">
+                                {new Date(rec.event_time).toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                          {isDetection ? (
+                            <>
+                              <p className="text-sm">{String(rec.fields.message ?? '—')}</p>
+                              {matched && (
+                                <p className="text-xs font-mono text-flag mt-1">
+                                  matched: {String(rec.fields.matched_indicator)}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm">
+                                {String(rec.fields.plugin ?? '—')} — {String(rec.fields.description ?? rec.fields.event ?? '—')}
+                              </p>
+                              <p className="text-xs font-mono text-muted-foreground mt-1">
+                                {formatDelta(rec.fields.delta_from_backup_seconds)} from backup date
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

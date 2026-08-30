@@ -1,7 +1,7 @@
 import React from 'react';
 import type { PipelineRunRow } from '@verichron/db-reader';
-import { Badge } from './ui/badge';
-import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
+import { Badge } from './Badge';
+import { Tooltip, TooltipTrigger, TooltipContent } from './Tooltip';
 
 /**
  * Shows only what pipeline_runs actually has. No integrity/verification

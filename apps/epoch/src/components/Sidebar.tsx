@@ -1,22 +1,22 @@
 import React from 'react';
 import { ListChecks, FileSearch, Flag, FileText } from 'lucide-react';
 import { cn } from '../lib/utils';
-
+ 
 export type Section = 'runs' | 'records' | 'iocs' | 'reports';
-
+ 
 const NAV_ITEMS: { section: Section; label: string; icon: typeof ListChecks }[] = [
   { section: 'runs', label: 'Runs', icon: ListChecks },
   { section: 'records', label: 'Records', icon: FileSearch },
   { section: 'iocs', label: 'IOCs', icon: Flag },
   { section: 'reports', label: 'Reports', icon: FileText },
 ];
-
+ 
 interface SidebarProps {
   active: Section;
   onSelect: (section: Section) => void;
   dbStatus: 'connected' | 'error' | 'unknown';
 }
-
+ 
 export function Sidebar({ active, onSelect, dbStatus }: SidebarProps) {
   return (
     <div className="w-44 shrink-0 bg-[hsl(217_17%_12%)] border-r border-border flex flex-col py-4">
@@ -32,7 +32,7 @@ export function Sidebar({ active, onSelect, dbStatus }: SidebarProps) {
               : 'text-muted-foreground hover:bg-surface hover:text-foreground'
           )}
         >
-          <Icon size={16} />
+          <Icon size="1rem" />
           {label}
         </button>
       ))}

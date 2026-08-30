@@ -12,7 +12,10 @@
     }
   },
   "scripts": {
+    "build:contracts": "pnpm --filter @verichron/contracts build",
+    "prebuild": "pnpm run build:contracts",
     "build": "tsc",
+    "pretypecheck": "pnpm run build:contracts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,12 +1,13 @@
 /// <reference types="@electron-forge/plugin-vite/forge-vite-env" />
 import electron from 'electron';
 import path from 'path';
+import fs from 'fs/promises';
 import { Pool } from 'pg';
-import { getPipelineRuns, getStageStatus, getForensicRecords } from '@verichron/db-reader';
+import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/db-reader';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
 import dotenv from 'dotenv'
 
-const { app, BrowserWindow, ipcMain } = electron;
+const { app, BrowserWindow, ipcMain, shell } = electron;
 
 console.log('\n=======================================');
 console.log('MAIN PROCESS IS EXECUTING!');
@@ -79,6 +80,71 @@ ipcMain.handle('epoch:getForensicRecords', async (_event, runId: string, sourceT
     console.error('DB error:', err);
     throw err;
   }
+});
+
+ipcMain.handle('epoch:getCorrelationPivots', async (_event, runId: string) => {
+  try {
+    return await getCorrelationPivots(dbPool, runId);
+  } catch (err) {
+    console.error('DB error:', err);
+    throw err;
+  }
+});
+
+ipcMain.handle(
+  'epoch:getCorrelatedContext',
+  async (_event, runId: string, eventTime: string, excludeId: number, windowMinutes?: number) => {
+    try {
+      return await getCorrelatedContext(dbPool, runId, eventTime, excludeId, windowMinutes);
+    } catch (err) {
+      console.error('DB error:', err);
+      throw err;
+    }
+  }
+);
+
+/**
+ * Third copy of this exact derivation -- orchestrator/main.ts's
+ * deriveResultsPath and mvt_iocs's resolve_results_path (Python) both do
+ * the same 'decrypted' -> 'results' swap. Not extracted to a shared
+ * package yet; worth doing if a fourth consumer shows up, or sooner.
+ */
+function deriveResultsPath(backupSource: string): string | undefined {
+  const parts = backupSource.split(path.sep);
+  const idx = parts.indexOf('decrypted');
+  if (idx === -1) return undefined;
+  parts[idx] = 'results';
+  return parts.join(path.sep);
+}
+
+function reportPathFor(backupSource: string): string | undefined {
+  const resultsPath = deriveResultsPath(backupSource);
+  if (!resultsPath) return undefined;
+  return path.join(resultsPath, 'investigation_report.md');
+}
+
+ipcMain.handle('epoch:getReport', async (_event, backupSource: string) => {
+  const reportPath = reportPathFor(backupSource);
+  if (!reportPath) {
+    return { status: 'no-results-path' as const };
+  }
+  try {
+    const content = await fs.readFile(reportPath, 'utf-8');
+    return { status: 'ok' as const, content, path: reportPath };
+  } catch (err: any) {
+    if (err?.code === 'ENOENT') {
+      return { status: 'not-found' as const, path: reportPath };
+    }
+    console.error('Report read error:', err);
+    throw err;
+  }
+});
+
+ipcMain.handle('epoch:openReport', async (_event, backupSource: string) => {
+  const reportPath = reportPathFor(backupSource);
+  if (!reportPath) return false;
+  const result = await shell.openPath(reportPath);
+  return result === '';
 });
 
 let mainWindow: BrowserWindowType | null = null;

@@ -14,7 +14,23 @@
  * apps/epoch/src/main.ts would have executed successfully against this
  * schema as written.
  */
-
-
-export type { PipelineRunRow, StageStatusRow, ForensicRecordRow, StageStatus } from './dbReader.js';
-export { getPipelineRuns, getStageStatus, getForensicRecords, CANONICAL_STAGE_ORDER } from './dbReader.js';
+ 
+ 
+export type {
+  PipelineRunRow,
+  StageStatusRow,
+  ForensicRecordRow,
+  StageStatus,
+  CorrelationPivotRow,
+  CorrelatedContextRow,
+} from './dbReader.js';
+export {
+  getPipelineRuns,
+  getStageStatus,
+  getForensicRecords,
+  getCorrelationPivots,
+  getCorrelatedContext,
+  CANONICAL_STAGE_ORDER,
+  CORRELATION_WINDOW_MINUTES,
+} from './dbReader.js';
+ 

@@ -172,3 +172,82 @@ export async function getForensicRecords(
   );
   return result.rows;
 }
+
+/**
+ * Correlation pivots + context, mirroring apps/reporting/generate_report.py's
+ * fetch_correlation_pivots / fetch_correlated_context exactly -- same source
+ * types, same window, same query shape. Two functions, not one, matching the
+ * Python file's own split: pivots is cheap (one query, all of them, since a
+ * run's mvt_ioc_detection + timestamp_anomaly count is small), context is
+ * per-pivot and only worth fetching when a caller actually wants to expand
+ * one -- fetching context for every pivot up front doesn't scale the same
+ * way pivots does.
+ */
+
+export interface CorrelationPivotRow {
+  id: number;
+  source_type: string;
+  event_time: string | null;
+  fields: Record<string, unknown>;
+}
+
+export interface CorrelatedContextRow {
+  id: number;
+  source_type: string;
+  event_time: string | null;
+  process_name: string | null;
+  bundle_id: string | null;
+  fields: Record<string, unknown>;
+}
+
+/** Minutes on either side of a pivot's event_time to pull as context. Matches
+ * generate_report.py's CORRELATION_WINDOW (a fixed default, not yet a CLI
+ * flag there either -- see that file's own comment on why a sensible fixed
+ * default shipped first). */
+export const CORRELATION_WINDOW_MINUTES = 15;
+
+/**
+ * Every mvt_ioc_detection / timestamp_anomaly row for a run -- the pivot
+ * points a correlation view builds a window around. Rows with a null
+ * event_time (e.g. an untimed alert) come back too; there's nothing to
+ * correlate them against, so a caller should render those separately rather
+ * than pass them to getCorrelatedContext.
+ */
+export async function getCorrelationPivots(client: Db, runId: string): Promise<CorrelationPivotRow[]> {
+  const result = await client.query<CorrelationPivotRow>(
+    `SELECT id, source_type, event_time, fields
+       FROM forensic_records
+      WHERE run_id = $1 AND source_type IN ('mvt_ioc_detection', 'timestamp_anomaly')
+      ORDER BY event_time ASC NULLS LAST`,
+    [runId]
+  );
+  return result.rows;
+}
+
+/**
+ * Everything else in forensic_records for this run within the correlation
+ * window of one pivot's event_time, across every source_type -- the entire
+ * point per generate_report.py's own comment: crash today, every other
+ * domain automatically once its extractor lands, no change needed here when
+ * that happens. `excludeId` keeps the pivot itself out of its own context.
+ */
+export async function getCorrelatedContext(
+  client: Db,
+  runId: string,
+  eventTime: string,
+  excludeId: number,
+  windowMinutes: number = CORRELATION_WINDOW_MINUTES
+): Promise<CorrelatedContextRow[]> {
+  const center = new Date(eventTime);
+  const lo = new Date(center.getTime() - windowMinutes * 60_000).toISOString();
+  const hi = new Date(center.getTime() + windowMinutes * 60_000).toISOString();
+
+  const result = await client.query<CorrelatedContextRow>(
+    `SELECT id, source_type, event_time, process_name, bundle_id, fields
+       FROM forensic_records
+      WHERE run_id = $1 AND event_time BETWEEN $2 AND $3 AND id != $4
+      ORDER BY event_time ASC`,
+    [runId, lo, hi, excludeId]
+  );
+  return result.rows;
+}

@@ -1,5 +1,5 @@
 @import "tailwindcss";
-
+ 
 :root {
   --background: 217 17% 9%;
   --surface: 217 17% 15%;
@@ -9,7 +9,7 @@
   --border: 217 15% 17%;
   --muted-foreground: 220 17% 64%;
 }
-
+ 
 @theme {
   --color-background: hsl(var(--background));
   --color-surface: hsl(var(--surface));
@@ -18,197 +18,21 @@
   --color-flag: hsl(var(--flag));
   --color-border: hsl(var(--border));
   --color-muted-foreground: hsl(var(--muted-foreground));
-
+ 
   --font-sans: 'Inter', sans-serif;
   --font-display: 'Space Grotesk', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
-
+ 
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
-
+ 
 body {
   font-family: var(--font-sans);
   background: var(--color-background);
   color: var(--color-foreground);
 }
-
-.app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-.app-header {
-  background: var(--color-surface);
-  border-bottom: 0.5px solid var(--color-border);
-  color: var(--color-foreground);
-  padding: 16px 20px;
-}
-
-.app-header h1 {
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 500;
-}
-
-.app-content {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  gap: 0.5px;
-  background: var(--color-border);
-}
-
-.runs-panel, .stages-panel {
-  flex: 1;
-  background: var(--color-background);
-  padding: 20px;
-  overflow: auto;
-}
-
-.runs-panel h2, .stages-panel h2 {
-  font-family: var(--font-display);
-  font-size: 16px;
-  font-weight: 500;
-  margin-bottom: 16px;
-  color: var(--color-accent);
-}
-
-.runs-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.runs-table th {
-  background: var(--color-surface);
-  padding: 10px 12px;
-  text-align: left;
-  border-bottom: 0.5px solid var(--color-border);
-  font-weight: 500;
-  color: var(--color-muted-foreground);
-}
-
-.runs-table td {
-  padding: 10px 12px;
-  border-bottom: 0.5px solid var(--color-border);
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-.runs-table tr {
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.runs-table tr:hover {
-  background: var(--color-surface);
-}
-
-.runs-table tr.selected {
-  background: var(--color-surface);
-  box-shadow: inset 2px 0 0 hsl(var(--accent));
-}
-
-.status {
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  font-family: var(--font-mono);
-}
-
-/*
- * Two vocabularies here, deliberately -- pipeline_runs has no status
- * column, so App.tsx derives a two-state run-level phase (in_progress /
- * finished) from finished_at, separate from pipeline_stage_status's real
- * five-value enum below. Conflating them would misrepresent a run as
- * "succeeded" when only its stages' statuses actually say that, and
- * pipeline_runs itself makes no such claim.
- */
-.status.in_progress {
-  background: hsl(var(--flag) / 0.15);
-  color: hsl(var(--flag));
-}
-
-.status.finished {
-  background: hsl(var(--accent) / 0.15);
-  color: hsl(var(--accent));
-}
-
-/* pipeline_stage_status.status CHECK constraint: pending | running | succeeded | failed | skipped */
-.status.pending {
-  background: hsl(var(--muted-foreground) / 0.12);
-  color: hsl(var(--muted-foreground));
-}
-
-.status.running {
-  background: hsl(var(--flag) / 0.15);
-  color: hsl(var(--flag));
-}
-
-.status.succeeded {
-  background: hsl(var(--accent) / 0.15);
-  color: hsl(var(--accent));
-}
-
-.status.failed {
-  background: hsl(var(--flag) / 0.2);
-  color: hsl(var(--flag));
-}
-
-.status.skipped {
-  background: hsl(var(--muted-foreground) / 0.08);
-  color: hsl(var(--muted-foreground));
-}
-
-.stages-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-}
-
-.stage-card {
-  background: var(--color-surface);
-  border-left: 2px solid hsl(var(--accent));
-  padding: 14px 16px;
-  border-radius: 6px;
-}
-
-.stage-card.pending {
-  border-left-color: hsl(var(--muted-foreground));
-}
-
-.stage-card.running {
-  border-left-color: hsl(var(--flag));
-}
-
-.stage-card.succeeded {
-  border-left-color: hsl(var(--accent));
-}
-
-.stage-card.failed {
-  border-left-color: hsl(var(--flag));
-}
-
-.stage-card.skipped {
-  border-left-color: hsl(var(--muted-foreground) / 0.5);
-}
-
-.stage-card h3 {
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 10px;
-}
-
-.stage-card p {
-  font-size: 12px;
-  margin-bottom: 6px;
-  color: var(--color-muted-foreground);
-  font-family: var(--font-mono);
-}
+ 

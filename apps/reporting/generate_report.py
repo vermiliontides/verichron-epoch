@@ -345,15 +345,48 @@ def generate_report(conn, run_id: str, output_path: str, results_path: str | Non
     print(f"[reporting] wrote {output_path}")
 
 
+def resolve_output_path(output: str | None, results_path: str | None) -> str:
+    """
+    A bare 'investigation_report.md' default with no run/backup identity in
+    the name meant every run silently overwrote the same file, wherever the
+    orchestrator process's cwd happened to be -- there was no reliable,
+    discoverable per-run report on disk at all.
+
+    The orchestrator already derives --results-path from --backup-path for
+    every stage that can use it (see @verichron/contracts's
+    deriveResultsPath, and mvt_iocs's own resolve_results_path fallback of
+    the same logic) -- reusing that gives the report a real per-run home
+    alongside that backup's own mvt output, with no new CLI surface needed.
+
+    An explicit --output always wins, for manual/ad hoc invocation.
+    """
+    if output is not None:
+        return output
+    if results_path:
+        return str(Path(results_path) / "investigation_report.md")
+    print(
+        "[reporting] no --output and no --results-path given -- falling back "
+        "to 'investigation_report.md' in the current working directory. "
+        "This will be silently overwritten by the next run invoked the same "
+        "way -- pass --backup-path (so --results-path can be derived) or "
+        "--output explicitly to get a stable per-run path.",
+        file=sys.stderr,
+    )
+    return "investigation_report.md"
+
+
 def main():
     fatal_if_missing_venv()
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--backup-path", required=False)  # unused here, present for contract consistency
-    parser.add_argument("--results-path", required=False, help="enables the timeline.csv correlation supplement (see render_correlation_section)")
+    parser.add_argument("--results-path", required=False, help="enables the timeline.csv correlation supplement (see render_correlation_section), and is also where the report itself is written by default -- see resolve_output_path")
     parser.add_argument("--db-url", required=True)
-    parser.add_argument("--output", default="investigation_report.md")
+    parser.add_argument("--output", default=None, help="defaults to <results-path>/investigation_report.md when --results-path is given; see resolve_output_path")
     args = parser.parse_args()
+
+    output_path = resolve_output_path(args.output, args.results_path)
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
     try:
         conn = psycopg2.connect(args.db_url)
@@ -362,7 +395,7 @@ def main():
         sys.exit(1)
 
     try:
-        generate_report(conn, args.run_id, args.output, args.results_path)
+        generate_report(conn, args.run_id, output_path, args.results_path)
     except Exception as e:
         print(f"[reporting] failed: {e}", file=sys.stderr)
         sys.exit(1)

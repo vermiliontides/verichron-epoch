@@ -4,16 +4,16 @@ import path from 'path';
 import fs from 'fs/promises';
 import { Pool } from 'pg';
 import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/db-reader';
+import { deriveResultsPath } from '@verichron/contracts';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
 import dotenv from 'dotenv'
-import { spawn } from 'child_process';
- 
-const { app, BrowserWindow, ipcMain, shell, dialog } = electron;
- 
+
+const { app, BrowserWindow, ipcMain, shell } = electron;
+
 console.log('\n=======================================');
 console.log('MAIN PROCESS IS EXECUTING!');
 console.log('=======================================\n');
- 
+
 dotenv.config({ path: '../../../.env' })
 // 1. Catch silent crashes and print them to the terminal
 process.on('uncaughtException', (error) => {
@@ -21,17 +21,17 @@ process.on('uncaughtException', (error) => {
   console.error(error);
   console.error('--------------------------------\n');
 });
- 
+
 process.on('unhandledRejection', (reason) => {
   console.error('\n--- UNHANDLED PROMISE REJECTION ---');
   console.error(reason);
   console.error('-----------------------------------\n');
 });
- 
+
 // Force X11 and disable acceleration for Linux display compatibility
 // app.commandLine.appendSwitch('ozone-platform', 'x11');
 // app.disableHardwareAcceleration();
- 
+
 // DB pool lives in the main process. This is the only process with full
 // Node access (net/tls/dns), which `pg` requires — a sandboxed preload
 // script cannot resolve those core modules, which is why the previous
@@ -55,50 +55,7 @@ const dbPool = new Pool({
   password: process.env.DB_PASSWORD || 'forensics_dev_only',
   max: 10,
 });
- 
-ipcMain.handle('epoch:startPipeline', async (_event, targetPath: string) => {
-  console.log(`[Main] Starting pipeline for target: ${targetPath}`);
- 
-  const pythonProcess = spawn('python3', [
-    path.join(__dirname, '../../../scripts/full_pipeline.py'),
-    '--target',
-    targetPath,
-  ]);
- 
-  pythonProcess.stdout.on('data', (data) => {
-    console.log(`[Pipeline STDOUT]: ${data.toString().trim()}`);
-  });
- 
-  pythonProcess.stderr.on('data', (data) => {
-    console.error(`[Pipeline STDERR]: ${data.toString().trim()}`);
-  });
- 
-  pythonProcess.on('close', (code) => {
-    console.log(`[Pipeline] Process exited with code ${code}`);
-  });
- 
-  // Resolve once the process has actually launched, not unconditionally.
-  // 'spawn' fires once the OS confirms the child started; 'error' fires
-  // instead if spawn itself failed (e.g. python3 isn't on PATH). Both fire
-  // near-immediately, well before the pipeline does any real work, so this
-  // doesn't meaningfully delay navigating to the Runs view -- it just stops
-  // that navigation from happening on top of a failure nobody was told
-  // about. The pipeline keeps running fire-and-forget after this resolves;
-  // this only guards the launch itself, not the run's eventual success.
-  return new Promise((resolve, reject) => {
-    pythonProcess.once('spawn', () => {
-      resolve({ status: 'started', target: targetPath });
-    });
-    pythonProcess.once('error', (err) => {
-      console.error(`[Pipeline Error] Failed to start subprocess:`, err);
-      reject(err);
-    });
-  });
-});
- 
- 
- 
- 
+
 ipcMain.handle('epoch:getPipelineRuns', async () => {
   try {
     return await getPipelineRuns(dbPool);
@@ -107,7 +64,7 @@ ipcMain.handle('epoch:getPipelineRuns', async () => {
     throw err;
   }
 });
- 
+
 ipcMain.handle('epoch:getStageStatus', async (_event, runId: string) => {
   try {
     return await getStageStatus(dbPool, runId);
@@ -116,7 +73,7 @@ ipcMain.handle('epoch:getStageStatus', async (_event, runId: string) => {
     throw err;
   }
 });
- 
+
 ipcMain.handle('epoch:getForensicRecords', async (_event, runId: string, sourceType?: string) => {
   try {
     return await getForensicRecords(dbPool, runId, { sourceType });
@@ -125,7 +82,7 @@ ipcMain.handle('epoch:getForensicRecords', async (_event, runId: string, sourceT
     throw err;
   }
 });
- 
+
 ipcMain.handle('epoch:getCorrelationPivots', async (_event, runId: string) => {
   try {
     return await getCorrelationPivots(dbPool, runId);
@@ -134,7 +91,7 @@ ipcMain.handle('epoch:getCorrelationPivots', async (_event, runId: string) => {
     throw err;
   }
 });
- 
+
 ipcMain.handle(
   'epoch:getCorrelatedContext',
   async (_event, runId: string, eventTime: string, excludeId: number, windowMinutes?: number) => {
@@ -146,27 +103,13 @@ ipcMain.handle(
     }
   }
 );
- 
-/**
- * Third copy of this exact derivation -- orchestrator/main.ts's
- * deriveResultsPath and mvt_iocs's resolve_results_path (Python) both do
- * the same 'decrypted' -> 'results' swap. Not extracted to a shared
- * package yet; worth doing if a fourth consumer shows up, or sooner.
- */
-function deriveResultsPath(backupSource: string): string | undefined {
-  const parts = backupSource.split(path.sep);
-  const idx = parts.indexOf('decrypted');
-  if (idx === -1) return undefined;
-  parts[idx] = 'results';
-  return parts.join(path.sep);
-}
- 
+
 function reportPathFor(backupSource: string): string | undefined {
   const resultsPath = deriveResultsPath(backupSource);
   if (!resultsPath) return undefined;
   return path.join(resultsPath, 'investigation_report.md');
 }
- 
+
 ipcMain.handle('epoch:getReport', async (_event, backupSource: string) => {
   const reportPath = reportPathFor(backupSource);
   if (!reportPath) {
@@ -183,34 +126,16 @@ ipcMain.handle('epoch:getReport', async (_event, backupSource: string) => {
     throw err;
   }
 });
- 
+
 ipcMain.handle('epoch:openReport', async (_event, backupSource: string) => {
   const reportPath = reportPathFor(backupSource);
   if (!reportPath) return false;
   const result = await shell.openPath(reportPath);
   return result === '';
 });
- 
-/**
- * preload.ts and window.d.ts both already declared this channel --
- * ipcRenderer.invoke('epoch:selectBackupDirectory') and the
- * Promise<string | null> return type -- but nothing on the main-process
- * side ever registered a handler for it. Since WorkspaceView is the
- * default landing section, this broke the app's very first interaction:
- * clicking "Import Directory" called an IPC channel nothing listened on,
- * which rejects immediately.
- */
-ipcMain.handle('epoch:selectBackupDirectory', async () => {
-  if (!mainWindow) return null;
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openDirectory'],
-  });
-  if (result.canceled || result.filePaths.length === 0) return null;
-  return result.filePaths[0];
-});
- 
+
 let mainWindow: BrowserWindowType | null = null;
- 
+
 const createWindow = (): void => {
   const windowOptions: BrowserWindowConstructorOptions = {
     width: 1400,
@@ -226,9 +151,9 @@ const createWindow = (): void => {
       // BrowserWindowConstructorOptions/WebPreferences.
     },
   };
- 
+
   mainWindow = new BrowserWindow(windowOptions);
- 
+
 // 2. Safely check for injected variables to prevent ReferenceErrors
   if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined') {
     // Force IPv4 loopback to avoid Node/Chromium IPv6 resolution mismatch
@@ -238,28 +163,28 @@ const createWindow = (): void => {
   } else {
     console.error('Vite target variables are missing.');
   }
- 
+
   mainWindow.webContents.openDevTools();
- 
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 };
- 
+
 app.whenReady().then(createWindow);
- 
+
 // app.on('window-all-closed', () => {
 //   if (process.platform !== 'darwin') {
 //     app.quit();
 //   }
 // });
- 
+
 app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
   }
 });
- 
+
 app.on('before-quit', () => {
   dbPool.end().catch((err) => console.error('Error closing DB pool:', err));
 });

@@ -61,6 +61,7 @@ import { parseArgs } from "node:util";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { deriveResultsPath } from "@verichron/contracts";
  
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -195,14 +196,6 @@ async function resolvePythonBin(): Promise<string> {
     );
     return "python3";
   }
-}
- 
-function deriveResultsPath(backupPath: string): string | undefined {
-  const parts = backupPath.split(path.sep);
-  const idx = parts.indexOf("decrypted");
-  if (idx === -1) return undefined;
-  parts[idx] = "results";
-  return parts.join(path.sep);
 }
  
 async function hasSucceededRun(client: Client, backupPath: string): Promise<boolean> {

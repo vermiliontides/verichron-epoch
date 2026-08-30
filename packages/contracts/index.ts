@@ -14,3 +14,4 @@
  */
 
 export { NormalizedRecord, SourceType } from "./normalizedRecord.js";
+export { deriveResultsPath } from "./resultsPath.js";

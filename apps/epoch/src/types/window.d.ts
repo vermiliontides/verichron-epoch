@@ -5,7 +5,12 @@ import type {
   CorrelationPivotRow,
   CorrelatedContextRow,
 } from '@verichron/db-reader';
- 
+
+export type ReportResult =
+  | { status: 'ok'; content: string; path: string }
+  | { status: 'not-found'; path: string }
+  | { status: 'no-results-path' };
+
 declare global {
   interface Window {
     epoch: {
@@ -19,13 +24,11 @@ declare global {
         excludeId: number,
         windowMinutes?: number
       ) => Promise<CorrelatedContextRow[]>;
-      getReport: (backupSource: string) => Promise<any>;
+      getReport: (backupSource: string) => Promise<ReportResult>;
       openReport: (backupSource: string) => Promise<boolean>;
-      // New methods for WorkspaceView
-      selectBackupDirectory: () => Promise<string | null>;
-      startPipeline: (targetPath: string) => Promise<{ status: string; target: string }>;
     };
   }
 }
- 
+
 export {};
+ 

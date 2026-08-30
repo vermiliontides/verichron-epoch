@@ -5,7 +5,7 @@ import type {
   CorrelationPivotRow,
   CorrelatedContextRow,
 } from '@verichron/db-reader';
-
+ 
 declare global {
   interface Window {
     epoch: {
@@ -27,5 +27,5 @@ declare global {
     };
   }
 }
-
+ 
 export {};

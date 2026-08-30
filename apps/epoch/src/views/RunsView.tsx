@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Inbox, MousePointerClick, Layers } from 'lucide-react';
 import type { PipelineRunRow, StageStatusRow } from '@verichron/db-reader';
 import { Badge } from '../components/ui/Badge';
@@ -40,6 +40,7 @@ interface RunsViewProps {
   selectedRun: PipelineRunRow | null;
   stages: StageStatusRow[];
   onSelectRun: (run: PipelineRunRow) => void;
+  onRefreshStages?: (runId: string) => void;
 }
  
 const thClass =
@@ -85,9 +86,28 @@ function RunsTableSkeleton() {
   );
 }
  
-export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRun }: RunsViewProps) {
+export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRun, onRefreshStages }: RunsViewProps) {
+  // Polling effect for in-progress runs
+  useEffect(() => {
+    const hasInProgressRun = runs.some(run => runPhase(run) === 'in_progress');
+    if (!hasInProgressRun || !selectedRun) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const data = await window.epoch.getStageStatus(selectedRun.run_id);
+        if (onRefreshStages) {
+          onRefreshStages(selectedRun.run_id);
+        }
+      } catch (err) {
+        console.error('Failed to poll stage status:', err);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [runs, selectedRun, onRefreshStages]);
+
   return (
-    <div className="flex flex-1 min-h-0 divide-x divide-border">
+    <div className="flex flex-1 min-h-0 divide-x divide-border h-full overflow-hidden">
       <div className="flex-1 overflow-auto p-5 relative">
         <h2 className="font-display text-base font-medium text-accent mb-4 flex items-baseline gap-2">
           Pipeline Runs

@@ -4,6 +4,7 @@ import type { PipelineRunRow, StageStatusRow, ForensicRecordRow, CorrelatedConte
 import { CORRELATION_WINDOW_MINUTES } from '@verichron/db-reader';
 import type { ReportResult } from './types/window';
 import { Sidebar, type Section } from './components/Sidebar';
+import { WorkspaceView } from './views/WorkspaceView';
 import { RunsView } from './views/RunsView';
 import { RecordsView } from './views/RecordsView';
 import { EvidenceTag } from './components/ui/EvidenceTag';
@@ -191,6 +192,8 @@ export const App: React.FC = () => {
           {selectedRun && <EvidenceTag run={selectedRun} phase={runPhase(selectedRun)} />}
 
           <div className="flex-1 overflow-auto p-5">
+            {section === 'workspace' && <WorkspaceView />}
+
             {section === 'runs' && (
               <RunsView
                 runs={runs}

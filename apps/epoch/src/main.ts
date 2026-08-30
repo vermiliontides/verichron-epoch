@@ -1,19 +1,21 @@
+
 /// <reference types="@electron-forge/plugin-vite/forge-vite-env" />
 import electron from 'electron';
 import path from 'path';
 import fs from 'fs/promises';
+import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { Pool } from 'pg';
 import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/db-reader';
 import { deriveResultsPath } from '@verichron/contracts';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
 import dotenv from 'dotenv'
-
-const { app, BrowserWindow, ipcMain, shell } = electron;
-
+ 
+const { app, BrowserWindow, ipcMain, shell, dialog } = electron;
+ 
 console.log('\n=======================================');
 console.log('MAIN PROCESS IS EXECUTING!');
 console.log('=======================================\n');
-
+ 
 dotenv.config({ path: '../../../.env' })
 // 1. Catch silent crashes and print them to the terminal
 process.on('uncaughtException', (error) => {
@@ -21,17 +23,17 @@ process.on('uncaughtException', (error) => {
   console.error(error);
   console.error('--------------------------------\n');
 });
-
+ 
 process.on('unhandledRejection', (reason) => {
   console.error('\n--- UNHANDLED PROMISE REJECTION ---');
   console.error(reason);
   console.error('-----------------------------------\n');
 });
-
+ 
 // Force X11 and disable acceleration for Linux display compatibility
 // app.commandLine.appendSwitch('ozone-platform', 'x11');
 // app.disableHardwareAcceleration();
-
+ 
 // DB pool lives in the main process. This is the only process with full
 // Node access (net/tls/dns), which `pg` requires — a sandboxed preload
 // script cannot resolve those core modules, which is why the previous
@@ -55,7 +57,7 @@ const dbPool = new Pool({
   password: process.env.DB_PASSWORD || 'forensics_dev_only',
   max: 10,
 });
-
+ 
 ipcMain.handle('epoch:getPipelineRuns', async () => {
   try {
     return await getPipelineRuns(dbPool);
@@ -64,7 +66,7 @@ ipcMain.handle('epoch:getPipelineRuns', async () => {
     throw err;
   }
 });
-
+ 
 ipcMain.handle('epoch:getStageStatus', async (_event, runId: string) => {
   try {
     return await getStageStatus(dbPool, runId);
@@ -73,7 +75,7 @@ ipcMain.handle('epoch:getStageStatus', async (_event, runId: string) => {
     throw err;
   }
 });
-
+ 
 ipcMain.handle('epoch:getForensicRecords', async (_event, runId: string, sourceType?: string) => {
   try {
     return await getForensicRecords(dbPool, runId, { sourceType });
@@ -82,7 +84,7 @@ ipcMain.handle('epoch:getForensicRecords', async (_event, runId: string, sourceT
     throw err;
   }
 });
-
+ 
 ipcMain.handle('epoch:getCorrelationPivots', async (_event, runId: string) => {
   try {
     return await getCorrelationPivots(dbPool, runId);
@@ -91,7 +93,7 @@ ipcMain.handle('epoch:getCorrelationPivots', async (_event, runId: string) => {
     throw err;
   }
 });
-
+ 
 ipcMain.handle(
   'epoch:getCorrelatedContext',
   async (_event, runId: string, eventTime: string, excludeId: number, windowMinutes?: number) => {
@@ -103,13 +105,13 @@ ipcMain.handle(
     }
   }
 );
-
+ 
 function reportPathFor(backupSource: string): string | undefined {
   const resultsPath = deriveResultsPath(backupSource);
   if (!resultsPath) return undefined;
   return path.join(resultsPath, 'investigation_report.md');
 }
-
+ 
 ipcMain.handle('epoch:getReport', async (_event, backupSource: string) => {
   const reportPath = reportPathFor(backupSource);
   if (!reportPath) {
@@ -126,16 +128,147 @@ ipcMain.handle('epoch:getReport', async (_event, backupSource: string) => {
     throw err;
   }
 });
-
+ 
 ipcMain.handle('epoch:openReport', async (_event, backupSource: string) => {
   const reportPath = reportPathFor(backupSource);
   if (!reportPath) return false;
   const result = await shell.openPath(reportPath);
   return result === '';
 });
-
+ 
+// This file is always Vite-bundled to apps/epoch/.vite/build/main.js, both
+// in `electron-forge start` dev mode and when packaged -- never run raw via
+// tsx from src/. __dirname at runtime is therefore always
+// <repo>/apps/epoch/.vite/build, so repo root is four levels up. (Verified
+// against the real build output, not assumed -- see the orchestrator's own
+// comment for the equivalent three-levels-up computation from its
+// unbundled apps/orchestrator/src/main.ts.)
+const REPO_ROOT = path.resolve(__dirname, '../../../..');
+ 
+/**
+ * mvt-runner (apps/mvt-runner) is Stage 1 of the real pipeline: it hashes,
+ * decrypts, repairs, and mvt-ios-scans one or more already-encrypted
+ * backups under --source into a --workspace (default ~/mvt-workspace).
+ * It does NOT touch the forensics database or create a pipeline_runs row
+ * -- that's the orchestrator's job (Stage 3, not yet wired), run
+ * separately against mvt-runner's decrypted output once the user picks
+ * which backup(s) to analyze.
+ *
+ * mvt-runner prompts for a decryption password via raw stdin -- but only
+ * when stdin is a real TTY (see its promptPassword()). Spawned here with
+ * piped (non-TTY) stdio, it automatically falls back to its own
+ * documented non-interactive mode: write the prompt to stdout with no
+ * trailing newline, then read one line from stdin. That fallback is what
+ * this bridge relies on -- no raw-terminal emulation needed on this side.
+ *
+ * Since mvt-runner processes backups strictly sequentially and blocks on
+ * stdin between prompts, at most one password prompt is ever outstanding
+ * at a time -- a single-slot resolver here is always correct, regardless
+ * of whether --different-passwords is passed (not exposed by this UI yet).
+ */
+let runningMvtProcess: ChildProcessWithoutNullStreams | null = null;
+let pendingPasswordResolve: ((password: string) => void) | null = null;
+ 
+const PASSWORD_PROMPT_RE = /password for (.+): $/;
+ 
+interface StartPipelineOptions {
+  workspace?: string;
+  forceDecrypt?: boolean;
+  refreshIOCs?: boolean;
+}
+ 
+function sendToRenderer(channel: string, ...args: unknown[]) {
+  mainWindow?.webContents.send(channel, ...args);
+}
+ 
+/**
+ * Buffers partial (no-newline) chunks per stream so a password prompt or
+ * log line split across multiple stdout 'data' events is still matched
+ * correctly, and so log lines are only emitted once complete.
+ */
+function makeStreamBuffer(stream: 'stdout' | 'stderr', child: ChildProcessWithoutNullStreams) {
+  let pending = '';
+  return (chunk: Buffer) => {
+    pending += chunk.toString('utf-8');
+    const lines = pending.split('\n');
+    pending = lines.pop() ?? ''; // last element: either '' (chunk ended in \n) or a partial line
+ 
+    for (const line of lines) {
+      sendToRenderer('epoch:mvtLog', { stream, line });
+    }
+ 
+    // Only stdout ever carries the password prompt (mvt-runner's
+    // promptPassword writes to process.stdout, not stderr).
+    if (stream === 'stdout') {
+      const match = PASSWORD_PROMPT_RE.exec(pending);
+      if (match) {
+        sendToRenderer('epoch:mvtLog', { stream, line: pending });
+        pendingPasswordResolve = (password: string) => {
+          child.stdin.write(password + '\n');
+        };
+        sendToRenderer('epoch:mvtPasswordRequired', match[1]);
+        pending = '';
+      }
+    }
+  };
+}
+ 
+ipcMain.handle('epoch:selectBackupDirectory', async () => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select a directory containing encrypted iOS backups',
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+ 
+ipcMain.handle('epoch:startPipeline', async (_event, source: string, options?: StartPipelineOptions) => {
+  if (runningMvtProcess) {
+    throw new Error('mvt-runner is already running -- wait for it to finish before starting another.');
+  }
+  if (!source || !source.trim()) {
+    throw new Error('A source directory is required.');
+  }
+ 
+  const args = ['--filter', '@verichron/mvt-runner', 'dev', '--', '--source', source];
+  if (options?.workspace) args.push('--workspace', options.workspace);
+  if (options?.forceDecrypt) args.push('--force-decrypt');
+  if (options?.refreshIOCs) args.push('--refresh-iocs');
+ 
+  const child = spawn('pnpm', args, { cwd: REPO_ROOT, stdio: ['pipe', 'pipe', 'pipe'] });
+  runningMvtProcess = child;
+  pendingPasswordResolve = null;
+ 
+  child.stdout.on('data', makeStreamBuffer('stdout', child));
+  child.stderr.on('data', makeStreamBuffer('stderr', child));
+ 
+  child.on('error', (err) => {
+    runningMvtProcess = null;
+    pendingPasswordResolve = null;
+    sendToRenderer('epoch:mvtFinished', { success: false, error: err.message });
+  });
+ 
+  child.on('close', (code) => {
+    runningMvtProcess = null;
+    pendingPasswordResolve = null;
+    sendToRenderer('epoch:mvtFinished', { success: code === 0, exitCode: code });
+  });
+ 
+  return { started: true };
+});
+ 
+ipcMain.handle('epoch:submitMvtPassword', async (_event, password: string) => {
+  if (!runningMvtProcess || !pendingPasswordResolve) {
+    throw new Error('No password prompt is currently pending.');
+  }
+  const resolve = pendingPasswordResolve;
+  pendingPasswordResolve = null;
+  resolve(password);
+});
+ 
 let mainWindow: BrowserWindowType | null = null;
-
+ 
 const createWindow = (): void => {
   const windowOptions: BrowserWindowConstructorOptions = {
     width: 1400,
@@ -151,9 +284,9 @@ const createWindow = (): void => {
       // BrowserWindowConstructorOptions/WebPreferences.
     },
   };
-
+ 
   mainWindow = new BrowserWindow(windowOptions);
-
+ 
 // 2. Safely check for injected variables to prevent ReferenceErrors
   if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined') {
     // Force IPv4 loopback to avoid Node/Chromium IPv6 resolution mismatch
@@ -163,28 +296,28 @@ const createWindow = (): void => {
   } else {
     console.error('Vite target variables are missing.');
   }
-
+ 
   mainWindow.webContents.openDevTools();
-
+ 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 };
-
+ 
 app.whenReady().then(createWindow);
-
+ 
 // app.on('window-all-closed', () => {
 //   if (process.platform !== 'darwin') {
 //     app.quit();
 //   }
 // });
-
+ 
 app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
   }
 });
-
+ 
 app.on('before-quit', () => {
   dbPool.end().catch((err) => console.error('Error closing DB pool:', err));
 });

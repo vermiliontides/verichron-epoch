@@ -139,7 +139,7 @@ export const App: React.FC = () => {
             {section === 'runs' && (
               <div className="flex gap-5 h-full">
                 <div className="flex-1 overflow-auto">
-                  <h2 className="font-display text-[15px] text-accent mb-4">Pipeline Runs</h2>
+                  <h2 className="font-display text-base font-medium text-accent mb-4">Pipeline Runs</h2>
                   {error ? (
                     <div className="text-flag bg-flag/10 border border-flag/30 rounded-md p-3 text-sm">
                       {error}
@@ -151,7 +151,7 @@ export const App: React.FC = () => {
                       No pipeline runs found. Run full_pipeline.py to create one.
                     </p>
                   ) : (
-                    <table className="w-full text-[13px] border-collapse">
+                    <table className="w-full text-sm border-collapse">
                       <thead>
                         <tr className="text-muted-foreground text-xs border-b border-border">
                           <th className="text-left font-medium py-2 px-3 bg-surface">Backup</th>
@@ -165,18 +165,18 @@ export const App: React.FC = () => {
                             key={run.run_id}
                             onClick={() => selectRun(run)}
                             className={`cursor-pointer border-b border-border hover:bg-surface transition-colors ${
-                              selectedRun?.run_id === run.run_id ? 'bg-surface shadow-[inset_2px_0_0_hsl(var(--accent))]' : ''
+                              selectedRun?.run_id === run.run_id ? 'bg-surface shadow-[inset_0.125rem_0_0_hsl(var(--accent))]' : ''
                             }`}
                           >
-                            <td className="py-2.5 px-3 font-mono text-xs">
+                            <td className="py-3 px-3 font-mono text-xs">
                               {run.backup_source.split('/').pop()}
                             </td>
-                            <td className="py-2.5 px-3">
+                            <td className="py-3 px-3">
                               <Badge variant={runPhase(run) === 'finished' ? 'accent' : 'flag'}>
                                 {runPhase(run) === 'finished' ? 'finished' : 'in progress'}
                               </Badge>
                             </td>
-                            <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground">
+                            <td className="py-3 px-3 font-mono text-xs text-muted-foreground">
                               {new Date(run.started_at).toLocaleString()}
                             </td>
                           </tr>
@@ -187,26 +187,26 @@ export const App: React.FC = () => {
                 </div>
 
                 <div className="flex-1 overflow-auto">
-                  <h2 className="font-display text-[15px] text-accent mb-4">Stage Breakdown</h2>
+                  <h2 className="font-display text-base font-medium text-accent mb-4">Stage Breakdown</h2>
                   {selectedRun ? (
                     stages.length === 0 ? (
                       <p className="text-muted-foreground text-sm">No stages found for this run.</p>
                     ) : (
-                      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+                      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(15rem, 1fr))' }}>
                         {stages.map((stage) => {
                           const durationMs = stageDurationMs(stage);
                           return (
                             <div
                               key={`${stage.run_id}-${stage.stage_name}`}
-                              className="bg-surface rounded-md p-3.5"
-                              style={{ borderLeft: `2px solid hsl(var(--${stage.status === 'succeeded' ? 'accent' : stage.status === 'pending' || stage.status === 'skipped' ? 'muted-foreground' : 'flag'}))` }}
+                              className="bg-surface rounded-md p-4"
+                              style={{ borderLeft: `0.125rem solid hsl(var(--${stage.status === 'succeeded' ? 'accent' : stage.status === 'pending' || stage.status === 'skipped' ? 'muted-foreground' : 'flag'}))` }}
                             >
                               <h3 className="font-display text-sm mb-2">{stage.stage_name}</h3>
-                              <div className="mb-1.5">
+                              <div className="mb-2">
                                 <Badge variant={STAGE_BADGE_VARIANT[stage.status]}>{stage.status}</Badge>
                               </div>
                               {stage.error_message && (
-                                <p className="text-xs text-flag font-mono mb-1.5">{stage.error_message}</p>
+                                <p className="text-xs text-flag font-mono mb-2">{stage.error_message}</p>
                               )}
                               <p className="text-xs text-muted-foreground font-mono">
                                 {durationMs !== null ? `${durationMs}ms` : '—'}
@@ -225,7 +225,7 @@ export const App: React.FC = () => {
 
             {section === 'records' && (
               <div>
-                <h2 className="font-display text-[15px] text-accent mb-4">Forensic Records</h2>
+                <h2 className="font-display text-base font-medium text-accent mb-4">Forensic Records</h2>
                 {!selectedRun ? (
                   <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
                 ) : records.length === 0 ? (
@@ -235,7 +235,7 @@ export const App: React.FC = () => {
                     <div className="flex gap-2 mb-4">
                       <button
                         onClick={() => setSourceTypeFilter(null)}
-                        className={`px-2.5 py-1 rounded-md text-xs font-mono border ${
+                        className={`px-3 py-1 rounded-md text-xs font-mono border ${
                           sourceTypeFilter === null ? 'border-accent text-accent' : 'border-border text-muted-foreground'
                         }`}
                       >
@@ -245,7 +245,7 @@ export const App: React.FC = () => {
                         <button
                           key={st}
                           onClick={() => setSourceTypeFilter(st)}
-                          className={`px-2.5 py-1 rounded-md text-xs font-mono border ${
+                          className={`px-3 py-1 rounded-md text-xs font-mono border ${
                             sourceTypeFilter === st ? 'border-accent text-accent' : 'border-border text-muted-foreground'
                           }`}
                         >
@@ -253,7 +253,7 @@ export const App: React.FC = () => {
                         </button>
                       ))}
                     </div>
-                    <table className="w-full text-[13px] border-collapse">
+                    <table className="w-full text-sm border-collapse">
                       <thead>
                         <tr className="text-muted-foreground text-xs border-b border-border">
                           <th className="text-left font-medium py-2 px-3 bg-surface">Event Time</th>
@@ -284,7 +284,7 @@ export const App: React.FC = () => {
 
             {section === 'iocs' && (
               <div>
-                <h2 className="font-display text-[15px] text-accent mb-4">Indicator Matches</h2>
+                <h2 className="font-display text-base font-medium text-accent mb-4">Indicator Matches</h2>
                 {!selectedRun ? (
                   <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
                 ) : iocRecords.length === 0 ? (
@@ -303,7 +303,7 @@ export const App: React.FC = () => {
                             matched ? 'bg-flag/10 border-flag/30' : 'bg-surface border-border'
                           }`}
                         >
-                          <div className="flex items-center gap-2 mb-1.5">
+                          <div className="flex items-center gap-2 mb-2">
                             <Badge variant={matched ? 'flag' : 'neutral'}>{rec.source_type}</Badge>
                             {rec.event_time && (
                               <span className="font-mono text-xs text-muted-foreground">
@@ -340,7 +340,7 @@ export const App: React.FC = () => {
 
             {section === 'reports' && (
               <div>
-                <h2 className="font-display text-[15px] text-accent mb-4">Reports</h2>
+                <h2 className="font-display text-base font-medium text-accent mb-4">Reports</h2>
                 <div className="bg-surface border border-border rounded-md p-4 text-sm text-muted-foreground">
                   Not wired yet — reporting/generate_report.py's Markdown output isn't exposed through
                   any IPC channel today. This section is a placeholder pending that wiring.

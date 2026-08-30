@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/db-reader';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
 import dotenv from 'dotenv'
+import { spawn } from 'child_process';
 
 const { app, BrowserWindow, ipcMain, shell } = electron;
 
@@ -54,6 +55,42 @@ const dbPool = new Pool({
   password: process.env.DB_PASSWORD || 'forensics_dev_only',
   max: 10,
 });
+
+ipcMain.handle('epoch:startPipeline', async (_event, targetPath: string) => {
+  console.log(`[Main] Starting pipeline for target: ${targetPath}`);
+  
+  return new Promise((resolve, reject) => {
+    // Spawn the pipeline script. Ensure the path is absolute or correctly relative to the project root.
+    const pythonProcess = spawn('python3', [
+      path.join(__dirname, '../../../scripts/full_pipeline.py'), 
+      '--target', 
+      targetPath
+    ]);
+
+    // We resolve immediately so the UI can navigate to the Runs view.
+    // The Python process continues running asynchronously in the background.
+    resolve({ status: 'started', target: targetPath });
+
+    pythonProcess.stdout.on('data', (data) => {
+      console.log(`[Pipeline STDOUT]: ${data.toString().trim()}`);
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      console.error(`[Pipeline STDERR]: ${data.toString().trim()}`);
+    });
+
+    pythonProcess.on('close', (code) => {
+      console.log(`[Pipeline] Process exited with code ${code}`);
+    });
+
+    pythonProcess.on('error', (err) => {
+      console.error(`[Pipeline Error] Failed to start subprocess:`, err);
+    });
+  });
+});
+
+
+
 
 ipcMain.handle('epoch:getPipelineRuns', async () => {
   try {

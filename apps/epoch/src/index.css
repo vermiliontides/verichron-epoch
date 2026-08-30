@@ -22,6 +22,10 @@
   --font-sans: 'Inter', sans-serif;
   --font-display: 'Space Grotesk', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+
+  /* Fixes missing text-2xs token mapping in Tailwind v4 */
+  --text-2xs: 0.65rem;
+  --text-2xs--line-height: 0.875rem;
 }
  
 * {
@@ -34,5 +38,5 @@ body {
   font-family: var(--font-sans);
   background: var(--color-background);
   color: var(--color-foreground);
+  overflow: hidden;
 }
- 

@@ -10,6 +10,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 // exactly one Pool in the app, owned by main.ts, and this file only
 // relays IPC calls to it.
 const dbApi = {
+  selectBackupDirectory: () => ipcRenderer.invoke('epoch:selectBackupDirectory'),
+  startPipeline: (targetPath: string) => ipcRenderer.invoke('epoch:startPipeline', targetPath),
   getPipelineRuns: () => ipcRenderer.invoke('epoch:getPipelineRuns'),
   getStageStatus: (runId: string) => ipcRenderer.invoke('epoch:getStageStatus', runId),
   getForensicRecords: (runId: string, sourceType?: string) =>

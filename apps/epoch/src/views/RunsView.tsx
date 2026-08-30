@@ -43,7 +43,7 @@ interface RunsViewProps {
 }
  
 const thClass =
-  'text-left font-medium text-muted-foreground bg-surface px-3 py-2 border-b border-border text-2xs uppercase tracking-wide';
+  'sticky top-0 bg-surface/90 backdrop-blur-md z-10 text-left font-medium text-muted-foreground px-3 py-2 border-b border-border text-2xs uppercase tracking-wide';
 const tdClass = 'px-3 py-2 border-b border-border';
  
 function EmptyState({ icon: Icon, title, detail }: { icon: typeof Inbox; title: string; detail?: string }) {
@@ -58,7 +58,7 @@ function EmptyState({ icon: Icon, title, detail }: { icon: typeof Inbox; title: 
  
 function RunsTableSkeleton() {
   return (
-    <table className="w-full text-sm border-collapse">
+    <table className="w-full text-sm border-collapse relative">
       <thead>
         <tr>
           <th className={thClass}>Backup</th>
@@ -88,7 +88,7 @@ function RunsTableSkeleton() {
 export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRun }: RunsViewProps) {
   return (
     <div className="flex flex-1 min-h-0 divide-x divide-border">
-      <div className="flex-1 overflow-auto p-5">
+      <div className="flex-1 overflow-auto p-5 relative">
         <h2 className="font-display text-base font-medium text-accent mb-4 flex items-baseline gap-2">
           Pipeline Runs
           {!loading && !error && runs.length > 0 && (
@@ -102,7 +102,7 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
         ) : runs.length === 0 ? (
           <EmptyState icon={Inbox} title="No pipeline runs found" detail="Run full_pipeline.py to create one" />
         ) : (
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full text-sm border-collapse relative">
             <thead>
               <tr>
                 <th className={thClass}>Backup</th>
@@ -119,7 +119,7 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
                   <tr
                     key={run.run_id}
                     onClick={() => onSelectRun(run)}
-                    className={`cursor-pointer transition-colors hover:bg-surface ${
+                    className={`cursor-pointer transition-colors hover:bg-surface hover:shadow-[inset_0.15rem_0_0_hsl(var(--accent))] ${
                       selected ? 'bg-surface shadow-[inset_0.125rem_0_0_hsl(var(--accent))]' : ''
                     }`}
                   >
@@ -129,9 +129,17 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
                       </span>
                     </td>
                     <td className={tdClass}>
-                      <Badge variant={phase}>{phase === 'finished' ? 'finished' : 'in progress'}</Badge>
+                      <div className="flex items-center gap-2">
+                        {phase === 'in_progress' && (
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-accent"></span>
+                          </span>
+                        )}
+                        <Badge variant={phase}>{phase === 'finished' ? 'finished' : 'in progress'}</Badge>
+                      </div>
                     </td>
-                    <td className={`${tdClass} font-mono text-xs`} title={new Date(run.started_at).toISOString()}>
+                    <td className={`${tdClass} font-mono text-xs tabular-nums tracking-tight`} title={new Date(run.started_at).toISOString()}>
                       {new Date(run.started_at).toLocaleString()}
                     </td>
                   </tr>
@@ -151,29 +159,39 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(16.25rem, 1fr))' }}>
               {stages.map((stage) => {
                 const durationMs = stageDurationMs(stage);
+                const statusColor = 
+                  stage.status === 'succeeded'
+                    ? 'var(--accent)'
+                    : stage.status === 'failed' || stage.status === 'running'
+                      ? 'var(--flag)'
+                      : 'var(--muted-foreground)';
+
                 return (
                   <div
                     key={`${stage.run_id}-${stage.stage_name}`}
-                    className="bg-surface rounded-md p-4 border-l-2"
+                    className="group relative overflow-hidden bg-surface/50 backdrop-blur-sm rounded-lg p-4 border border-border border-l-2 shadow-md transition-all hover:shadow-lg hover:bg-surface/80"
                     style={{
-                      borderLeftColor:
-                        stage.status === 'succeeded'
-                          ? 'hsl(var(--accent))'
-                          : stage.status === 'failed' || stage.status === 'running'
-                            ? 'hsl(var(--flag))'
-                            : 'hsl(var(--muted-foreground) / 0.5)',
+                      borderLeftColor: `hsl(${statusColor} / ${stage.status === 'pending' || stage.status === 'skipped' ? '0.5' : '1'})`,
                     }}
                   >
-                    <h3 className="font-display text-sm font-medium mb-2">{stage.stage_name}</h3>
-                    <p className="text-xs text-muted-foreground font-mono mb-1 flex items-center gap-2">
-                      Status: <Badge variant={stage.status}>{stage.status}</Badge>
-                    </p>
-                    {stage.error_message && (
-                      <p className="text-xs text-flag font-mono mb-1 break-words">Error: {stage.error_message}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground font-mono">
-                      Duration: <strong className="text-foreground">{durationMs !== null ? formatDuration(durationMs) : '—'}</strong>
-                    </p>
+                    {/* Hover Glow Effect based on status */}
+                    <div 
+                      className="absolute -inset-1 opacity-0 group-hover:opacity-10 blur-xl transition-opacity pointer-events-none"
+                      style={{ backgroundColor: `hsl(${statusColor})` }}
+                    />
+                    
+                    <div className="relative z-10">
+                      <h3 className="font-display text-sm font-medium mb-2">{stage.stage_name}</h3>
+                      <div className="text-xs text-muted-foreground font-mono mb-1 flex items-center gap-2">
+                        Status: <Badge variant={stage.status}>{stage.status}</Badge>
+                      </div>
+                      {stage.error_message && (
+                        <p className="text-xs text-flag font-mono mb-1 break-words">Error: {stage.error_message}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground font-mono">
+                        Duration: <strong className="text-foreground">{durationMs !== null ? formatDuration(durationMs) : '—'}</strong>
+                      </p>
+                    </div>
                   </div>
                 );
               })}
@@ -186,4 +204,3 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
     </div>
   );
 }
- 

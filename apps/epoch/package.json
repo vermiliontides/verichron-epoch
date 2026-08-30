@@ -11,9 +11,14 @@
   },
   "scripts": {
     "clean:ts": "find src/ -type f \\( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' \\) ! -name 'env.d.ts' -delete",
+    "build:db-reader": "pnpm --filter @verichron/db-reader build",
+    "prestart": "pnpm run build:db-reader",
     "start": "electron-forge start",
+    "predev": "pnpm run build:db-reader",
     "dev": "electron-forge start",
+    "prepackage": "pnpm run build:db-reader",
     "package": "electron-forge package",
+    "premake": "pnpm run build:db-reader",
     "make": "electron-forge make",
     "lint": "eslint ."
   },

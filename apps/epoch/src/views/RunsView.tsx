@@ -1,7 +1,7 @@
 import React from 'react';
 import { Inbox, MousePointerClick, Layers } from 'lucide-react';
 import type { PipelineRunRow, StageStatusRow } from '@verichron/db-reader';
-import { Badge } from '../components/ui/badge';
+import { Badge } from '../components/ui/Badge';
  
 /**
  * Field names here are pulled directly from PipelineRunRow/StageStatusRow

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { ForensicRecordRow, PipelineRunRow } from '@verichron/db-reader';
-import { Badge } from '../components/ui/badge';
+import { Badge } from '../components/ui/Badge';
 
 interface RecordsViewProps {
   runs: PipelineRunRow[];

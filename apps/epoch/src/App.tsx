@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
-import type { PipelineRunRow, StageStatusRow, ForensicRecordRow, CorrelatedContextRow } from '@verichron/db-reader';
+import type {
+  PipelineRunRow,
+  StageStatusRow,
+  ForensicRecordRow,
+  CorrelationPivotRow,
+  CorrelatedContextRow,
+} from '@verichron/db-reader';
 import { CORRELATION_WINDOW_MINUTES } from '@verichron/db-reader';
 import { Sidebar, type Section } from './components/Sidebar';
 import { EvidenceTag } from './components/ui/EvidenceTag';
@@ -64,6 +70,15 @@ export const App: React.FC = () => {
   const [records, setRecords] = useState<ForensicRecordRow[]>([]);
   const [recordsLoaded, setRecordsLoaded] = useState(false);
   const [sourceTypeFilter, setSourceTypeFilter] = useState<string | null>(null);
+
+  // getForensicRecords caps at 500 rows across ALL source types for a run
+  // (see its own doc comment -- it's a UI browse read, not exhaustive).
+  // IOCs must never be silently truncated by that unrelated cap, so this
+  // is its own uncapped, source-type-scoped fetch via getCorrelationPivots
+  // -- not derived from `records` above.
+  const [pivots, setPivots] = useState<CorrelationPivotRow[]>([]);
+  const [pivotsLoaded, setPivotsLoaded] = useState(false);
+  const [pivotsLoadError, setPivotsLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<'connected' | 'error' | 'unknown'>('unknown');
@@ -106,6 +121,9 @@ export const App: React.FC = () => {
     setRecords([]);
     setRecordsLoaded(false);
     setSourceTypeFilter(null);
+    setPivots([]);
+    setPivotsLoaded(false);
+    setPivotsLoadError(null);
     setReport(null);
     setReportLoaded(false);
     setReportLoadError(null);
@@ -127,6 +145,19 @@ export const App: React.FC = () => {
       setDbStatus('connected');
     } catch (err) {
       console.error('Failed to load records:', err);
+      setDbStatus('error');
+    }
+  };
+
+  const loadPivots = async (run: PipelineRunRow) => {
+    try {
+      const data = await window.epoch.getCorrelationPivots(run.run_id);
+      setPivots(data);
+      setPivotsLoaded(true);
+      setDbStatus('connected');
+    } catch (err) {
+      console.error('Failed to load IOC pivots:', err);
+      setPivotsLoadError(err instanceof Error ? err.message : 'Unknown error');
       setDbStatus('error');
     }
   };
@@ -154,15 +185,18 @@ export const App: React.FC = () => {
 
   const handleSectionSelect = (next: Section) => {
     setSection(next);
-    if ((next === 'records' || next === 'iocs') && selectedRun && !recordsLoaded) {
+    if (next === 'records' && selectedRun && !recordsLoaded) {
       loadRecords(selectedRun);
+    }
+    if (next === 'iocs' && selectedRun && !pivotsLoaded) {
+      loadPivots(selectedRun);
     }
     if (next === 'reports' && selectedRun && !reportLoaded) {
       loadReport(selectedRun);
     }
   };
 
-  const toggleCorrelatedContext = async (pivot: ForensicRecordRow) => {
+  const toggleCorrelatedContext = async (pivot: CorrelationPivotRow) => {
     if (expandedPivotId === pivot.id) {
       setExpandedPivotId(null);
       return;
@@ -184,7 +218,6 @@ export const App: React.FC = () => {
     }
   };
 
-  const iocRecords = records.filter((r) => isIocSourceType(r.source_type));
   const nonIocRecords = records.filter((r) => !isIocSourceType(r.source_type));
 
   const availableSourceTypes = Array.from(new Set(nonIocRecords.map((r) => r.source_type))).sort();
@@ -352,13 +385,19 @@ export const App: React.FC = () => {
                 <h2 className="font-display text-base font-medium text-accent mb-4">Indicator Matches</h2>
                 {!selectedRun ? (
                   <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
-                ) : iocRecords.length === 0 ? (
+                ) : pivotsLoadError ? (
+                  <div className="text-flag bg-flag/10 border border-flag/30 rounded-md p-3 text-sm">
+                    Error: {pivotsLoadError}
+                  </div>
+                ) : !pivotsLoaded ? (
+                  <p className="text-muted-foreground text-sm">Loading...</p>
+                ) : pivots.length === 0 ? (
                   <p className="text-muted-foreground text-sm">
                     No mvt_ioc_detection or timestamp_anomaly records for this run.
                   </p>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    {iocRecords.map((rec) => {
+                    {pivots.map((rec) => {
                       const isDetection = rec.source_type === 'mvt_ioc_detection';
                       const matched = isDetection && rec.fields.matched_indicator != null;
                       const expandable = rec.event_time != null;

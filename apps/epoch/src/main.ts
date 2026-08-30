@@ -2,7 +2,7 @@
 import electron from 'electron';
 import path from 'path';
 import { Pool } from 'pg';
-import { getPipelineRuns, getStageStatus, getForensicRecords } from '@verichron/db-reader';
+import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/db-reader';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
 import dotenv from 'dotenv'
 
@@ -80,6 +80,27 @@ ipcMain.handle('epoch:getForensicRecords', async (_event, runId: string, sourceT
     throw err;
   }
 });
+
+ipcMain.handle('epoch:getCorrelationPivots', async (_event, runId: string) => {
+  try {
+    return await getCorrelationPivots(dbPool, runId);
+  } catch (err) {
+    console.error('DB error:', err);
+    throw err;
+  }
+});
+
+ipcMain.handle(
+  'epoch:getCorrelatedContext',
+  async (_event, runId: string, eventTime: string, excludeId: number, windowMinutes?: number) => {
+    try {
+      return await getCorrelatedContext(dbPool, runId, eventTime, excludeId, windowMinutes);
+    } catch (err) {
+      console.error('DB error:', err);
+      throw err;
+    }
+  }
+);
 
 let mainWindow: BrowserWindowType | null = null;
 

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import type { PipelineRunRow, StageStatusRow, ForensicRecordRow } from '@verichron/db-reader';
+import { ChevronRight, ChevronDown } from 'lucide-react';
+import type { PipelineRunRow, StageStatusRow, ForensicRecordRow, CorrelatedContextRow } from '@verichron/db-reader';
+import { CORRELATION_WINDOW_MINUTES } from '@verichron/db-reader';
 import { Sidebar, type Section } from './components/Sidebar';
 import { EvidenceTag } from './components/ui/EvidenceTag';
 import { Badge } from './components/ui/Badge';
@@ -66,6 +68,20 @@ export const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<'connected' | 'error' | 'unknown'>('unknown');
 
+  // Correlation context is per-pivot and fetched only on expand (see
+  // db-reader's getCorrelatedContext docstring) -- keyed by the pivot
+  // record's id, not a single flat list, since more than one pivot can
+  // be expanded at once.
+  const [expandedPivotId, setExpandedPivotId] = useState<number | null>(null);
+  const [correlatedContext, setCorrelatedContext] = useState<Record<number, CorrelatedContextRow[]>>({});
+  const [correlatedLoading, setCorrelatedLoading] = useState<number | null>(null);
+  const [correlatedError, setCorrelatedError] = useState<Record<number, string>>({});
+
+  const [report, setReport] = useState<ReportResult | null>(null);
+  const [reportLoaded, setReportLoaded] = useState(false);
+  const [reportLoadError, setReportLoadError] = useState<string | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+
   useEffect(() => {
     loadRuns();
   }, []);
@@ -90,6 +106,9 @@ export const App: React.FC = () => {
     setRecords([]);
     setRecordsLoaded(false);
     setSourceTypeFilter(null);
+    setReport(null);
+    setReportLoaded(false);
+    setReportLoadError(null);
     try {
       const data = await window.epoch.getStageStatus(run.run_id);
       setStages(data);
@@ -112,10 +131,56 @@ export const App: React.FC = () => {
     }
   };
 
+  const loadReport = async (run: PipelineRunRow) => {
+    setReportLoading(true);
+    setReportLoadError(null);
+    try {
+      const result = await window.epoch.getReport(run.backup_source);
+      setReport(result);
+      setReportLoaded(true);
+      setDbStatus('connected');
+    } catch (err) {
+      console.error('Failed to load report:', err);
+      setReportLoadError(err instanceof Error ? err.message : 'Unknown error');
+    }
+    setReportLoading(false);
+  };
+
+  const openReportFile = async () => {
+    if (!selectedRun) return;
+    const opened = await window.epoch.openReport(selectedRun.backup_source);
+    if (!opened) console.error('Failed to open report in default app');
+  };
+
   const handleSectionSelect = (next: Section) => {
     setSection(next);
     if ((next === 'records' || next === 'iocs') && selectedRun && !recordsLoaded) {
       loadRecords(selectedRun);
+    }
+    if (next === 'reports' && selectedRun && !reportLoaded) {
+      loadReport(selectedRun);
+    }
+  };
+
+  const toggleCorrelatedContext = async (pivot: ForensicRecordRow) => {
+    if (expandedPivotId === pivot.id) {
+      setExpandedPivotId(null);
+      return;
+    }
+    setExpandedPivotId(pivot.id);
+    if (correlatedContext[pivot.id] || !selectedRun || !pivot.event_time) return;
+    setCorrelatedLoading(pivot.id);
+    try {
+      const data = await window.epoch.getCorrelatedContext(selectedRun.run_id, pivot.event_time, pivot.id);
+      setCorrelatedContext((prev) => ({ ...prev, [pivot.id]: data }));
+    } catch (err) {
+      console.error('Failed to load correlated context:', err);
+      setCorrelatedError((prev) => ({
+        ...prev,
+        [pivot.id]: err instanceof Error ? err.message : 'Unknown error',
+      }));
+    } finally {
+      setCorrelatedLoading(null);
     }
   };
 
@@ -296,39 +361,85 @@ export const App: React.FC = () => {
                     {iocRecords.map((rec) => {
                       const isDetection = rec.source_type === 'mvt_ioc_detection';
                       const matched = isDetection && rec.fields.matched_indicator != null;
+                      const expandable = rec.event_time != null;
+                      const expanded = expandedPivotId === rec.id;
+                      const contextRows = correlatedContext[rec.id];
+                      const contextError = correlatedError[rec.id];
                       return (
                         <div
                           key={rec.id}
-                          className={`rounded-md p-3 border ${
+                          className={`rounded-md border ${
                             matched ? 'bg-flag/10 border-flag/30' : 'bg-surface border-border'
                           }`}
                         >
-                          <div className="flex items-center gap-2 mb-2">
-                            <Badge variant={matched ? 'flag' : 'neutral'}>{rec.source_type}</Badge>
-                            {rec.event_time && (
-                              <span className="font-mono text-xs text-muted-foreground">
-                                {new Date(rec.event_time).toLocaleString()}
-                              </span>
+                          <div
+                            className={`p-3 ${expandable ? 'cursor-pointer' : ''}`}
+                            onClick={() => expandable && toggleCorrelatedContext(rec)}
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              {expandable &&
+                                (expanded ? (
+                                  <ChevronDown size="0.875rem" className="text-muted-foreground shrink-0" />
+                                ) : (
+                                  <ChevronRight size="0.875rem" className="text-muted-foreground shrink-0" />
+                                ))}
+                              <Badge variant={matched ? 'flag' : 'neutral'}>{rec.source_type}</Badge>
+                              {rec.event_time && (
+                                <span className="font-mono text-xs text-muted-foreground">
+                                  {new Date(rec.event_time).toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                            {isDetection ? (
+                              <>
+                                <p className="text-sm">{String(rec.fields.message ?? '—')}</p>
+                                {matched && (
+                                  <p className="text-xs font-mono text-flag mt-1">
+                                    matched: {String(rec.fields.matched_indicator)}
+                                  </p>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm">
+                                  {String(rec.fields.plugin ?? '—')} — {String(rec.fields.description ?? rec.fields.event ?? '—')}
+                                </p>
+                                <p className="text-xs font-mono text-muted-foreground mt-1">
+                                  {formatDelta(rec.fields.delta_from_backup_seconds)} from backup date
+                                </p>
+                              </>
                             )}
                           </div>
-                          {isDetection ? (
-                            <>
-                              <p className="text-sm">{String(rec.fields.message ?? '—')}</p>
-                              {matched && (
-                                <p className="text-xs font-mono text-flag mt-1">
-                                  matched: {String(rec.fields.matched_indicator)}
-                                </p>
+                          {expanded && (
+                            <div className="border-t border-border p-3">
+                              <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-2">
+                                Nearby events (±{CORRELATION_WINDOW_MINUTES}m)
+                              </p>
+                              {contextError ? (
+                                <p className="text-xs text-flag font-mono">Error: {contextError}</p>
+                              ) : correlatedLoading === rec.id ? (
+                                <p className="text-xs text-muted-foreground">Loading...</p>
+                              ) : !contextRows || contextRows.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No other events in this window.</p>
+                              ) : (
+                                <div className="flex flex-col gap-2">
+                                  {contextRows.map((ctx) => (
+                                    <div key={ctx.id} className="flex items-center gap-2 text-xs">
+                                      <Badge variant="neutral">{ctx.source_type}</Badge>
+                                      <span className="font-mono text-muted-foreground">
+                                        {ctx.event_time ? new Date(ctx.event_time).toLocaleString() : '—'}
+                                      </span>
+                                      {ctx.process_name && (
+                                        <span className="font-mono text-foreground">{ctx.process_name}</span>
+                                      )}
+                                      {ctx.bundle_id && (
+                                        <span className="font-mono text-muted-foreground">{ctx.bundle_id}</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
                               )}
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-sm">
-                                {String(rec.fields.plugin ?? '—')} — {String(rec.fields.description ?? rec.fields.event ?? '—')}
-                              </p>
-                              <p className="text-xs font-mono text-muted-foreground mt-1">
-                                {formatDelta(rec.fields.delta_from_backup_seconds)} from backup date
-                              </p>
-                            </>
+                            </div>
                           )}
                         </div>
                       );
@@ -341,10 +452,43 @@ export const App: React.FC = () => {
             {section === 'reports' && (
               <div>
                 <h2 className="font-display text-base font-medium text-accent mb-4">Reports</h2>
-                <div className="bg-surface border border-border rounded-md p-4 text-sm text-muted-foreground">
-                  Not wired yet — reporting/generate_report.py's Markdown output isn't exposed through
-                  any IPC channel today. This section is a placeholder pending that wiring.
-                </div>
+                {!selectedRun ? (
+                  <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
+                ) : reportLoadError ? (
+                  <div className="text-flag bg-flag/10 border border-flag/30 rounded-md p-3 text-sm">
+                    Error: {reportLoadError}
+                  </div>
+                ) : reportLoading || !report ? (
+                  <p className="text-muted-foreground text-sm">Loading...</p>
+                ) : report.status === 'no-results-path' ? (
+                  <div className="bg-surface border border-border rounded-md p-4 text-sm text-muted-foreground">
+                    Can't derive a results path for this run's backup source (
+                    <span className="font-mono text-xs">{selectedRun.backup_source}</span>) -- it has no{' '}
+                    <span className="font-mono text-xs">decrypted</span> path segment to swap for{' '}
+                    <span className="font-mono text-xs">results</span>.
+                  </div>
+                ) : report.status === 'not-found' ? (
+                  <div className="bg-surface border border-border rounded-md p-4 text-sm text-muted-foreground">
+                    No report generated yet. Expected at:
+                    <br />
+                    <span className="font-mono text-xs">{report.path}</span>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-mono text-xs text-muted-foreground">{report.path}</span>
+                      <button
+                        onClick={openReportFile}
+                        className="px-3 py-1 rounded-md text-xs font-mono border border-border text-muted-foreground hover:text-foreground hover:border-accent transition-colors"
+                      >
+                        Open in default app
+                      </button>
+                    </div>
+                    <pre className="bg-surface border border-border rounded-md p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-[calc(100vh-14rem)]">
+                      {report.content}
+                    </pre>
+                  </div>
+                )}
               </div>
             )}
           </div>

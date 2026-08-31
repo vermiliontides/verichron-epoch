@@ -144,7 +144,7 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
                     }`}
                   >
                     <td className={`${tdClass} font-mono text-xs`}>
-                      <span className="block max-w-[13.75rem] truncate" title={run.backup_source}>
+                      <span className="block max-w-[55] truncate" title={run.backup_source}>
                         {backupName}
                       </span>
                     </td>
@@ -206,7 +206,7 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
                         Status: <Badge variant={stage.status}>{stage.status}</Badge>
                       </div>
                       {stage.error_message && (
-                        <p className="text-xs text-flag font-mono mb-1 break-words">Error: {stage.error_message}</p>
+                        <p className="text-xs text-flag font-mono mb-1 wrap-break-words">Error: {stage.error_message}</p>
                       )}
                       <p className="text-xs text-muted-foreground font-mono">
                         Duration: <strong className="text-foreground">{durationMs !== null ? formatDuration(durationMs) : '—'}</strong>

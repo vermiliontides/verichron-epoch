@@ -9,5 +9,17 @@
     "types": ["vite/client"]
   },
   "include": ["src/**/*", "vite.env.d.ts"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    // src/tools/idevicebackup -- provisional scaffolding, not wired into
+    // the app anywhere (nothing outside this folder imports it). The class
+    // is missing several methods it calls (detectArch, getExecutablePath,
+    // getLibraryPath, log, emit, formatBytes -- doesn't even extend
+    // EventEmitter despite calling emit()) and depends on axios/tar/adm-zip,
+    // none of which are in package.json. A better version is planned for
+    // the rewrite; excluded here rather than fabricated so it doesn't block
+    // the rest of the app compiling in the meantime.
+    "src/tools"
+  ]
 }

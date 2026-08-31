@@ -280,12 +280,20 @@ export class DeviceBackupManager {
 
   /**
    * Register Windows DLLs
+   *
+   * STUB — the original implementation was truncated mid-statement (this
+   * file cut off inside the `regsvr32` command-string template literal,
+   * with no closing invocation, error handling, or logic for what happens
+   * after registration). Rather than guess at the intended command
+   * construction, error handling style (this class uses both `execSync`
+   * and `spawn` elsewhere, inconsistently), or success/failure semantics,
+   * this is stubbed to a no-op so the rest of the app compiles. Wanted:
+   * a proper version as part of the planned rewrite, not a quick patch
+   * here.
    */
   private async registerDlls(files: string[]): Promise<void> {
     if (process.platform !== 'win32') return;
 
-    for (const file of files) {
-      const filePath = this.getLibraryPath(file);
-      if (!await fs.pathExists(filePath)) continue;
-
-      const cmd = `regsvr32 /s
+    this.log(`registerDlls stubbed — skipping registration for ${files.length} file(s): ${files.join(', ')}`);
+  }
+}

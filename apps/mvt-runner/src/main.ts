@@ -73,7 +73,19 @@ async function main() {
 function parseFlags(): Config {
   const home = os.homedir();
 
+  // `pnpm run <script> -- --foo` is meant to strip the `--` separator
+  // before invoking the underlying script, but that's not reliable across
+  // pnpm versions/invocation shapes (observed forwarding it literally when
+  // spawned via `pnpm --filter <pkg> dev -- --source ...`, as Electron's
+  // main.ts does). Node's parseArgs has no allowPositionals here, so a
+  // leftover leading `--` makes it treat every following flag as an
+  // unexpected positional and throw. Stripping one defensively is a no-op
+  // when pnpm already stripped it, and fixes the case when it didn't.
+  const rawArgs = process.argv.slice(2);
+  const args = rawArgs[0] === "--" ? rawArgs.slice(1) : rawArgs;
+
   const { values } = parseArgs({
+    args,
     options: {
       source: { type: "string", default: "" },
       workspace: { type: "string", default: path.join(home, "mvt-workspace") },

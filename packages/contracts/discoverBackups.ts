@@ -33,7 +33,6 @@ export async function discoverBackups(source: string, only?: string): Promise<Ba
   const found: Backup[] = [];
   for (const e of topEntries) {
     if (!e.isDirectory()) continue;
-    if (wanted !== null && !wanted.has(e.name)) continue;
 
     const topPath = path.join(source, e.name);
     const roots = await findBackupRoots(topPath, BACKUP_SEARCH_MAX_DEPTH);
@@ -41,8 +40,33 @@ export async function discoverBackups(source: string, only?: string): Promise<Ba
     if (roots.length === 0) continue;
     for (const root of roots) {
       // Multiple backup roots under one label is unusual but possible
-      // (e.g. two UDID dirs nested under one date folder) - disambiguate.
-      const label = roots.length > 1 ? `${e.name}__${path.basename(root)}` : e.name;
+      // (e.g. two UDID dirs nested under one date folder) - disambiguate
+      // using the full relative path from the top-level entry down to the
+      // root, not just its basename. Two distinct roots can share a
+      // terminal directory name (e.g. the same UDID folder name reused
+      // under two different intermediate paths) -- basename alone
+      // collides in that case and produces two backups with an identical
+      // label, which silently breaks both UI selection (duplicate React
+      // keys / indistinguishable checkboxes) and --only filtering below
+      // (matching the wrong one, or both). The full relative path is
+      // unique per root by construction, since findBackupRoots never
+      // returns the same directory twice.
+      const label =
+        roots.length > 1
+          ? `${e.name}__${path.relative(topPath, root).split(path.sep).join('__')}`
+          : e.name;
+
+      // Matched against either the final (possibly disambiguated) label
+      // or the plain top-level directory name. The latter preserves the
+      // original CLI contract (`--only <top-level-dir-name>` selects
+      // every root under it); the former is required for callers -- like
+      // the Electron picker UI -- that select one specific disambiguated
+      // root and pass its exact label back in. Filtering on e.name alone
+      // (the original implementation) meant a caller-supplied compound
+      // label never matched anything, silently dropping that backup from
+      // the run instead of erroring.
+      if (wanted !== null && !wanted.has(label) && !wanted.has(e.name)) continue;
+
       found.push({ label, path: root });
     }
   }

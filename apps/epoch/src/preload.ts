@@ -1,4 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { Backup } from '@verichron/contracts';
+import type { ReportResult } from './types/window';
  
 // This file previously created its own `pg.Pool` and issued its own SQL
 // directly from the preload script, bypassing main.ts's `ipcMain.handle`
@@ -13,10 +15,12 @@ interface StartPipelineOptions {
   workspace?: string;
   forceDecrypt?: boolean;
   refreshIOCs?: boolean;
+  only?: string[];
 }
  
 const dbApi = {
   selectBackupDirectory: () => ipcRenderer.invoke('epoch:selectBackupDirectory'),
+  discoverBackups: (source: string): Promise<Backup[]> => ipcRenderer.invoke('epoch:discoverBackups', source),
   startPipeline: (source: string, options?: StartPipelineOptions) =>
     ipcRenderer.invoke('epoch:startPipeline', source, options),
   submitMvtPassword: (password: string) => ipcRenderer.invoke('epoch:submitMvtPassword', password),
@@ -46,6 +50,8 @@ const dbApi = {
   getCorrelationPivots: (runId: string) => ipcRenderer.invoke('epoch:getCorrelationPivots', runId),
   getCorrelatedContext: (runId: string, eventTime: string, excludeId: number, windowMinutes?: number) =>
     ipcRenderer.invoke('epoch:getCorrelatedContext', runId, eventTime, excludeId, windowMinutes),
+  getReport: (backupSource: string): Promise<ReportResult> => ipcRenderer.invoke('epoch:getReport', backupSource),
+  openReport: (backupSource: string): Promise<boolean> => ipcRenderer.invoke('epoch:openReport', backupSource),
 };
  
 contextBridge.exposeInMainWorld('epoch', dbApi);

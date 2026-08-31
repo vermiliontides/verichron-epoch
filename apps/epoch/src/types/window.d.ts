@@ -5,6 +5,7 @@ import type {
   CorrelationPivotRow,
   CorrelatedContextRow,
 } from '@verichron/db-reader';
+import type { Backup } from '@verichron/contracts';
  
 export type ReportResult =
   | { status: 'ok'; content: string; path: string }
@@ -15,6 +16,7 @@ export interface StartPipelineOptions {
   workspace?: string;
   forceDecrypt?: boolean;
   refreshIOCs?: boolean;
+  only?: string[];
 }
  
 export interface MvtLogEntry {
@@ -32,6 +34,7 @@ declare global {
   interface Window {
     epoch: {
       selectBackupDirectory: () => Promise<string | null>;
+      discoverBackups: (source: string) => Promise<Backup[]>;
       startPipeline: (source: string, options?: StartPipelineOptions) => Promise<{ started: boolean }>;
       submitMvtPassword: (password: string) => Promise<void>;
       onMvtLog: (callback: (entry: MvtLogEntry) => void) => () => void;

@@ -15,3 +15,5 @@
 
 export { NormalizedRecord, SourceType } from "./normalizedRecord.js";
 export { deriveResultsPath } from "./resultsPath.js";
+export { discoverBackups, BACKUP_SEARCH_MAX_DEPTH } from "./discoverBackups.js";
+export type { Backup } from "./discoverBackups.js";

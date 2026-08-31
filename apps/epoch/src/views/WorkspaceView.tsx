@@ -1,10 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { FolderOpen, HardDrive, Play, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { FolderOpen, HardDrive, Play, AlertCircle, ChevronDown, ChevronRight, Smartphone } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import type { MvtLogEntry, MvtFinishedResult, StartPipelineOptions } from '../types/window';
+import type { Backup } from '@verichron/contracts';
 
 export function WorkspaceView() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+
+  const [backups, setBackups] = useState<Backup[]>([]);
+  const [discoveringBackups, setDiscoveringBackups] = useState(false);
+  const [discoverError, setDiscoverError] = useState<string | null>(null);
+  const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
 
   const [showOptions, setShowOptions] = useState(false);
   const [workspace, setWorkspace] = useState('');
@@ -43,8 +49,54 @@ export function WorkspaceView() {
     if (dir) setSelectedPath(dir);
   };
 
+  // Re-discover whenever the source directory changes, so the checkbox
+  // list always reflects what mvt-runner would actually find under it --
+  // not a stale list from a previously selected directory.
+  useEffect(() => {
+    if (!selectedPath) {
+      setBackups([]);
+      setSelectedLabels(new Set());
+      setDiscoverError(null);
+      return;
+    }
+    let cancelled = false;
+    setDiscoveringBackups(true);
+    setDiscoverError(null);
+    window.epoch
+      .discoverBackups(selectedPath)
+      .then((found) => {
+        if (cancelled) return;
+        setBackups(found);
+        setSelectedLabels(new Set(found.map((b) => b.label))); // default: everything selected
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setBackups([]);
+        setSelectedLabels(new Set());
+        setDiscoverError(err instanceof Error ? err.message : 'Unknown error');
+      })
+      .finally(() => {
+        if (!cancelled) setDiscoveringBackups(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPath]);
+
+  const toggleBackup = (label: string) => {
+    setSelectedLabels((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  const selectAllBackups = () => setSelectedLabels(new Set(backups.map((b) => b.label)));
+  const selectNoBackups = () => setSelectedLabels(new Set());
+
   const handleStartPipeline = async () => {
-    if (!selectedPath) return;
+    if (!selectedPath || selectedLabels.size === 0) return;
     setIsStarting(true);
     setStartError(null);
     setLogLines([]);
@@ -54,6 +106,7 @@ export function WorkspaceView() {
         workspace: workspace.trim() || undefined,
         forceDecrypt,
         refreshIOCs,
+        only: Array.from(selectedLabels),
       };
       await window.epoch.startPipeline(selectedPath, options);
       setIsRunning(true);
@@ -122,7 +175,7 @@ export function WorkspaceView() {
             </div>
             <button
               onClick={handleStartPipeline}
-              disabled={busy}
+              disabled={busy || discoveringBackups || selectedLabels.size === 0}
               className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-md font-medium text-sm transition-colors shrink-0"
             >
               {busy ? (
@@ -133,10 +186,68 @@ export function WorkspaceView() {
               ) : (
                 <>
                   <Play size="1rem" fill="currentColor" />
-                  Run mvt-runner
+                  Run mvt-runner{selectedLabels.size > 0 ? ` (${selectedLabels.size})` : ''}
                 </>
               )}
             </button>
+          </div>
+
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-2xs text-muted-foreground uppercase tracking-wide font-medium">
+                Backups Found{backups.length > 0 ? ` (${backups.length})` : ''}
+              </p>
+              {backups.length > 1 && !busy && (
+                <div className="flex items-center gap-2 text-2xs">
+                  <button onClick={selectAllBackups} className="text-accent hover:underline">
+                    Select all
+                  </button>
+                  <span className="text-muted-foreground">/</span>
+                  <button onClick={selectNoBackups} className="text-accent hover:underline">
+                    Select none
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {discoveringBackups && (
+              <p className="text-sm text-muted-foreground">Scanning directory for backups...</p>
+            )}
+
+            {!discoveringBackups && discoverError && (
+              <p className="text-sm text-flag">Could not scan directory: {discoverError}</p>
+            )}
+
+            {!discoveringBackups && !discoverError && backups.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No backups found under this directory (looked for Manifest.db / Info.plist in
+                subdirectories).
+              </p>
+            )}
+
+            {!discoveringBackups && backups.length > 0 && (
+              <div className="border border-border rounded-md divide-y divide-border max-h-56 overflow-auto">
+                {backups.map((b) => (
+                  <label
+                    key={b.label}
+                    className={`flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-surface/60 ${
+                      busy ? 'opacity-50 pointer-events-none' : ''
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedLabels.has(b.label)}
+                      onChange={() => toggleBackup(b.label)}
+                      disabled={busy}
+                    />
+                    <Smartphone size="1rem" className="text-muted-foreground shrink-0" />
+                    <span className="font-mono text-foreground truncate" title={b.path}>
+                      {b.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           <button

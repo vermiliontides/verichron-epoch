@@ -10,8 +10,12 @@
     "mvt-runner": "./dist/main.js"
   },
   "scripts": {
+    "build:contracts": "pnpm --filter @verichron/contracts build",
+    "prebuild": "pnpm run build:contracts",
     "build": "tsc",
+    "prestart": "pnpm run build:contracts",
     "start": "node dist/main.js",
+    "predev": "pnpm run build:contracts",
     "dev": "tsx src/main.ts",
     "typecheck": "tsc --noEmit"
   },

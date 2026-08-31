@@ -6,7 +6,7 @@ import fs from 'fs/promises';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { Pool } from 'pg';
 import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/db-reader';
-import { deriveResultsPath } from '@verichron/contracts';
+import { deriveResultsPath, discoverBackups, type Backup } from '@verichron/contracts';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
 import dotenv from 'dotenv'
  
@@ -175,6 +175,10 @@ interface StartPipelineOptions {
   workspace?: string;
   forceDecrypt?: boolean;
   refreshIOCs?: boolean;
+  // Backup labels (as returned by epoch:discoverBackups) to process,
+  // rather than every backup found under `source`. Forwarded to
+  // mvt-runner's own --only flag verbatim, comma-joined.
+  only?: string[];
 }
  
 function sendToRenderer(channel: string, ...args: unknown[]) {
@@ -223,6 +227,19 @@ ipcMain.handle('epoch:selectBackupDirectory', async () => {
   return result.filePaths[0];
 });
  
+// Lists the backups mvt-runner would find under `source`, so Stage 1 can
+// let the user pick which one(s) to actually process instead of always
+// running the whole directory. Uses the exact same discovery logic
+// mvt-runner runs internally (see @verichron/contracts/discoverBackups) --
+// two independent implementations here would drift the moment the nested-
+// UDID-directory search logic changes in one place and not the other.
+ipcMain.handle('epoch:discoverBackups', async (_event, source: string): Promise<Backup[]> => {
+  if (!source || !source.trim()) {
+    throw new Error('A source directory is required.');
+  }
+  return discoverBackups(source);
+});
+ 
 ipcMain.handle('epoch:startPipeline', async (_event, source: string, options?: StartPipelineOptions) => {
   if (runningMvtProcess) {
     throw new Error('mvt-runner is already running -- wait for it to finish before starting another.');
@@ -235,6 +252,7 @@ ipcMain.handle('epoch:startPipeline', async (_event, source: string, options?: S
   if (options?.workspace) args.push('--workspace', options.workspace);
   if (options?.forceDecrypt) args.push('--force-decrypt');
   if (options?.refreshIOCs) args.push('--refresh-iocs');
+  if (options?.only && options.only.length > 0) args.push('--only', options.only.join(','));
  
   const child = spawn('pnpm', args, { cwd: REPO_ROOT, stdio: ['pipe', 'pipe', 'pipe'] });
   runningMvtProcess = child;

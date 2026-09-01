@@ -136,6 +136,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
       await window.epoch.pullDeviceBackup(sourceId, selectedDevice, destDir);
     } catch (err) {
       setPullError(err instanceof Error ? err.message : 'Unknown error');
+      setPhase('available');
     }
   };
 

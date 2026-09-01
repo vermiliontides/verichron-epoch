@@ -6,6 +6,7 @@ interface TerminalLogProps {
   lines: MvtLogEntry[];
   live: boolean;
   defaultOpen?: boolean;
+  label?: string;
 }
 
 // How close to the bottom (in px) counts as "still at the bottom" for the
@@ -14,7 +15,7 @@ interface TerminalLogProps {
 // stable "I'm reading the end" position as "I scrolled away".
 const BOTTOM_THRESHOLD_PX = 24;
 
-export function TerminalLog({ lines, live, defaultOpen = false }: TerminalLogProps) {
+export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technical log' }: TerminalLogProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [stickToBottom, setStickToBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -70,7 +71,7 @@ export function TerminalLog({ lines, live, defaultOpen = false }: TerminalLogPro
         <span className="flex items-center gap-2 text-sm text-muted-foreground">
           {open ? <ChevronDown size="0.9rem" /> : <ChevronRight size="0.9rem" />}
           <TerminalSquare size="0.9rem" />
-          Technical log
+          {label}
           {live && (
             <span className="flex items-center gap-1.5 ml-1 text-2xs uppercase tracking-wide text-flag">
               <span className="w-1.5 h-1.5 rounded-full bg-flag animate-pulse" />

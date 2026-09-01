@@ -203,7 +203,14 @@ export const App: React.FC = () => {
           {selectedRun && <EvidenceTag run={selectedRun} phase={runPhase(selectedRun)} />}
 
           <div className="flex-1 overflow-auto p-5">
-            {section === 'workspace' && <WorkspaceView />}
+            {section === 'workspace' && (
+              <WorkspaceView
+                onAnalysisComplete={() => {
+                  setSection('runs');
+                  loadRuns();
+                }}
+              />
+            )}
 
             {section === 'runs' && (
               <RunsView

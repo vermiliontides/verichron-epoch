@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FolderOpen, HardDrive, Play, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, XCircle, Pencil } from 'lucide-react';
+import { FolderOpen, HardDrive, Play, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, XCircle, Pencil, Microscope, ArrowRight } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { BackupRow } from '../components/BackupRow';
 import { TerminalLog } from '../components/TerminalLog';
@@ -8,7 +8,15 @@ import type { MvtLogEntry, MvtFinishedResult, StartPipelineOptions } from '../ty
 import type { Backup } from '@verichron/contracts';
 import { applyMvtLogLine, initMvtRunProgress, type MvtRunProgress } from '../lib/mvtLogParser';
 
-export function WorkspaceView() {
+export interface WorkspaceViewProps {
+  // Called once Stage 3 (orchestrator) finishes successfully -- lets App.tsx
+  // switch to the Runs section and refresh its (mount-only) run list, since
+  // otherwise a freshly-created pipeline_runs row wouldn't show up until an
+  // unrelated reload happened to occur.
+  onAnalysisComplete: () => void;
+}
+
+export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   const [backups, setBackups] = useState<Backup[]>([]);
@@ -37,6 +45,17 @@ export function WorkspaceView() {
   const [passwordInput, setPasswordInput] = useState('');
   const [submittingPassword, setSubmittingPassword] = useState(false);
 
+  // Stage 3 (orchestrator) -- runs after mvt-runner finishes, against the
+  // exact workspace mvt-runner just used. This is what actually creates a
+  // pipeline_runs row; without it, a completed Stage 1 run has nowhere to
+  // go (see epoch:startAnalysis's own comment in main.ts for the full
+  // Stage 1 vs Stage 3 split).
+  const [lastRunWorkspace, setLastRunWorkspace] = useState<string | null>(null);
+  const [analysisRunning, setAnalysisRunning] = useState(false);
+  const [analysisLog, setAnalysisLog] = useState<MvtLogEntry[]>([]);
+  const [analysisResult, setAnalysisResult] = useState<MvtFinishedResult | null>(null);
+  const [analysisStartError, setAnalysisStartError] = useState<string | null>(null);
+
   useEffect(() => {
     const unsubLog = window.epoch.onMvtLog((entry) => {
       setLogLines((prev) => [...prev, entry]);
@@ -50,10 +69,19 @@ export function WorkspaceView() {
       setIsRunning(false);
       setFinishResult(result);
     });
+    const unsubOrchestratorLog = window.epoch.onOrchestratorLog((entry) => {
+      setAnalysisLog((prev) => [...prev, entry]);
+    });
+    const unsubOrchestratorFinished = window.epoch.onOrchestratorFinished((result) => {
+      setAnalysisRunning(false);
+      setAnalysisResult(result);
+    });
     return () => {
       unsubLog();
       unsubPassword();
       unsubFinished();
+      unsubOrchestratorLog();
+      unsubOrchestratorFinished();
     };
   }, []);
 
@@ -114,6 +142,11 @@ export function WorkspaceView() {
     setStartError(null);
     setLogLines([]);
     setFinishResult(null);
+    // A fresh Stage 1 run invalidates any prior Stage 3 result -- it was
+    // for a previous set of backups, not this one.
+    setAnalysisResult(null);
+    setAnalysisLog([]);
+    setAnalysisStartError(null);
     const selected = Array.from(selectedLabels);
     setRunProgress(initMvtRunProgress(selected));
     try {
@@ -123,7 +156,8 @@ export function WorkspaceView() {
         refreshIOCs,
         only: selected,
       };
-      await window.epoch.startPipeline(selectedPath, options);
+      const result = await window.epoch.startPipeline(selectedPath, options);
+      setLastRunWorkspace(result.workspace);
       setIsRunning(true);
     } catch (err) {
       setStartError(err instanceof Error ? err.message : 'Unknown error');
@@ -143,6 +177,20 @@ export function WorkspaceView() {
       console.error('Failed to submit password:', err);
     } finally {
       setSubmittingPassword(false);
+    }
+  };
+
+  const handleStartAnalysis = async () => {
+    if (!lastRunWorkspace) return;
+    setAnalysisRunning(true);
+    setAnalysisStartError(null);
+    setAnalysisLog([]);
+    setAnalysisResult(null);
+    try {
+      await window.epoch.startAnalysis(lastRunWorkspace);
+    } catch (err) {
+      setAnalysisStartError(err instanceof Error ? err.message : 'Unknown error');
+      setAnalysisRunning(false);
     }
   };
 
@@ -361,6 +409,79 @@ export function WorkspaceView() {
       )}
 
       {(isRunning || logLines.length > 0) && <TerminalLog lines={logLines} live={isRunning} />}
+
+      {/* Stage 3: only offered once Stage 1 has at least one successfully
+          decrypted+scanned backup to analyze. Nothing here happens
+          automatically -- mvt-runner's own summary above is real and
+          already complete on its own; this is a distinct next step, not a
+          continuation of the same run. */}
+      {finishResult && runProgress && doneCount > 0 && lastRunWorkspace && (
+        <div className="bg-surface border border-border rounded-lg p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Microscope className="text-accent" size="1.125rem" />
+            <h3 className="font-display text-base font-medium text-foreground">Analyze results</h3>
+          </div>
+
+          {!analysisRunning && !analysisResult && (
+            <>
+              <p className="text-sm text-muted-foreground mb-3">
+                Run the forensic extractors against the {doneCount} decrypted backup
+                {doneCount === 1 ? '' : 's'} above and record the results -- this is what makes them show up under
+                Runs, Records, and Reports.
+              </p>
+              <button
+                onClick={handleStartAnalysis}
+                className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 px-4 py-2 rounded-md font-medium text-sm transition-colors"
+              >
+                <Microscope size="1rem" />
+                Analyze {doneCount} backup{doneCount === 1 ? '' : 's'}
+              </button>
+              {analysisStartError && <p className="text-sm text-danger mt-2">{analysisStartError}</p>}
+            </>
+          )}
+
+          {analysisRunning && (
+            <p className="text-sm text-flag flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-flag/30 border-t-flag rounded-full animate-spin" />
+              Running the forensic extractors...
+            </p>
+          )}
+
+          {analysisResult && (
+            <div>
+              {analysisResult.success ? (
+                <>
+                  <p className="text-sm text-accent flex items-center gap-2 mb-3">
+                    <CheckCircle2 size="1rem" /> Analysis complete.
+                  </p>
+                  <button
+                    onClick={onAnalysisComplete}
+                    className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 px-4 py-2 rounded-md font-medium text-sm transition-colors"
+                  >
+                    View results in Runs
+                    <ArrowRight size="1rem" />
+                  </button>
+                </>
+              ) : (
+                <div>
+                  <p className="text-sm text-danger flex items-center gap-2">
+                    <XCircle size="1rem" /> Analysis failed{analysisResult.error ? `: ${analysisResult.error}` : '.'}
+                  </p>
+                  <button onClick={handleStartAnalysis} className="text-xs text-accent hover:underline mt-2">
+                    Try again
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {(analysisRunning || analysisLog.length > 0) && (
+            <div className="mt-3">
+              <TerminalLog lines={analysisLog} live={analysisRunning} label="Orchestrator log" />
+            </div>
+          )}
+        </div>
+      )}
 
       {!selectedPath && (
         <div className="flex items-start gap-3 bg-surface border border-border rounded-lg p-4">

@@ -29,7 +29,7 @@ const dbApi = {
   selectBackupDirectory: () => ipcRenderer.invoke('epoch:selectBackupDirectory'),
   selectDeviceBackupDestination: (): Promise<string | null> => ipcRenderer.invoke('epoch:selectDeviceBackupDestination'),
   discoverBackups: (source: string): Promise<Backup[]> => ipcRenderer.invoke('epoch:discoverBackups', source),
-  startPipeline: (source: string, options?: StartPipelineOptions) =>
+  startPipeline: (source: string, options?: StartPipelineOptions): Promise<{ started: boolean; workspace: string }> =>
     ipcRenderer.invoke('epoch:startPipeline', source, options),
   submitMvtPassword: (password: string) => ipcRenderer.invoke('epoch:submitMvtPassword', password),
   onMvtLog: (callback: (entry: { stream: 'stdout' | 'stderr'; line: string }) => void) => {
@@ -60,6 +60,27 @@ const dbApi = {
     ipcRenderer.invoke('epoch:getCorrelatedContext', runId, eventTime, excludeId, windowMinutes),
   getReport: (backupSource: string): Promise<ReportResult> => ipcRenderer.invoke('epoch:getReport', backupSource),
   openReport: (backupSource: string): Promise<boolean> => ipcRenderer.invoke('epoch:openReport', backupSource),
+
+  // Stage 3: runs the orchestrator (creates pipeline_runs/stage rows for
+  // everything mvt-runner has decrypted in `workspace`). See main.ts's
+  // epoch:startAnalysis handler for why this doesn't need a list of which
+  // backups succeeded -- orchestrator discovers that itself.
+  startAnalysis: (workspace: string): Promise<{ started: boolean }> =>
+    ipcRenderer.invoke('epoch:startAnalysis', workspace),
+  onOrchestratorLog: (callback: (entry: { stream: 'stdout' | 'stderr'; line: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, entry: { stream: 'stdout' | 'stderr'; line: string }) =>
+      callback(entry);
+    ipcRenderer.on('epoch:orchestratorLog', listener);
+    return () => ipcRenderer.removeListener('epoch:orchestratorLog', listener);
+  },
+  onOrchestratorFinished: (callback: (result: { success: boolean; exitCode?: number | null; error?: string }) => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      result: { success: boolean; exitCode?: number | null; error?: string }
+    ) => callback(result);
+    ipcRenderer.on('epoch:orchestratorFinished', listener);
+    return () => ipcRenderer.removeListener('epoch:orchestratorFinished', listener);
+  },
 
   // Device backup acquisition -- see apps/epoch/src/tools/device-backup.
   listDeviceBackupSources: (): Promise<Array<{ id: string; label: string }>> =>
@@ -101,4 +122,3 @@ const dbApi = {
 };
  
 contextBridge.exposeInMainWorld('epoch', dbApi);
- 

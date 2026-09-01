@@ -43,7 +43,7 @@ declare global {
       selectBackupDirectory: () => Promise<string | null>;
       selectDeviceBackupDestination: () => Promise<string | null>;
       discoverBackups: (source: string) => Promise<Backup[]>;
-      startPipeline: (source: string, options?: StartPipelineOptions) => Promise<{ started: boolean }>;
+      startPipeline: (source: string, options?: StartPipelineOptions) => Promise<{ started: boolean; workspace: string }>;
       submitMvtPassword: (password: string) => Promise<void>;
       onMvtLog: (callback: (entry: MvtLogEntry) => void) => () => void;
       onMvtPasswordRequired: (callback: (backupName: string) => void) => () => void;
@@ -60,6 +60,12 @@ declare global {
       ) => Promise<CorrelatedContextRow[]>;
       getReport: (backupSource: string) => Promise<ReportResult>;
       openReport: (backupSource: string) => Promise<boolean>;
+      // Stage 3 (orchestrator) -- see main.ts's epoch:startAnalysis handler.
+      // Reuses MvtLogEntry/MvtFinishedResult since the shape is identical;
+      // no need for a second pair of structurally-equal types.
+      startAnalysis: (workspace: string) => Promise<{ started: boolean }>;
+      onOrchestratorLog: (callback: (entry: MvtLogEntry) => void) => () => void;
+      onOrchestratorFinished: (callback: (result: MvtFinishedResult) => void) => () => void;
       listDeviceBackupSources: () => Promise<Array<{ id: string; label: string }>>;
       checkDeviceBackupToolAvailable: (sourceId: string) => Promise<ToolAvailabilityStatus>;
       listConnectedDevices: (sourceId: string) => Promise<DeviceInfo[]>;

@@ -9,6 +9,8 @@ import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivo
 import { deriveResultsPath, discoverBackups, type Backup } from '@verichron/contracts';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
 import dotenv from 'dotenv'
+import { listDeviceBackupSources, getDeviceBackupSource, getAcquisitionStrategy } from './tools/device-backup/registry';
+import type { DeviceInfo, ToolAcquisitionCommand } from './tools/device-backup/types';
  
 const { app, BrowserWindow, ipcMain, shell, dialog } = electron;
  
@@ -226,6 +228,16 @@ ipcMain.handle('epoch:selectBackupDirectory', async () => {
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
 });
+
+ipcMain.handle('epoch:selectDeviceBackupDestination', async () => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: 'Choose where to save the new backup',
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
  
 // Lists the backups mvt-runner would find under `source`, so Stage 1 can
 // let the user pick which one(s) to actually process instead of always
@@ -283,6 +295,113 @@ ipcMain.handle('epoch:submitMvtPassword', async (_event, password: string) => {
   const resolve = pendingPasswordResolve;
   pendingPasswordResolve = null;
   resolve(password);
+});
+
+/**
+ * Device backup acquisition -- pulling a fresh backup directly from a
+ * connected device, as an alternative to selectBackupDirectory's "point at
+ * something already on disk". See apps/epoch/src/tools/device-backup for
+ * the actual DeviceBackupSource/ToolAcquisitionStrategy implementations;
+ * this section is IPC wiring only. A pulled backup's directory feeds into
+ * the exact same epoch:discoverBackups / epoch:startPipeline flow above
+ * that an existing directory already does -- no separate pipeline entry
+ * point needed for device-sourced vs. disk-sourced backups.
+ */
+ipcMain.handle('epoch:listDeviceBackupSources', async () => {
+  return listDeviceBackupSources().map((source) => ({ id: source.id, label: source.label }));
+});
+
+ipcMain.handle('epoch:checkDeviceBackupToolAvailable', async (_event, sourceId: string) => {
+  const source = getDeviceBackupSource(sourceId);
+  if (!source) throw new Error(`Unknown device backup source: ${sourceId}`);
+  return source.checkToolAvailable();
+});
+
+ipcMain.handle('epoch:listConnectedDevices', async (_event, sourceId: string) => {
+  const source = getDeviceBackupSource(sourceId);
+  if (!source) throw new Error(`Unknown device backup source: ${sourceId}`);
+  return source.listConnectedDevices();
+});
+
+ipcMain.handle('epoch:getToolAcquisitionActions', async (_event, sourceId: string) => {
+  const strategy = getAcquisitionStrategy(sourceId);
+  if (!strategy) throw new Error(`Unknown device backup source: ${sourceId}`);
+  return strategy.availableActions();
+});
+
+let deviceBackupInFlight = false;
+
+ipcMain.handle(
+  'epoch:pullDeviceBackup',
+  async (_event, sourceId: string, device: DeviceInfo, destDir: string) => {
+    if (deviceBackupInFlight) {
+      throw new Error('A device backup is already in progress -- wait for it to finish before starting another.');
+    }
+    const source = getDeviceBackupSource(sourceId);
+    if (!source) throw new Error(`Unknown device backup source: ${sourceId}`);
+
+    deviceBackupInFlight = true;
+    try {
+      return await source.pullBackup(device, destDir, (progress) => {
+        sendToRenderer('epoch:deviceBackupProgress', progress);
+      });
+    } finally {
+      deviceBackupInFlight = false;
+    }
+  }
+);
+
+let acquisitionInFlight = false;
+
+/** Runs a compile-from-source (or WSL-wrapped) step sequence in order,
+ * stopping at the first failure. Each command's PKG_CONFIG_PATH is set to
+ * the shared installPrefix so later repos in the chain find earlier ones --
+ * see buildSteps.ts's own comment on why this is threaded through env
+ * rather than a configure flag. */
+ipcMain.handle('epoch:runToolAcquisitionSteps', async (_event, steps: ToolAcquisitionCommand[], installPrefix: string) => {
+  if (acquisitionInFlight) {
+    throw new Error('A tool acquisition run is already in progress.');
+  }
+  acquisitionInFlight = true;
+
+  try {
+    if (steps.length > 0) {
+      const buildRoot = steps[0].cwd;
+      if (buildRoot) await fs.mkdir(buildRoot, { recursive: true }).catch(() => undefined);
+    }
+    await fs.mkdir(installPrefix, { recursive: true }).catch(() => undefined);
+
+    for (const step of steps) {
+      sendToRenderer('epoch:toolAcquisitionStepStarted', step.label);
+      const pkgConfigPath = path.join(installPrefix, 'lib', 'pkgconfig');
+      const env = {
+        ...process.env,
+        PKG_CONFIG_PATH: [pkgConfigPath, process.env.PKG_CONFIG_PATH].filter(Boolean).join(path.delimiter),
+      };
+
+      const exitCode = await new Promise<number>((resolve, reject) => {
+        const child = spawn(step.command, step.args, { cwd: step.cwd, env });
+        child.stdout?.on('data', (chunk: Buffer) => {
+          sendToRenderer('epoch:toolAcquisitionOutput', { step: step.label, line: chunk.toString('utf-8') });
+        });
+        child.stderr?.on('data', (chunk: Buffer) => {
+          sendToRenderer('epoch:toolAcquisitionOutput', { step: step.label, line: chunk.toString('utf-8') });
+        });
+        child.once('error', reject);
+        child.once('close', (code) => resolve(code ?? 1));
+      });
+
+      if (exitCode !== 0) {
+        sendToRenderer('epoch:toolAcquisitionFinished', { success: false, failedStep: step.label });
+        return { success: false, failedStep: step.label };
+      }
+    }
+
+    sendToRenderer('epoch:toolAcquisitionFinished', { success: true });
+    return { success: true };
+  } finally {
+    acquisitionInFlight = false;
+  }
 });
  
 let mainWindow: BrowserWindowType | null = null;

@@ -3,6 +3,7 @@ import { FolderOpen, HardDrive, Play, AlertCircle, ChevronDown, ChevronRight, Ch
 import { Badge } from '../components/ui/Badge';
 import { BackupRow } from '../components/BackupRow';
 import { TerminalLog } from '../components/TerminalLog';
+import { DevicePullPanel } from '../components/DevicePullPanel';
 import type { MvtLogEntry, MvtFinishedResult, StartPipelineOptions } from '../types/window';
 import type { Backup } from '@verichron/contracts';
 import { applyMvtLogLine, initMvtRunProgress, type MvtRunProgress } from '../lib/mvtLogParser';
@@ -162,21 +163,24 @@ export function WorkspaceView() {
       </div>
 
       {!selectedPath ? (
-        <div
-          onClick={handleSelectDirectory}
-          className="group relative flex flex-col items-center justify-center p-12 border-2 border-dashed border-border rounded-xl bg-surface/30 hover:bg-surface/60 hover:border-accent cursor-pointer transition-all"
-        >
-          <div className="bg-surface p-4 rounded-full border border-border mb-4">
-            <FolderOpen size="2rem" className="text-muted-foreground group-hover:text-accent transition-colors" />
+        <>
+          <DevicePullPanel onBackupPulled={(destDir) => setSelectedPath(destDir)} />
+          <div
+            onClick={handleSelectDirectory}
+            className="group relative flex flex-col items-center justify-center p-12 border-2 border-dashed border-border rounded-xl bg-surface/30 hover:bg-surface/60 hover:border-accent cursor-pointer transition-all"
+          >
+            <div className="bg-surface p-4 rounded-full border border-border mb-4">
+              <FolderOpen size="2rem" className="text-muted-foreground group-hover:text-accent transition-colors" />
+            </div>
+            <h3 className="font-display text-base font-medium text-foreground mb-1">Import Directory</h3>
+            <p className="text-sm text-muted-foreground font-mono mb-4 text-center max-w-md">
+              macOS: ~/Library/Application Support/MobileSync/Backup/
+              <br />
+              Windows: %appdata%\Apple Computer\MobileSync\Backup\
+            </p>
+            <Badge variant="neutral">Browse Local Files</Badge>
           </div>
-          <h3 className="font-display text-base font-medium text-foreground mb-1">Import Directory</h3>
-          <p className="text-sm text-muted-foreground font-mono mb-4 text-center max-w-md">
-            macOS: ~/Library/Application Support/MobileSync/Backup/
-            <br />
-            Windows: %appdata%\Apple Computer\MobileSync\Backup\
-          </p>
-          <Badge variant="neutral">Browse Local Files</Badge>
-        </div>
+        </>
       ) : (
         <>
           {/* Compact source bar -- replaces the import hero once a directory is
@@ -362,9 +366,8 @@ export function WorkspaceView() {
         <div className="flex items-start gap-3 bg-surface border border-border rounded-lg p-4">
           <AlertCircle className="text-muted-foreground shrink-0 mt-1" size="1rem" />
           <p className="text-xs text-muted-foreground leading-relaxed">
-            <strong className="text-foreground">Tip:</strong> Live device extraction over USB is currently disabled.
-            Please use an external tool (like Finder, iTunes, or libimobiledevice) to stage the evidence before
-            running Verichron.
+            <strong className="text-foreground">Tip:</strong> Pull a fresh backup directly from a connected iOS
+            device above, or import a directory of backups already staged by Finder, iTunes, or another tool.
           </p>
         </div>
       )}

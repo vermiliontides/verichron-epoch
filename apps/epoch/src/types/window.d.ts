@@ -6,6 +6,13 @@ import type {
   CorrelatedContextRow,
 } from '@verichron/db-reader';
 import type { Backup } from '@verichron/contracts';
+import type {
+  BackupProgress,
+  DeviceInfo,
+  ToolAcquisitionAction,
+  ToolAcquisitionCommand,
+  ToolAvailabilityStatus,
+} from '../tools/device-backup/types';
  
 export type ReportResult =
   | { status: 'ok'; content: string; path: string }
@@ -34,6 +41,7 @@ declare global {
   interface Window {
     epoch: {
       selectBackupDirectory: () => Promise<string | null>;
+      selectDeviceBackupDestination: () => Promise<string | null>;
       discoverBackups: (source: string) => Promise<Backup[]>;
       startPipeline: (source: string, options?: StartPipelineOptions) => Promise<{ started: boolean }>;
       submitMvtPassword: (password: string) => Promise<void>;
@@ -52,6 +60,19 @@ declare global {
       ) => Promise<CorrelatedContextRow[]>;
       getReport: (backupSource: string) => Promise<ReportResult>;
       openReport: (backupSource: string) => Promise<boolean>;
+      listDeviceBackupSources: () => Promise<Array<{ id: string; label: string }>>;
+      checkDeviceBackupToolAvailable: (sourceId: string) => Promise<ToolAvailabilityStatus>;
+      listConnectedDevices: (sourceId: string) => Promise<DeviceInfo[]>;
+      getToolAcquisitionActions: (sourceId: string) => Promise<ToolAcquisitionAction[]>;
+      pullDeviceBackup: (sourceId: string, device: DeviceInfo, destDir: string) => Promise<string>;
+      runToolAcquisitionSteps: (
+        steps: ToolAcquisitionCommand[],
+        installPrefix: string
+      ) => Promise<{ success: boolean; failedStep?: string }>;
+      onDeviceBackupProgress: (callback: (progress: BackupProgress) => void) => () => void;
+      onToolAcquisitionStepStarted: (callback: (label: string) => void) => () => void;
+      onToolAcquisitionOutput: (callback: (entry: { step: string; line: string }) => void) => () => void;
+      onToolAcquisitionFinished: (callback: (result: { success: boolean; failedStep?: string }) => void) => () => void;
     };
   }
 }

@@ -1,6 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Backup } from '@verichron/contracts';
 import type { ReportResult } from './types/window';
+import type {
+  BackupProgress,
+  DeviceInfo,
+  ToolAcquisitionAction,
+  ToolAcquisitionCommand,
+  ToolAvailabilityStatus,
+} from './tools/device-backup/types';
  
 // This file previously created its own `pg.Pool` and issued its own SQL
 // directly from the preload script, bypassing main.ts's `ipcMain.handle`
@@ -20,6 +27,7 @@ interface StartPipelineOptions {
  
 const dbApi = {
   selectBackupDirectory: () => ipcRenderer.invoke('epoch:selectBackupDirectory'),
+  selectDeviceBackupDestination: (): Promise<string | null> => ipcRenderer.invoke('epoch:selectDeviceBackupDestination'),
   discoverBackups: (source: string): Promise<Backup[]> => ipcRenderer.invoke('epoch:discoverBackups', source),
   startPipeline: (source: string, options?: StartPipelineOptions) =>
     ipcRenderer.invoke('epoch:startPipeline', source, options),
@@ -52,6 +60,44 @@ const dbApi = {
     ipcRenderer.invoke('epoch:getCorrelatedContext', runId, eventTime, excludeId, windowMinutes),
   getReport: (backupSource: string): Promise<ReportResult> => ipcRenderer.invoke('epoch:getReport', backupSource),
   openReport: (backupSource: string): Promise<boolean> => ipcRenderer.invoke('epoch:openReport', backupSource),
+
+  // Device backup acquisition -- see apps/epoch/src/tools/device-backup.
+  listDeviceBackupSources: (): Promise<Array<{ id: string; label: string }>> =>
+    ipcRenderer.invoke('epoch:listDeviceBackupSources'),
+  checkDeviceBackupToolAvailable: (sourceId: string): Promise<ToolAvailabilityStatus> =>
+    ipcRenderer.invoke('epoch:checkDeviceBackupToolAvailable', sourceId),
+  listConnectedDevices: (sourceId: string): Promise<DeviceInfo[]> =>
+    ipcRenderer.invoke('epoch:listConnectedDevices', sourceId),
+  getToolAcquisitionActions: (sourceId: string): Promise<ToolAcquisitionAction[]> =>
+    ipcRenderer.invoke('epoch:getToolAcquisitionActions', sourceId),
+  pullDeviceBackup: (sourceId: string, device: DeviceInfo, destDir: string): Promise<string> =>
+    ipcRenderer.invoke('epoch:pullDeviceBackup', sourceId, device, destDir),
+  runToolAcquisitionSteps: (
+    steps: ToolAcquisitionCommand[],
+    installPrefix: string
+  ): Promise<{ success: boolean; failedStep?: string }> =>
+    ipcRenderer.invoke('epoch:runToolAcquisitionSteps', steps, installPrefix),
+  onDeviceBackupProgress: (callback: (progress: BackupProgress) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: BackupProgress) => callback(progress);
+    ipcRenderer.on('epoch:deviceBackupProgress', listener);
+    return () => ipcRenderer.removeListener('epoch:deviceBackupProgress', listener);
+  },
+  onToolAcquisitionStepStarted: (callback: (label: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, label: string) => callback(label);
+    ipcRenderer.on('epoch:toolAcquisitionStepStarted', listener);
+    return () => ipcRenderer.removeListener('epoch:toolAcquisitionStepStarted', listener);
+  },
+  onToolAcquisitionOutput: (callback: (entry: { step: string; line: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, entry: { step: string; line: string }) => callback(entry);
+    ipcRenderer.on('epoch:toolAcquisitionOutput', listener);
+    return () => ipcRenderer.removeListener('epoch:toolAcquisitionOutput', listener);
+  },
+  onToolAcquisitionFinished: (callback: (result: { success: boolean; failedStep?: string }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, result: { success: boolean; failedStep?: string }) =>
+      callback(result);
+    ipcRenderer.on('epoch:toolAcquisitionFinished', listener);
+    return () => ipcRenderer.removeListener('epoch:toolAcquisitionFinished', listener);
+  },
 };
  
 contextBridge.exposeInMainWorld('epoch', dbApi);

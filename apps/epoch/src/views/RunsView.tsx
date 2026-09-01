@@ -44,8 +44,8 @@ interface RunsViewProps {
 }
  
 const thClass =
-  'sticky top-0 bg-surface/90 backdrop-blur-md z-10 text-left font-medium text-muted-foreground px-3 py-2 border-b border-border text-2xs uppercase tracking-wide';
-const tdClass = 'px-3 py-2 border-b border-border';
+  'sticky top-0 bg-surface/90 backdrop-blur-md z-10 text-left font-medium text-muted-foreground px-4 py-3 border-b border-border text-2xs uppercase tracking-wide';
+const tdClass = 'px-4 py-3 border-b border-border';
  
 function EmptyState({ icon: Icon, title, detail }: { icon: typeof Inbox; title: string; detail?: string }) {
   return (
@@ -107,15 +107,15 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
 
   return (
     <div className="flex flex-1 min-h-0 divide-x divide-border h-full overflow-hidden">
-      <div className="flex-1 overflow-auto p-5 relative">
-        <h2 className="font-display text-base font-medium text-accent mb-4 flex items-baseline gap-2">
+      <div className="flex-1 overflow-auto p-8 relative">
+        <h2 className="font-display text-base font-medium text-accent mb-6 flex items-baseline gap-2">
           Pipeline Runs
           {!loading && !error && runs.length > 0 && (
             <span className="font-mono text-2xs text-muted-foreground">{runs.length}</span>
           )}
         </h2>
         {error ? (
-          <div className="text-flag bg-flag/10 border border-flag/30 rounded-md px-3 py-2 text-sm">{error}</div>
+          <div className="text-flag bg-flag/10 border border-flag/30 rounded-md px-4 py-3 text-sm">{error}</div>
         ) : loading ? (
           <RunsTableSkeleton />
         ) : runs.length === 0 ? (
@@ -169,13 +169,13 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
         )}
       </div>
  
-      <div className="flex-1 overflow-auto p-5">
-        <h2 className="font-display text-base font-medium text-accent mb-4">Stage Breakdown</h2>
+      <div className="flex-1 overflow-auto p-8">
+        <h2 className="font-display text-base font-medium text-accent mb-6">Stage Breakdown</h2>
         {selectedRun ? (
           stages.length === 0 ? (
             <EmptyState icon={Layers} title="No stages found for this run" />
           ) : (
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(16.25rem, 1fr))' }}>
+            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(16.25rem, 1fr))' }}>
               {stages.map((stage) => {
                 const durationMs = stageDurationMs(stage);
                 const statusColor = 
@@ -188,7 +188,7 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
                 return (
                   <div
                     key={`${stage.run_id}-${stage.stage_name}`}
-                    className="group relative overflow-hidden bg-surface/50 backdrop-blur-sm rounded-lg p-4 border border-border border-l-2 shadow-md transition-all hover:shadow-lg hover:bg-surface/80"
+                    className="group relative overflow-hidden bg-surface/50 backdrop-blur-sm rounded-lg p-5 border border-border border-l-2 shadow-md transition-all hover:shadow-lg hover:bg-surface/80"
                     style={{
                       borderLeftColor: `hsl(${statusColor} / ${stage.status === 'pending' || stage.status === 'skipped' ? '0.5' : '1'})`,
                     }}
@@ -200,12 +200,12 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
                     />
                     
                     <div className="relative z-10">
-                      <h3 className="font-display text-sm font-medium mb-2">{stage.stage_name}</h3>
-                      <div className="text-xs text-muted-foreground font-mono mb-1 flex items-center gap-2">
+                      <h3 className="font-display text-sm font-medium mb-3">{stage.stage_name}</h3>
+                      <div className="text-xs text-muted-foreground font-mono mb-2 flex items-center gap-2">
                         Status: <Badge variant={stage.status}>{stage.status}</Badge>
                       </div>
                       {stage.error_message && (
-                        <p className="text-xs text-flag font-mono mb-1 wrap-break-words">Error: {stage.error_message}</p>
+                        <p className="text-xs text-flag font-mono mb-2 wrap-break-words">Error: {stage.error_message}</p>
                       )}
                       <p className="text-xs text-muted-foreground font-mono">
                         Duration: <strong className="text-foreground">{durationMs !== null ? formatDuration(durationMs) : '—'}</strong>

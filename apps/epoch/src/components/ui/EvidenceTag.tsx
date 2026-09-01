@@ -18,7 +18,7 @@ interface EvidenceTagProps {
 
 export function EvidenceTag({ run, phase }: EvidenceTagProps) {
   return (
-    <div className="flex items-center gap-4 px-5 py-3 border-b border-border text-xs">
+    <div className="flex items-center gap-4 px-6 py-3 border-b border-border text-xs">
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="font-mono text-accent cursor-default">

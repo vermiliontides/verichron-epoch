@@ -202,7 +202,7 @@ export const App: React.FC = () => {
         <div className="flex-1 flex flex-col min-w-0">
           {selectedRun && <EvidenceTag run={selectedRun} phase={runPhase(selectedRun)} />}
 
-          <div className="flex-1 overflow-auto p-5">
+          <div className="flex-1 overflow-auto p-8">
             {section === 'workspace' && (
               <WorkspaceView
                 onAnalysisComplete={() => {
@@ -236,7 +236,7 @@ export const App: React.FC = () => {
 
             {section === 'iocs' && (
               <div>
-                <h2 className="font-display text-base font-medium text-accent mb-4">Indicator Matches</h2>
+                <h2 className="font-display text-base font-medium text-accent mb-6">Indicator Matches</h2>
                 {!selectedRun ? (
                   <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
                 ) : iocRecords.length === 0 ? (
@@ -244,7 +244,7 @@ export const App: React.FC = () => {
                     No mvt_ioc_detection or timestamp_anomaly records for this run.
                   </p>
                 ) : (
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-3">
                     {iocRecords.map((rec) => {
                       const isDetection = rec.source_type === 'mvt_ioc_detection';
                       const matched = isDetection && rec.fields.matched_indicator != null;
@@ -255,15 +255,15 @@ export const App: React.FC = () => {
                       return (
                         <div
                           key={rec.id}
-                          className={`rounded-md border ${
+                          className={`rounded-lg border ${
                             matched ? 'bg-flag/10 border-flag/30' : 'bg-surface border-border'
                           }`}
                         >
                           <div
-                            className={`p-3 ${expandable ? 'cursor-pointer' : ''}`}
+                            className={`p-4 ${expandable ? 'cursor-pointer' : ''}`}
                             onClick={() => expandable && toggleCorrelatedContext(rec)}
                           >
-                            <div className="flex items-center gap-2 mb-2">
+                            <div className="flex items-center gap-2 mb-3">
                               {expandable &&
                                 (expanded ? (
                                   <ChevronDown size="0.875rem" className="text-muted-foreground shrink-0" />
@@ -281,7 +281,7 @@ export const App: React.FC = () => {
                               <>
                                 <p className="text-sm">{String(rec.fields.message ?? '—')}</p>
                                 {matched && (
-                                  <p className="text-xs font-mono text-flag mt-1">
+                                  <p className="text-xs font-mono text-flag mt-2">
                                     matched: {String(rec.fields.matched_indicator)}
                                   </p>
                                 )}
@@ -291,15 +291,15 @@ export const App: React.FC = () => {
                                 <p className="text-sm">
                                   {String(rec.fields.plugin ?? '—')} — {String(rec.fields.description ?? rec.fields.event ?? '—')}
                                 </p>
-                                <p className="text-xs font-mono text-muted-foreground mt-1">
+                                <p className="text-xs font-mono text-muted-foreground mt-2">
                                   {formatDelta(rec.fields.delta_from_backup_seconds)} from backup date
                                 </p>
                               </>
                             )}
                           </div>
                           {expanded && (
-                            <div className="border-t border-border p-3">
-                              <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-2">
+                            <div className="border-t border-border p-4">
+                              <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-3">
                                 Nearby events (±{CORRELATION_WINDOW_MINUTES}m)
                               </p>
                               {contextError ? (
@@ -309,9 +309,9 @@ export const App: React.FC = () => {
                               ) : !contextRows || contextRows.length === 0 ? (
                                 <p className="text-xs text-muted-foreground">No other events in this window.</p>
                               ) : (
-                                <div className="flex flex-col gap-2">
+                                <div className="flex flex-col gap-2.5">
                                   {contextRows.map((ctx) => (
-                                    <div key={ctx.id} className="flex items-center gap-2 text-xs">
+                                    <div key={ctx.id} className="flex items-center gap-3 text-xs">
                                       <Badge variant="neutral">{ctx.source_type}</Badge>
                                       <span className="font-mono text-muted-foreground">
                                         {ctx.event_time ? new Date(ctx.event_time).toLocaleString() : '—'}
@@ -338,40 +338,40 @@ export const App: React.FC = () => {
 
             {section === 'reports' && (
               <div>
-                <h2 className="font-display text-base font-medium text-accent mb-4">Reports</h2>
+                <h2 className="font-display text-base font-medium text-accent mb-6">Reports</h2>
                 {!selectedRun ? (
                   <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
                 ) : reportLoadError ? (
-                  <div className="text-flag bg-flag/10 border border-flag/30 rounded-md p-3 text-sm">
+                  <div className="text-flag bg-flag/10 border border-flag/30 rounded-lg p-4 text-sm">
                     Error: {reportLoadError}
                   </div>
                 ) : reportLoading || !report ? (
                   <p className="text-muted-foreground text-sm">Loading...</p>
                 ) : report.status === 'no-results-path' ? (
-                  <div className="bg-surface border border-border rounded-md p-4 text-sm text-muted-foreground">
+                  <div className="bg-surface border border-border rounded-lg p-5 text-sm text-muted-foreground">
                     Can't derive a results path for this run's backup source (
                     <span className="font-mono text-xs">{selectedRun.backup_source}</span>) -- it has no{' '}
                     <span className="font-mono text-xs">decrypted</span> path segment to swap for{' '}
                     <span className="font-mono text-xs">results</span>.
                   </div>
                 ) : report.status === 'not-found' ? (
-                  <div className="bg-surface border border-border rounded-md p-4 text-sm text-muted-foreground">
+                  <div className="bg-surface border border-border rounded-lg p-5 text-sm text-muted-foreground">
                     No report generated yet. Expected at:
                     <br />
                     <span className="font-mono text-xs">{report.path}</span>
                   </div>
                 ) : (
                   <div>
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-4">
                       <span className="font-mono text-xs text-muted-foreground">{report.path}</span>
                       <button
                         onClick={openReportFile}
-                        className="px-3 py-1 rounded-md text-xs font-mono border border-border text-muted-foreground hover:text-foreground hover:border-accent transition-colors"
+                        className="px-4 py-2 rounded-md text-xs font-mono border border-border text-muted-foreground hover:text-foreground hover:border-accent transition-colors"
                       >
                         Open in default app
                       </button>
                     </div>
-                    <pre className="bg-surface border border-border rounded-md p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-[calc(100vh-14rem)]">
+                    <pre className="bg-surface border border-border rounded-lg p-5 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-[calc(100vh-16rem)]">
                       {report.content}
                     </pre>
                   </div>

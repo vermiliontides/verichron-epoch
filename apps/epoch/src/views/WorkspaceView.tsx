@@ -202,9 +202,9 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
     : 0;
 
   return (
-    <div className="flex-1 flex flex-col p-8 max-w-4xl mx-auto w-full min-h-full gap-5">
+    <div className="flex-1 flex flex-col p-8 max-w-4xl mx-auto w-full min-h-full gap-6">
       <div>
-        <h1 className="font-display text-lg font-medium text-foreground mb-1">New Investigation</h1>
+        <h1 className="font-display text-lg font-medium text-foreground mb-2">New Investigation</h1>
         <p className="text-sm text-muted-foreground">
           Select a directory of already-encrypted mobile backups to decrypt and scan with mvt-runner.
         </p>
@@ -253,8 +253,8 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
             )}
           </div>
 
-          <div className="bg-surface border border-border rounded-lg p-5">
-            <div className="flex items-center justify-between mb-3">
+          <div className="bg-surface border border-border rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
               <p className="text-sm font-medium text-foreground">
                 Backups{backups.length > 0 ? ` (${backups.length})` : ''}
               </p>
@@ -326,7 +326,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
               </div>
             )}
 
-            <div className="mt-4 pt-4 border-t border-border">
+            <div className="mt-5 pt-5 border-t border-border">
               <button
                 onClick={() => setShowOptions((v) => !v)}
                 disabled={busy}
@@ -376,7 +376,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       )}
 
       {startError && (
-        <div className="flex items-start gap-2 text-danger bg-danger/10 border border-danger/30 rounded-md p-3 text-sm">
+        <div className="flex items-start gap-2 text-danger bg-danger/10 border border-danger/30 rounded-md p-4 text-sm">
           <AlertCircle size="1rem" className="shrink-0 mt-0.5" />
           {startError}
         </div>
@@ -384,7 +384,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
       {finishResult && runProgress && (
         <div
-          className={`flex items-center gap-3 rounded-lg p-4 border ${
+          className={`flex items-center gap-3 rounded-lg p-5 border ${
             failedCount === 0 ? 'bg-accent/10 border-accent/30' : 'bg-danger/10 border-danger/30'
           }`}
         >
@@ -416,15 +416,15 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           already complete on its own; this is a distinct next step, not a
           continuation of the same run. */}
       {finishResult && runProgress && doneCount > 0 && lastRunWorkspace && (
-        <div className="bg-surface border border-border rounded-lg p-5">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="bg-surface border border-border rounded-lg p-6">
+          <div className="flex items-center gap-2 mb-3">
             <Microscope className="text-accent" size="1.125rem" />
             <h3 className="font-display text-base font-medium text-foreground">Analyze results</h3>
           </div>
 
           {!analysisRunning && !analysisResult && (
             <>
-              <p className="text-sm text-muted-foreground mb-3">
+              <p className="text-sm text-muted-foreground mb-4">
                 Run the forensic extractors against the {doneCount} decrypted backup
                 {doneCount === 1 ? '' : 's'} above and record the results -- this is what makes them show up under
                 Runs, Records, and Reports.
@@ -484,7 +484,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       )}
 
       {!selectedPath && (
-        <div className="flex items-start gap-3 bg-surface border border-border rounded-lg p-4">
+        <div className="flex items-start gap-3 bg-surface border border-border rounded-lg p-5">
           <AlertCircle className="text-muted-foreground shrink-0 mt-1" size="1rem" />
           <p className="text-xs text-muted-foreground leading-relaxed">
             <strong className="text-foreground">Tip:</strong> Pull a fresh backup directly from a connected iOS

@@ -143,15 +143,15 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
   if (!sourceId) return null;
 
   return (
-    <div className="bg-surface border border-border rounded-lg p-5 mb-6">
-      <div className="flex items-center gap-2 mb-4">
+    <div className="bg-surface border border-border rounded-lg p-6 mb-6">
+      <div className="flex items-center gap-2 mb-5">
         <Smartphone className="text-accent" size="1.25rem" />
         <h3 className="font-display text-base font-medium text-foreground">Pull from Device</h3>
         {sources.length > 1 && (
           <select
             value={sourceId}
             onChange={(e) => setSourceId(e.target.value)}
-            className="ml-auto bg-background border border-border rounded-md px-2 py-1 text-xs font-mono text-foreground"
+            className="ml-auto bg-background border border-border rounded-md px-3 py-1.5 text-xs font-mono text-foreground"
           >
             {sources.map((s) => (
               <option key={s.id} value={s.id}>
@@ -170,14 +170,14 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
 
       {phase === 'unavailable' && toolStatus && !toolStatus.available && (
         <div>
-          <p className="text-sm text-flag flex items-center gap-2 mb-3">
+          <p className="text-sm text-flag flex items-center gap-2 mb-4">
             <XCircle size="1rem" /> {toolStatus.reason}
           </p>
           {actions.map((action, i) => (
-            <div key={i} className="border border-border rounded-md p-3 mb-2">
-              <p className="text-sm font-medium text-foreground mb-2">{action.title}</p>
+            <div key={i} className="border border-border rounded-md p-4 mb-3">
+              <p className="text-sm font-medium text-foreground mb-3">{action.title}</p>
               {action.kind === 'install-instructions' && (
-                <div className="bg-background rounded-md p-2 font-mono text-xs text-muted-foreground">
+                <div className="bg-background rounded-md p-3 font-mono text-xs text-muted-foreground">
                   {action.commands.map((c, j) => (
                     <div key={j}>{c}</div>
                   ))}
@@ -186,7 +186,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               {action.kind === 'compile-from-source' && (
                 <button
                   onClick={() => runCompileFromSource(action)}
-                  className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 px-3 py-1.5 rounded-md text-xs font-medium"
+                  className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 px-4 py-2 rounded-md text-xs font-medium"
                 >
                   <Wrench size="0.875rem" /> Build automatically
                 </button>
@@ -203,30 +203,30 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
 
       {phase === 'acquiring' && (
         <div>
-          <p className="text-sm text-foreground flex items-center gap-2 mb-2">
+          <p className="text-sm text-foreground flex items-center gap-2 mb-3">
             <Loader2 size="1rem" className="animate-spin" /> {acquisitionStep ?? 'Working...'}
           </p>
-          <pre className="bg-background border border-border rounded-md p-3 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-48 text-muted-foreground">
+          <pre className="bg-background border border-border rounded-md p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-48 text-muted-foreground">
             {acquisitionOutput.join('\n')}
           </pre>
-          {acquisitionError && <p className="text-sm text-flag mt-2">{acquisitionError}</p>}
+          {acquisitionError && <p className="text-sm text-flag mt-3">{acquisitionError}</p>}
         </div>
       )}
 
       {(phase === 'available' || phase === 'pulling' || phase === 'pulled') && toolStatus?.available && (
         <div>
-          <p className="text-2xs text-muted-foreground uppercase tracking-wide font-medium mb-2 flex items-center gap-1">
+          <p className="text-2xs text-muted-foreground uppercase tracking-wide font-medium mb-3 flex items-center gap-1">
             <CheckCircle2 size="0.875rem" className="text-accent" /> Tool ready
           </p>
 
           {devices.length === 0 ? (
             <p className="text-sm text-muted-foreground">No devices connected. Plug one in via USB and unlock it.</p>
           ) : (
-            <div className="border border-border rounded-md divide-y divide-border mb-3">
+            <div className="border border-border rounded-md divide-y divide-border mb-4">
               {devices.map((d) => (
                 <label
                   key={d.id}
-                  className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-background/60"
+                  className="flex items-center gap-3 px-4 py-3 text-sm cursor-pointer hover:bg-background/60"
                 >
                   <input
                     type="radio"
@@ -243,7 +243,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           )}
 
           {selectedDevice && (
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3 mb-4">
               <button
                 onClick={handleSelectDestination}
                 disabled={phase === 'pulling'}
@@ -259,7 +259,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
             <button
               onClick={handlePull}
               disabled={phase === 'pulling'}
-              className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 px-3 py-1.5 rounded-md text-xs font-medium"
+              className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 px-4 py-2 rounded-md text-xs font-medium"
             >
               {phase === 'pulling' ? <Loader2 size="0.875rem" className="animate-spin" /> : null}
               {phase === 'pulling' ? 'Pulling backup...' : 'Pull backup'}
@@ -267,13 +267,13 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           )}
 
           {pullProgress.length > 0 && (
-            <pre className="bg-background border border-border rounded-md p-3 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-40 text-muted-foreground mt-3">
+            <pre className="bg-background border border-border rounded-md p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-40 text-muted-foreground mt-4">
               {pullProgress.map((p) => p.message).join('\n')}
             </pre>
           )}
-          {pullError && <p className="text-sm text-flag mt-2">{pullError}</p>}
+          {pullError && <p className="text-sm text-flag mt-3">{pullError}</p>}
           {phase === 'pulled' && (
-            <p className="text-sm text-accent flex items-center gap-2 mt-2">
+            <p className="text-sm text-accent flex items-center gap-2 mt-3">
               <CheckCircle2 size="1rem" /> Backup pulled -- feeding into the pipeline below.
             </p>
           )}

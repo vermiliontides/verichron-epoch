@@ -66,7 +66,7 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
     <div className="border border-border rounded-md overflow-hidden bg-background">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-3 py-2 bg-surface hover:bg-surface/80 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface/80 transition-colors"
       >
         <span className="flex items-center gap-2 text-sm text-muted-foreground">
           {open ? <ChevronDown size="0.9rem" /> : <ChevronRight size="0.9rem" />}

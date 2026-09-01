@@ -34,7 +34,7 @@ export function BackupRow({
 
   return (
     <label
-      className={`flex items-center gap-3 px-3 py-2.5 text-sm cursor-pointer hover:bg-surface/60 ${
+      className={`flex items-center gap-3 px-4 py-3 text-sm cursor-pointer hover:bg-surface/60 ${
         disabled ? 'opacity-50 pointer-events-none' : ''
       }`}
     >
@@ -82,7 +82,7 @@ function LiveBackupRow({
   }
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 text-sm">
+    <div className="flex items-center gap-3 px-4 py-3 text-sm">
       {awaitingPassword ? <KeyRound size="1rem" className="text-flag shrink-0" /> : icon}
       <div className="min-w-0 flex-1">
         <div className="font-mono text-foreground truncate" title={backup.path}>
@@ -93,4 +93,3 @@ function LiveBackupRow({
     </div>
   );
 }
-

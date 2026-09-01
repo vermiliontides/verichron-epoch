@@ -20,9 +20,9 @@ export function Sidebar({ active, onSelect, dbStatus }: SidebarProps) {
 
   return (
     <div className="w-64 bg-surface border-r border-border flex flex-col h-full">
-      <div className="p-5 border-b border-border">
+      <div className="p-6 border-b border-border">
         <h1 className="font-display text-xl font-bold text-foreground tracking-tight">Epoch</h1>
-        <div className="flex items-center gap-2 mt-2">
+        <div className="flex items-center gap-2 mt-3">
           <div className={`w-2 h-2 rounded-full ${
             dbStatus === 'connected' ? 'bg-accent' : dbStatus === 'error' ? 'bg-flag' : 'bg-muted-foreground'
           }`} />
@@ -32,12 +32,12 @@ export function Sidebar({ active, onSelect, dbStatus }: SidebarProps) {
         </div>
       </div>
 
-      <nav className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
+      <nav className="flex-1 p-4 flex flex-col gap-1.5 overflow-y-auto">
         {navItems.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => onSelect(id as Section)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all ${
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-md text-sm font-medium transition-all ${
               active === id
                 ? 'bg-accent/10 text-accent'
                 : 'text-muted-foreground hover:bg-surface/80 hover:text-foreground'

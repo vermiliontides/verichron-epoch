@@ -2,8 +2,8 @@ import { useState, Fragment } from 'react';
 import type { ForensicRecordRow } from '@verichron/db-reader';
 import { Badge } from '../components/ui/Badge';
 
-const thClass = 'text-left font-medium text-muted-foreground bg-surface px-3 py-2 border-b border-border text-2xs uppercase tracking-wide';
-const tdClass = 'px-3 py-2 border-b border-border';
+const thClass = 'text-left font-medium text-muted-foreground bg-surface px-4 py-3 border-b border-border text-2xs uppercase tracking-wide';
+const tdClass = 'px-4 py-3 border-b border-border';
 
 interface RecordsViewProps {
   selectedRun: boolean;
@@ -23,8 +23,8 @@ export function RecordsView({
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   return (
-    <div className="flex-1 overflow-auto p-5">
-      <h2 className="font-display text-base font-medium text-accent mb-4">Forensic Records</h2>
+    <div className="flex-1 overflow-auto p-8">
+      <h2 className="font-display text-base font-medium text-accent mb-6">Forensic Records</h2>
 
       {!selectedRun ? (
         <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
@@ -32,10 +32,10 @@ export function RecordsView({
         <p className="text-muted-foreground text-sm">No records for this run.</p>
       ) : (
         <>
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-5">
             <button
               onClick={() => onFilterChange(null)}
-              className={`px-3 py-1 rounded-md text-xs font-mono border ${
+              className={`px-4 py-2 rounded-md text-xs font-mono border ${
                 sourceTypeFilter === null ? 'border-accent text-accent' : 'border-border text-muted-foreground'
               }`}
             >
@@ -45,7 +45,7 @@ export function RecordsView({
               <button
                 key={st}
                 onClick={() => onFilterChange(st)}
-                className={`px-3 py-1 rounded-md text-xs font-mono border ${
+                className={`px-4 py-2 rounded-md text-xs font-mono border ${
                   sourceTypeFilter === st ? 'border-accent text-accent' : 'border-border text-muted-foreground'
                 }`}
               >
@@ -84,7 +84,7 @@ export function RecordsView({
                   </tr>
                   {expandedId === record.id && (
                     <tr>
-                      <td colSpan={7} className="px-3 py-3 border-b border-border bg-surface">
+                      <td colSpan={7} className="px-4 py-4 border-b border-border bg-surface">
                         <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
                           {JSON.stringify(record.fields, null, 2)}
                         </pre>

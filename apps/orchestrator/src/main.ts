@@ -272,6 +272,7 @@ function runStage(
     });
  
     let stderr = "";
+    child.stdout?.pipe(process.stdout);
     child.stderr?.on("data", (chunk) => {
       stderr += chunk.toString();
     });

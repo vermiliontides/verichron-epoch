@@ -1,14 +1,14 @@
+
 /// <reference types="@electron-forge/plugin-vite/forge-vite-env" />
 import electron from 'electron';
 import path from 'path';
-import os from 'os';
 import fs from 'fs/promises';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { Pool } from 'pg';
 import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/db-reader';
 import { deriveResultsPath, discoverBackups, type Backup } from '@verichron/contracts';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
-import { config as loadEnv } from 'dotenv'
+import dotenv from 'dotenv'
 import { listDeviceBackupSources, getDeviceBackupSource, getAcquisitionStrategy } from './tools/device-backup/registry';
 import type { DeviceInfo, ToolAcquisitionCommand } from './tools/device-backup/types';
  
@@ -18,7 +18,7 @@ console.log('\n=======================================');
 console.log('MAIN PROCESS IS EXECUTING!');
 console.log('=======================================\n');
  
-loadEnv({ path: '../../../.env' })
+dotenv.config({ path: '../../../.env' })
 // 1. Catch silent crashes and print them to the terminal
 process.on('uncaughtException', (error) => {
   console.error('\n--- FATAL UNCAUGHT EXCEPTION ---');
@@ -170,11 +170,6 @@ const REPO_ROOT = path.resolve(__dirname, '../../../..');
  */
 let runningMvtProcess: ChildProcessWithoutNullStreams | null = null;
 let pendingPasswordResolve: ((password: string) => void) | null = null;
-
-// Stage 3 (orchestrator) has no password prompt or interactivity of its
-// own by the time it runs -- see orchestrator's own header comment -- so
-// this only needs a running-guard, not a resolver slot.
-let runningOrchestratorProcess: ChildProcessWithoutNullStreams | null = null;
  
 const PASSWORD_PROMPT_RE = /password for (.+): $/;
  
@@ -224,24 +219,6 @@ function makeStreamBuffer(stream: 'stdout' | 'stderr', child: ChildProcessWithou
   };
 }
  
-/**
- * Same line-buffering as makeStreamBuffer above, minus the password-prompt
- * detection -- orchestrator (see its own header comment) has no
- * interactivity of its own by the time it runs; every backup it's given
- * is already decrypted.
- */
-function makeOrchestratorStreamBuffer(stream: 'stdout' | 'stderr') {
-  let pending = '';
-  return (chunk: Buffer) => {
-    pending += chunk.toString('utf-8');
-    const lines = pending.split('\n');
-    pending = lines.pop() ?? '';
-    for (const line of lines) {
-      sendToRenderer('epoch:orchestratorLog', { stream, line });
-    }
-  };
-}
- 
 ipcMain.handle('epoch:selectBackupDirectory', async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -283,13 +260,8 @@ ipcMain.handle('epoch:startPipeline', async (_event, source: string, options?: S
     throw new Error('A source directory is required.');
   }
  
-  // Resolved (not just the raw option) so the caller can hand this exact
-  // value to epoch:startAnalysis afterward without duplicating mvt-runner's
-  // own default -- see parseFlags() in apps/mvt-runner/src/main.ts, whose
-  // default this mirrors exactly (path.join(os.homedir(), 'mvt-workspace')).
-  const resolvedWorkspace = options?.workspace || path.join(os.homedir(), 'mvt-workspace');
- 
-  const args = ['--filter', '@verichron/mvt-runner', 'dev', '--', '--source', source, '--workspace', resolvedWorkspace];
+  const args = ['--filter', '@verichron/mvt-runner', 'dev', '--', '--source', source];
+  if (options?.workspace) args.push('--workspace', options.workspace);
   if (options?.forceDecrypt) args.push('--force-decrypt');
   if (options?.refreshIOCs) args.push('--refresh-iocs');
   if (options?.only && options.only.length > 0) args.push('--only', options.only.join(','));
@@ -313,7 +285,7 @@ ipcMain.handle('epoch:startPipeline', async (_event, source: string, options?: S
     sendToRenderer('epoch:mvtFinished', { success: code === 0, exitCode: code });
   });
  
-  return { started: true, workspace: resolvedWorkspace };
+  return { started: true };
 });
  
 ipcMain.handle('epoch:submitMvtPassword', async (_event, password: string) => {
@@ -323,42 +295,6 @@ ipcMain.handle('epoch:submitMvtPassword', async (_event, password: string) => {
   const resolve = pendingPasswordResolve;
   pendingPasswordResolve = null;
   resolve(password);
-});
- 
-// Stage 3: runs the orchestrator against everything mvt-runner has already
-// decrypted under `workspace` (orchestrator discovers backups itself by
-// scanning workspace/decrypted/*/.mvt_decrypted_ok -- see its own
-// parseCliConfig -- so this doesn't need to know which specific backups
-// succeeded, only where to look). This is what actually creates the
-// pipeline_runs/pipeline_stage_status rows Runs/Records/Reports read from;
-// mvt-runner alone never touches the database. See the big comment above
-// mvt-runner's invocation for the full Stage 1 vs Stage 3 split.
-ipcMain.handle('epoch:startAnalysis', async (_event, workspace: string) => {
-  if (runningOrchestratorProcess) {
-    throw new Error('Analysis is already running -- wait for it to finish before starting another.');
-  }
-  if (!workspace || !workspace.trim()) {
-    throw new Error('A workspace directory is required.');
-  }
- 
-  const args = ['--filter', '@verichron/orchestrator', 'investigate', '--', '--workspace', workspace];
-  const child = spawn('pnpm', args, { cwd: REPO_ROOT, stdio: ['pipe', 'pipe', 'pipe'] });
-  runningOrchestratorProcess = child;
- 
-  child.stdout.on('data', makeOrchestratorStreamBuffer('stdout'));
-  child.stderr.on('data', makeOrchestratorStreamBuffer('stderr'));
- 
-  child.on('error', (err) => {
-    runningOrchestratorProcess = null;
-    sendToRenderer('epoch:orchestratorFinished', { success: false, error: err.message });
-  });
- 
-  child.on('close', (code) => {
-    runningOrchestratorProcess = null;
-    sendToRenderer('epoch:orchestratorFinished', { success: code === 0, exitCode: code });
-  });
- 
-  return { started: true };
 });
 
 /**
@@ -498,7 +434,9 @@ const createWindow = (): void => {
     console.error('Vite target variables are missing.');
   }
  
-  mainWindow.webContents.openDevTools();
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools();
+  }
  
   mainWindow.on('closed', () => {
     mainWindow = null;

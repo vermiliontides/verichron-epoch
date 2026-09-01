@@ -8,7 +8,7 @@ import { Pool } from 'pg';
 import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/db-reader';
 import { deriveResultsPath, discoverBackups, type Backup } from '@verichron/contracts';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
-import dotenv from 'dotenv'
+import { config as loadEnv } from 'dotenv'
 import { listDeviceBackupSources, getDeviceBackupSource, getAcquisitionStrategy } from './tools/device-backup/registry';
 import type { DeviceInfo, ToolAcquisitionCommand } from './tools/device-backup/types';
  
@@ -18,7 +18,7 @@ console.log('\n=======================================');
 console.log('MAIN PROCESS IS EXECUTING!');
 console.log('=======================================\n');
  
-dotenv.config({ path: '../../../.env' })
+loadEnv({ path: '../../../.env' })
 // 1. Catch silent crashes and print them to the terminal
 process.on('uncaughtException', (error) => {
   console.error('\n--- FATAL UNCAUGHT EXCEPTION ---');

@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState, Fragment } from 'react';
 import type { ForensicRecordRow } from '@verichron/db-reader';
 import { Badge } from '../components/ui/Badge';
 
@@ -20,7 +20,7 @@ export function RecordsView({
   sourceTypeFilter,
   onFilterChange,
 }: RecordsViewProps) {
-  const [expandedId, setExpandedId] = React.useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   return (
     <div className="flex-1 overflow-auto p-5">
@@ -65,7 +65,7 @@ export function RecordsView({
             </thead>
             <tbody>
               {records.map((record) => (
-                <React.Fragment key={record.id}>
+                <Fragment key={record.id}>
                   <tr
                     onClick={() => setExpandedId(expandedId === record.id ? null : record.id)}
                     className="cursor-pointer transition-colors hover:bg-surface"
@@ -91,7 +91,7 @@ export function RecordsView({
                       </td>
                     </tr>
                   )}
-                </React.Fragment>
+                </Fragment>
               ))}
             </tbody>
           </table>

@@ -1,3 +1,18 @@
+"""
+FLAGGED FOR DELETION -- superseded, not currently useful.
+
+Encrypts a directory into a fake "encrypted backup" using ad hoc PBKDF2/AES,
+NOT Apple's real iOS backup encryption format. This was a stand-in for real
+device backup encryption before Stage 0 (idevicebackup2, see
+apps/epoch/src/tools/idevicebackup/) existed to do the real thing.
+
+Not imported by anything outside scripts/ itself (only full_pipeline.py,
+also flagged). No npm/uv script references it. Keeping it risks someone
+mistaking its output for a real encrypted backup format, which it is not.
+
+Recommend: delete, along with full_pipeline.py and backup_parser.py (the
+rest of the same superseded synthetic-demo cluster).
+"""
 import os
 import tarfile
 from pathlib import Path

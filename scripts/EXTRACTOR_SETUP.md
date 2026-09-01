@@ -1,89 +1,118 @@
-Extractor setup and run notes
+# Extractor setup and run notes
 
-Purpose
+**When/why:** the minimum commands to get the Postgres-backed extractor
+pipeline running locally, from a clean checkout, for development or
+smoke-testing. There is no root README.md yet — this is currently the
+closest thing to one for the backend/extractor side. (For the Electron
+app, apps/epoch has its own setup implicit in package.json.)
 
-This document collects the minimum commands and environment notes to get the Postgres-backed extractor pipelines (iLEAPP bridge and MVT runner) running for local development and smoke tests.
+Last verified accurate: this pass. Previous version of this doc
+referenced a `packages-ts/orchestrator/mvt-runner` path and a
+`pip install -r requirements.txt` flow, neither of which reflects the
+current repo layout — see git history if you need the old text.
 
-Assumptions
+## Assumptions
 
-- Repository root: the directory where you cloned this repo (for example, run `git rev-parse --show-toplevel` to get it on any machine).
-- Docker and docker-compose are available for bringing up a local Postgres instance.
-- Python 3.11+ is available for creating a .venv in the repository root when running Python pipelines.
-- mvt-ios is installed in a predictable location for mvt-runner, or its path is supplied explicitly via --mvt-bin.
+- Docker and docker-compose available, for local Postgres.
+- `uv` installed (https://docs.astral.sh/uv/) — this is a single uv
+  workspace; see pyproject.toml's `[tool.uv.workspace]`.
+- `pnpm` installed, for the Node/TypeScript workspace (mvt-runner,
+  orchestrator, epoch).
+- `mvt-ios` installed somewhere resolvable, or its path supplied via
+  `--mvt-bin` to mvt-runner.
 
-1) Bring up Postgres with migrations
+## 1) Bootstrap everything at once
 
-The repository provides a docker-compose service (infra/docker-compose.yml) that mounts migrations into Postgres' init folder. From the repo root:
+    ./scripts/bootstrap-dev.sh
 
-  cd "$(git rev-parse --show-toplevel)"
-  docker compose -f infra/docker-compose.yml up -d postgres
+Installs the pre-commit forensic-output guard, syncs the Python workspace
+(`uv sync`), installs the pnpm workspace, and initializes the iLEAPP
+submodule. See that script's own header for what each step does. The
+steps below are the same things done manually / individually.
 
-Wait for Postgres to become healthy (the compose healthcheck uses pg_isready). The default local connection string for the repo is:
+## 2) Bring up Postgres with migrations
 
-  postgresql://forensics:forensics_dev_only@localhost:5432/forensics
+    docker compose -f infra/docker-compose.yml up -d postgres
 
-If you need to run migrations manually (outside compose), check packages/db/migrations and apply with your preferred tool (psql/psycopg2-based script).
+Default local connection string:
 
-2) Ensure the iLEAPP submodule is populated
+    postgresql://forensics:forensics_dev_only@localhost:5432/forensics
 
-The repo uses a submodule at apps/extractors/ileapp_bridge/iLEAPP. Initialize and update the submodule:
+Apply migrations manually if you're not using compose's auto-init:
+`packages/db/migrations`, applied via `python3 packages/db/migrate.py --db-url <DB_URL>`.
 
-  git submodule update --init --recursive -- apps/extractors/ileapp_bridge/iLEAPP
+## 3) Ensure the iLEAPP submodule is populated
 
-3) Create the Python virtual environment (repo-root .venv)
+    git submodule update --init --recursive -- apps/extractors/ileapp_bridge/iLEAPP
 
-A repo-root `.venv` is expected and required before any Python pipeline script runs. If it does not exist, create it and install dependencies before invoking extractor commands.
+## 4) Python workspace (single uv workspace, single .venv)
 
-The orchestrator expects a Python interpreter at .venv/bin/python by default. Create the venv and install dependencies used by extractors:
+    uv sync
 
-  python3 -m venv .venv
-  . .venv/bin/activate
-  pip install --upgrade pip
-  pip install -r requirements.txt
+This resolves and installs every workspace member (packages/contracts,
+packages/db, all apps/extractors/*, apps/analysis, apps/reporting,
+libs/*) plus third-party dependencies from the single pyproject.toml /
+uv.lock at the repo root. Do not use `pip install` here — there is no
+separate requirements.txt; uv.lock is the one source of truth.
 
-Note: individual extractor folders (e.g., ileapp_bridge) may have additional requirements; inspect their README or requirements files.
+Run any Python entry point via `uv run`, e.g.:
 
-4) Running the iLEAPP bridge directly (example)
+    uv run python apps/extractors/ileapp_bridge/main.py --help
 
-The iLEAPP bridge entrypoint is apps/extractors/ileapp_bridge/main.py. It expects a run id, path to a decrypted backup or extraction directory, and a Postgres URL.
+## 5) Running the iLEAPP bridge directly (example)
 
-  . .venv/bin/activate
-  python apps/extractors/ileapp_bridge/main.py \
-    --run-id mytest-run-1 \
-    --backup-path /path/to/decrypted_backup_or_extraction_dir \
-    --db-url "postgresql://forensics:forensics_dev_only@localhost:5432/forensics" \
-    --output ./ileapp_raw_output
+    uv run python apps/extractors/ileapp_bridge/main.py \
+      --run-id mytest-run-1 \
+      --backup-path /path/to/decrypted_backup_or_extraction_dir \
+      --db-url "postgresql://forensics:forensics_dev_only@localhost:5432/forensics" \
+      --output ./ileapp_raw_output
 
-The bridge will run the iLEAPP extraction (via its local iLEAPP clone) and then parse artifact files and persist NormalizedRecord rows into the forensic_records table using the shared db_writer helpers.
+Runs the iLEAPP extraction (via the vendored submodule checked out in
+step 3) and parses artifact files into `forensic_records` via
+`db_writer.py`.
 
-5) Running the mvt runner (example)
+## 6) Running mvt-runner (real Stage 1: decrypt + scan)
 
-mvt-runner is a TypeScript node tool under packages-ts/orchestrator/mvt-runner. It spawns the mvt-ios binary and writes outputs into a workspace directory. The orchestrator sets a default mvt path, but you can override with --mvt-bin.
+mvt-runner is a TypeScript tool at `apps/mvt-runner` (package name
+`@verichron/mvt-runner`). It hashes, decrypts, repairs, and mvt-ios-scans
+one or more already-encrypted backups.
 
-  # build or use the packaged mvt-runner; or run via node ./dist/main.js
-  node ./packages-ts/orchestrator/mvt-runner/dist/main.js --source /path/to/backups --workspace ./mvt-workspace --mvt-bin /path/to/mvt/.venv/bin/mvt-ios
+    pnpm --filter @verichron/mvt-runner dev -- --source /path/to/backups --workspace ~/mvt-workspace
 
-mvt-runner expects mvt-ios to be available (the binary is typically inside an mvt virtualenv). If mvt-runner cannot find it, pass --mvt-bin explicitly.
+`--source` is a directory containing already-encrypted backups (the kind
+Finder/iTunes/`idevicebackup2` produce — mvt-runner does not create or
+encrypt a backup itself). It prompts interactively for the decryption
+password unless run non-interactively (see apps/epoch's mvt-runner
+integration for how that's bridged in the desktop app). Pass `--mvt-bin`
+if `mvt-ios` isn't on PATH.
 
-6) Environment variables
+## 7) Running the orchestrator (real Stage 3: pipeline_runs + forensic_records)
 
-- DATABASE_URL or explicit --db-url flags: pipelines look for a Postgres URL in DATABASE_URL; if absent, they default to a local forensics DB string (see orchestrator code).
-- For secure setups, set DATABASE_URL before running orchestrator steps:
+The orchestrator is a separate TypeScript tool at `apps/orchestrator`
+(package name `@verichron/orchestrator`). It's what actually creates a
+`pipeline_runs` row and runs the extractors — mvt-runner alone does not
+touch Postgres at all.
 
-  export DATABASE_URL="postgresql://forensics:forensics_dev_only@localhost:5432/forensics"
+    pnpm --filter @verichron/orchestrator investigate -- --workspace ~/mvt-workspace
 
-7) Developer convenience
+or against one or more explicit already-decrypted backup paths instead of
+`--workspace`. See `apps/orchestrator/src/main.ts`'s own usage text
+(`--help`) for the current full option list — options change faster than
+this doc does.
 
-- To run the orchestrator end-to-end (TypeScript), ensure node dependencies are installed and the repo's root ts build is up-to-date. The orchestrator spawns the Python pipeline (ileapp_bridge) and passes run-id and db-url to it.
-- When adding TypeScript extractors, follow the normalized-record.schema.json envelope and implement a Node.js equivalent of db_writer.py that
-  - computes file hashes for idempotency,
-  - inserts into ingested_files if not already present,
-  - writes validated normalized records into forensic_records (use normalizedRecord.ts for validation), and
-  - supports batch writes (execute_values or bulk insert) for higher throughput.
+## 8) Environment variables
 
-8) Next steps and verification
+- `DATABASE_URL` — if unset, falls back to the same local dev string as
+  above. Set explicitly for anything other than the default local
+  Postgres:
 
-- Run a smoke ingestion: bring up Postgres, create the venv, and run the ileapp_bridge on a tiny sample extraction. Confirm rows appear in forensic_records and ingested_files.
-- Verify timestamps in records are ISO-8601 (UTC preferred) per normalized-record.schema.json so correlate.py and other tools can perform cross-domain correlation.
+      export DATABASE_URL="postgresql://forensics:forensics_dev_only@localhost:5432/forensics"
 
-If anything here is unclear or you'd like the repository to contain small helper scripts (e.g., scripts/bootstrap-dev.sh), say which parts to implement and they can be added next.
+## 9) Verification
+
+- Confirm rows landed: `uv run python scripts/db_peek.py --db-url "$DATABASE_URL"`
+  (defaults to the most recent run if `--run-id` isn't given).
+- Confirm iLEAPP output is being picked up as expected:
+  `uv run python scripts/inspect_ileapp_output.py <ileapp_output_dir>`.
+- If iLEAPP's plugin discovery returns zero plugins, start with
+  `uv run python scripts/diagnose_ileapp_plugin_loading.py`.

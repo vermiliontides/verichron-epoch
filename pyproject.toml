@@ -21,6 +21,8 @@ dependencies = [
     "pytest>=8.0",
     "jsonschema>=4.0",
     "requests>=2.31",
+    "stix2>=3.0",
+    "faker>=20.0",
 ]
 
 [tool.setuptools]
@@ -33,6 +35,12 @@ members = [
     "apps/extractors/*",
     "apps/analysis",
     "apps/reporting",
+]
+# db-reader is a pure TypeScript/Node package (@verichron/db-reader) with no
+# Python source at all -- it belongs to the pnpm workspace, not this one.
+# The packages/* glob above would otherwise sweep it in.
+exclude = [
+    "packages/db-reader",
 ]
 
 [tool.uv.sources]

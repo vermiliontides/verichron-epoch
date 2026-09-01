@@ -1,3 +1,22 @@
+"""
+FLAGGED FOR DELETION -- superseded, not currently useful.
+
+Orchestrates the old synthetic demo flow end to end: generate a fake
+backup (synthetic_backup_generator.py) -> fake-encrypt it
+(backup_encryption.py) -> hand-parse it (backup_parser.py). All three
+downstream pieces are separately flagged for deletion; this is their
+entry point.
+
+Conceptually replaced by the real pipeline: idevicebackup2 (Stage 0, real
+device backup + encryption) -> mvt-runner (Stage 1, real decrypt + scan)
+-> orchestrator (Stage 3, real extractors writing to Postgres). Not
+referenced by any current npm/uv script. scripts/smoke_test.sh points at
+this file via a path that no longer exists
+(scripts/synthetic_backup_pipeline/full_pipeline.py) -- it's also flagged.
+
+Recommend: delete, along with backup_encryption.py, backup_parser.py, and
+smoke_test.sh.
+"""
 import sys
 sys.path.insert(0, './scripts')
 

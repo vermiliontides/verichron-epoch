@@ -14,7 +14,7 @@ const badgeVariants = cva(
         pending: 'bg-muted-foreground/10 text-muted-foreground',
         running: 'bg-flag/15 text-flag',
         succeeded: 'bg-accent/15 text-accent',
-        failed: 'bg-flag/25 text-flag font-semibold',
+        failed: 'bg-danger/20 text-danger font-semibold',
         skipped: 'bg-muted-foreground/8 text-muted-foreground',
         // pipeline_runs has no status column -- this is the derived
         // two-state phase (finished_at set or not), not a success claim.

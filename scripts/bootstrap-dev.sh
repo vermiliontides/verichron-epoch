@@ -1,12 +1,30 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
+#
 # Bootstrap developer environment for the repo.
-# - Installs the forensic-output pre-commit guard (see SECURITY.md)
-# - Creates repo-local .venv (if missing) and installs Python requirements
-# - Runs pnpm install for workspace packages
-# - Syncs and updates git submodules
-# Usage: ./scripts/bootstrap-dev.sh
+#
+# When/why: run once after cloning, or any time dependencies change and
+# `.venv`/node_modules need to catch up. Sets up everything needed to run
+# the Python extractors/orchestrator/tests and the Electron app (Epoch)
+# from a clean checkout.
+#
+# What it does:
+#   - Installs the forensic-output pre-commit guard (see SECURITY.md)
+#   - Creates/updates the repo-root .venv via `uv sync` (NOT pip -- this
+#     is a single uv workspace; see pyproject.toml's [tool.uv.workspace].
+#     `uv sync` resolves every member package plus third-party deps from
+#     uv.lock in one pass, including the local editable packages
+#     (verichron-contracts, verichron-db, the extractor apps, etc.) --
+#     pip install -r requirements.txt never installed those at all, and
+#     requirements.txt itself was a second, hand-maintained dependency
+#     list that had already drifted out of sync with the real one more
+#     than once. See git history for both.)
+#   - Runs pnpm install for the Node/pnpm workspace (apps/epoch and friends)
+#   - Syncs and updates git submodules (apps/extractors/ileapp_bridge/iLEAPP)
+#
+# Usage:
+#   ./scripts/bootstrap-dev.sh
+
+set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -23,24 +41,13 @@ else
   echo "[bootstrap] WARNING: .githooks/ missing — commits are NOT guarded against forensic output" >&2
 fi
 
-# 1) Python venv and pip deps
-if [ ! -d ".venv" ]; then
-  echo "[bootstrap] Creating Python venv at .venv"
-  python3 -m venv .venv
-else
-  echo "[bootstrap] .venv already exists — reusing"
+# 1) Python: single uv workspace, one lockfile, one venv for everything.
+if ! command -v uv >/dev/null 2>&1; then
+  echo "[bootstrap] uv not found — install it (https://docs.astral.sh/uv/) and re-run this script"
+  exit 1
 fi
-
-# Activate and install
-# shellcheck disable=SC1091
-. .venv/bin/activate
-python -m pip install --upgrade pip
-if [ -f "requirements.txt" ]; then
-  echo "[bootstrap] Installing Python requirements"
-  python -m pip install -r requirements.txt
-else
-  echo "[bootstrap] No Python requirements found at requirements.txt"
-fi
+echo "[bootstrap] Syncing Python workspace via uv (creates/updates .venv)"
+uv sync
 
 # 2) Node workspace install
 if command -v pnpm >/dev/null 2>&1; then

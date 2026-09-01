@@ -1,3 +1,24 @@
+"""
+Generates a realistic-shaped but entirely synthetic iPhone backup
+(Contacts/Messages/Call Log/Calendar/Safari History SQLite databases,
+Manifest.plist, Info.plist, Status.plist) under ./backups/<udid>/.
+
+Why this exists: lets you exercise the real extractor apps
+(apps/extractors/ileapp_bridge, apps/extractors/mvt_iocs) and the real
+forensic_records pipeline against realistic data without a real device or
+real PII. No real person's data appears anywhere in the output -- every
+field is Faker-generated.
+
+Does not encrypt or scan its own output -- for that, run the real
+pipeline against it: idevicebackup2 (real device backup + encryption) is
+Stage 0 in production, but for a synthetic backup you can skip straight
+to mvt-runner's decrypt/scan step by pointing --source at a directory
+containing this output, or feed it directly to an extractor's --backup-path.
+
+Usage:
+    python3 scripts/synthetic_backup_generator.py
+    pnpm gen:synthetic-backup
+"""
 import sqlite3
 import hashlib
 import plistlib
@@ -410,3 +431,11 @@ class RealisticBackupGenerator:
         
         self.create_safari_history()
         print("✓ Created Safari History database")
+
+if __name__ == "__main__":
+    generator = RealisticBackupGenerator('./backups')
+    generator.generate()
+    generator.create_manifests()
+    generator.create_info_plist()
+    generator.create_status_plist()
+    print(f"\n✓ Backup generated at: ./backups/{generator.udid}")

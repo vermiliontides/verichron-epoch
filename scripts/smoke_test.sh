@@ -1,4 +1,20 @@
 #!/bin/bash
+#
+# FLAGGED FOR DELETION -- currently broken, and tests the wrong pipeline
+# even if fixed.
+#
+# References scripts/synthetic_backup_pipeline/full_pipeline.py, which
+# does not exist -- the file is at scripts/full_pipeline.py (no
+# subdirectory). This script has not run successfully in its current
+# form.
+#
+# Even if that path were fixed, full_pipeline.py drives the old
+# synthetic-demo generate/encrypt/parse flow, not the real pipeline
+# (idevicebackup2 -> mvt-runner -> orchestrator). A smoke test for the
+# real pipeline would need to drive `pnpm --filter @verichron/orchestrator
+# investigate` against real or mvt-runner-decrypted output instead.
+#
+# Recommend: delete, or rewrite from scratch against the real pipeline.
 set -e
 
 echo "============================================================"

@@ -19,7 +19,10 @@ export default defineConfig({
       // initialization" at runtime — a circular-binding TDZ error, not
       // a real code bug. Like db-reader, this is meant to be
       // require()'d natively by the main process, not bundled.
-      external: ['@verichron/db-reader', 'pg'],
+      // @verichron/contracts is built the same way (tsc, same getter
+      // re-export pattern) and hits the identical Rollup limitation --
+      // same fix, same reason.
+      external: ['@verichron/db-reader', '@verichron/contracts', 'pg'],
     },
   },
 });

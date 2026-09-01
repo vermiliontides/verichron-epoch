@@ -1,3 +1,19 @@
+"""
+FLAGGED FOR DELETION -- superseded, not currently useful.
+
+Hand-rolled parser for a raw iOS backup (reads Manifest.plist directly,
+writes its own CSV/JSON output format). Superseded by the real extractor
+apps under apps/extractors/ (crash, ileapp_bridge, mvt_iocs), which parse
+real decrypted backups against the actual NormalizedRecord contract
+(packages/contracts/normalized-record.schema.json) and write to Postgres
+via db_writer.py -- this script predates that and writes to neither.
+
+Not imported by anything outside scripts/ itself (only full_pipeline.py,
+also flagged). No npm/uv script references it.
+
+Recommend: delete, along with full_pipeline.py and backup_encryption.py
+(the rest of the same superseded synthetic-demo cluster).
+"""
 import sqlite3
 import json
 import plistlib

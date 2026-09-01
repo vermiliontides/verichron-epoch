@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import type { PipelineRunRow, StageStatusRow, ForensicRecordRow, CorrelatedContextRow } from '@verichron/db-reader';
 import { CORRELATION_WINDOW_MINUTES } from '@verichron/db-reader';
+import type { ReportResult } from './types/window';
 import { Sidebar, type Section } from './components/Sidebar';
+import { WorkspaceView } from './views/WorkspaceView';
+import { RunsView } from './views/RunsView';
+import { RecordsView } from './views/RecordsView';
 import { EvidenceTag } from './components/ui/EvidenceTag';
 import { Badge } from './components/ui/Badge';
 import { TooltipProvider } from './components/ui/Tooltip';
@@ -22,19 +26,6 @@ import { TooltipProvider } from './components/ui/Tooltip';
 function runPhase(run: PipelineRunRow): 'in_progress' | 'finished' {
   return run.finished_at ? 'finished' : 'in_progress';
 }
-
-function stageDurationMs(stage: StageStatusRow): number | null {
-  if (!stage.started_at || !stage.finished_at) return null;
-  return new Date(stage.finished_at).getTime() - new Date(stage.started_at).getTime();
-}
-
-const STAGE_BADGE_VARIANT: Record<StageStatusRow['status'], 'accent' | 'flag' | 'neutral'> = {
-  pending: 'neutral',
-  running: 'flag',
-  succeeded: 'accent',
-  failed: 'flag',
-  skipped: 'neutral',
-};
 
 /**
  * Matches apps/extractors/mvt_iocs's SourceType enum (normalized_record.py)
@@ -201,150 +192,27 @@ export const App: React.FC = () => {
           {selectedRun && <EvidenceTag run={selectedRun} phase={runPhase(selectedRun)} />}
 
           <div className="flex-1 overflow-auto p-5">
-            {section === 'runs' && (
-              <div className="flex gap-5 h-full">
-                <div className="flex-1 overflow-auto">
-                  <h2 className="font-display text-base font-medium text-accent mb-4">Pipeline Runs</h2>
-                  {error ? (
-                    <div className="text-flag bg-flag/10 border border-flag/30 rounded-md p-3 text-sm">
-                      {error}
-                    </div>
-                  ) : loading ? (
-                    <p className="text-muted-foreground text-sm">Loading...</p>
-                  ) : runs.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">
-                      No pipeline runs found. Run full_pipeline.py to create one.
-                    </p>
-                  ) : (
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr className="text-muted-foreground text-xs border-b border-border">
-                          <th className="text-left font-medium py-2 px-3 bg-surface">Backup</th>
-                          <th className="text-left font-medium py-2 px-3 bg-surface">Phase</th>
-                          <th className="text-left font-medium py-2 px-3 bg-surface">Started</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {runs.map((run) => (
-                          <tr
-                            key={run.run_id}
-                            onClick={() => selectRun(run)}
-                            className={`cursor-pointer border-b border-border hover:bg-surface transition-colors ${
-                              selectedRun?.run_id === run.run_id ? 'bg-surface shadow-[inset_0.125rem_0_0_hsl(var(--accent))]' : ''
-                            }`}
-                          >
-                            <td className="py-3 px-3 font-mono text-xs">
-                              {run.backup_source.split('/').pop()}
-                            </td>
-                            <td className="py-3 px-3">
-                              <Badge variant={runPhase(run) === 'finished' ? 'accent' : 'flag'}>
-                                {runPhase(run) === 'finished' ? 'finished' : 'in progress'}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-3 font-mono text-xs text-muted-foreground">
-                              {new Date(run.started_at).toLocaleString()}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
+            {section === 'workspace' && <WorkspaceView />}
 
-                <div className="flex-1 overflow-auto">
-                  <h2 className="font-display text-base font-medium text-accent mb-4">Stage Breakdown</h2>
-                  {selectedRun ? (
-                    stages.length === 0 ? (
-                      <p className="text-muted-foreground text-sm">No stages found for this run.</p>
-                    ) : (
-                      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(15rem, 1fr))' }}>
-                        {stages.map((stage) => {
-                          const durationMs = stageDurationMs(stage);
-                          return (
-                            <div
-                              key={`${stage.run_id}-${stage.stage_name}`}
-                              className="bg-surface rounded-md p-4"
-                              style={{ borderLeft: `0.125rem solid hsl(var(--${stage.status === 'succeeded' ? 'accent' : stage.status === 'pending' || stage.status === 'skipped' ? 'muted-foreground' : 'flag'}))` }}
-                            >
-                              <h3 className="font-display text-sm mb-2">{stage.stage_name}</h3>
-                              <div className="mb-2">
-                                <Badge variant={STAGE_BADGE_VARIANT[stage.status]}>{stage.status}</Badge>
-                              </div>
-                              {stage.error_message && (
-                                <p className="text-xs text-flag font-mono mb-2">{stage.error_message}</p>
-                              )}
-                              <p className="text-xs text-muted-foreground font-mono">
-                                {durationMs !== null ? `${durationMs}ms` : '—'}
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )
-                  ) : (
-                    <p className="text-muted-foreground text-sm">Select a pipeline run to view stages</p>
-                  )}
-                </div>
-              </div>
+            {section === 'runs' && (
+              <RunsView
+                runs={runs}
+                loading={loading}
+                error={error}
+                selectedRun={selectedRun}
+                stages={stages}
+                onSelectRun={selectRun}
+              />
             )}
 
             {section === 'records' && (
-              <div>
-                <h2 className="font-display text-base font-medium text-accent mb-4">Forensic Records</h2>
-                {!selectedRun ? (
-                  <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
-                ) : records.length === 0 ? (
-                  <p className="text-muted-foreground text-sm">No records for this run.</p>
-                ) : (
-                  <>
-                    <div className="flex gap-2 mb-4">
-                      <button
-                        onClick={() => setSourceTypeFilter(null)}
-                        className={`px-3 py-1 rounded-md text-xs font-mono border ${
-                          sourceTypeFilter === null ? 'border-accent text-accent' : 'border-border text-muted-foreground'
-                        }`}
-                      >
-                        all
-                      </button>
-                      {availableSourceTypes.map((st) => (
-                        <button
-                          key={st}
-                          onClick={() => setSourceTypeFilter(st)}
-                          className={`px-3 py-1 rounded-md text-xs font-mono border ${
-                            sourceTypeFilter === st ? 'border-accent text-accent' : 'border-border text-muted-foreground'
-                          }`}
-                        >
-                          {st}
-                        </button>
-                      ))}
-                    </div>
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr className="text-muted-foreground text-xs border-b border-border">
-                          <th className="text-left font-medium py-2 px-3 bg-surface">Event Time</th>
-                          <th className="text-left font-medium py-2 px-3 bg-surface">Source</th>
-                          <th className="text-left font-medium py-2 px-3 bg-surface">Process</th>
-                          <th className="text-left font-medium py-2 px-3 bg-surface">Bundle</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visibleRecords.map((rec) => (
-                          <tr key={rec.id} className="border-b border-border">
-                            <td className="py-2 px-3 font-mono text-xs text-muted-foreground">
-                              {rec.event_time ? new Date(rec.event_time).toLocaleString() : '—'}
-                            </td>
-                            <td className="py-2 px-3">
-                              <Badge variant="neutral">{rec.source_type}</Badge>
-                            </td>
-                            <td className="py-2 px-3 font-mono text-xs">{rec.process_name ?? '—'}</td>
-                            <td className="py-2 px-3 font-mono text-xs">{rec.bundle_id ?? '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </>
-                )}
-              </div>
+              <RecordsView
+                selectedRun={!!selectedRun}
+                records={visibleRecords}
+                availableSourceTypes={availableSourceTypes}
+                sourceTypeFilter={sourceTypeFilter}
+                onFilterChange={setSourceTypeFilter}
+              />
             )}
 
             {section === 'iocs' && (

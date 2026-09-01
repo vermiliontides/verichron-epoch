@@ -45,6 +45,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import * as crypto from "node:crypto";
 import { spawn } from "node:child_process";
+import { discoverBackups, BACKUP_SEARCH_MAX_DEPTH, type Backup } from "@verichron/contracts";
 
 interface Config {
   source: string;
@@ -72,7 +73,19 @@ async function main() {
 function parseFlags(): Config {
   const home = os.homedir();
 
+  // `pnpm run <script> -- --foo` is meant to strip the `--` separator
+  // before invoking the underlying script, but that's not reliable across
+  // pnpm versions/invocation shapes (observed forwarding it literally when
+  // spawned via `pnpm --filter <pkg> dev -- --source ...`, as Electron's
+  // main.ts does). Node's parseArgs has no allowPositionals here, so a
+  // leftover leading `--` makes it treat every following flag as an
+  // unexpected positional and throw. Stripping one defensively is a no-op
+  // when pnpm already stripped it, and fixes the case when it didn't.
+  const rawArgs = process.argv.slice(2);
+  const args = rawArgs[0] === "--" ? rawArgs.slice(1) : rawArgs;
+
   const { values } = parseArgs({
+    args,
     options: {
       source: { type: "string", default: "" },
       workspace: { type: "string", default: path.join(home, "mvt-workspace") },
@@ -329,81 +342,6 @@ async function ensureIOCs(cfg: Config): Promise<void> {
 
   console.log("downloading/refreshing IOC indicators...");
   await runInherited(cfg.mvtBin, ["download-iocs"]);
-}
-
-// A discovered backup: `label` is the friendly top-level directory name
-// under --source (used for workspace organization), `path` is the actual
-// directory containing Manifest.db / Info.plist (what gets passed to
-// mvt-ios). These are the same directory in the simple case, but idevice-
-// backup2 output is commonly one level deeper: <source>/<label>/<UDID>/Manifest.db
-interface Backup {
-  label: string;
-  path: string;
-}
-
-const BACKUP_SEARCH_MAX_DEPTH = 3;
-
-// discoverBackups treats each immediate subdirectory of `source` as one
-// logical backup ("label"), then searches within it (up to a bounded depth)
-// for the actual directory containing Manifest.db / Info.plist, since
-// idevicebackup2 nests the real backup root under a UDID-named folder.
-async function discoverBackups(source: string, only: string): Promise<Backup[]> {
-  let wanted: Set<string> | null = null;
-  if (only !== "") {
-    wanted = new Set(only.split(",").map((n) => n.trim()));
-  }
-
-  const topEntries = await fsp.readdir(source, { withFileTypes: true });
-
-  const found: Backup[] = [];
-  for (const e of topEntries) {
-    if (!e.isDirectory()) continue;
-    if (wanted !== null && !wanted.has(e.name)) continue;
-
-    const topPath = path.join(source, e.name);
-    const roots = await findBackupRoots(topPath, BACKUP_SEARCH_MAX_DEPTH);
-
-    if (roots.length === 0) continue;
-    for (const root of roots) {
-      // Multiple backup roots under one label is unusual but possible
-      // (e.g. two UDID dirs nested under one date folder) - disambiguate.
-      const label = roots.length > 1 ? `${e.name}__${path.basename(root)}` : e.name;
-      found.push({ label, path: root });
-    }
-  }
-
-  found.sort((a, b) => a.label.localeCompare(b.label));
-  return found;
-}
-
-// findBackupRoots recursively searches for directories that look like an
-// idevicebackup2 backup root, stopping as soon as a match is found along
-// each branch (it does not descend into the 00-ff hashed content
-// directories once Manifest.db has already been located higher up).
-async function findBackupRoots(dir: string, remainingDepth: number): Promise<string[]> {
-  if (await isBackupRoot(dir)) {
-    return [dir];
-  }
-  if (remainingDepth <= 0) return [];
-
-  let entries;
-  try {
-    entries = await fsp.readdir(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const results: string[] = [];
-  for (const e of entries) {
-    if (!e.isDirectory()) continue;
-    const sub = path.join(dir, e.name);
-    results.push(...(await findBackupRoots(sub, remainingDepth - 1)));
-  }
-  return results;
-}
-
-async function isBackupRoot(dir: string): Promise<boolean> {
-  return (await pathExists(path.join(dir, "Manifest.db"))) || (await pathExists(path.join(dir, "Info.plist")));
 }
 
 // readRepairFailures loads the persisted list of files that were still

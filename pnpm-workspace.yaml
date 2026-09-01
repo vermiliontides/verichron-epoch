@@ -14,14 +14,20 @@ catalog:
   # (>=4.8.4 <6.1.0) hard-blocks TS7 until 7.1 ships a stable API, so we
   # want an explicit version bump here, not an implicit one via ^.
   
-  # Node/pg toolchain shared across mvt-runner, orchestrator, db-writer
-  '@types/node': ^20.19.43 # OPEN QUESTION — see note below
+  # Node/pg toolchain shared across mvt-runner, orchestrator, db-writer.
+  # Was pinned to ^20.19.43 with an open question about whether it should
+  # track engines.node instead (apps/epoch and apps/mvt-runner both declare
+  # "engines": {"node": ">=24.0.0"} and independently override this catalog
+  # entry with @types/node ^24.0.0 to match). Resolved: bump the catalog
+  # itself to the 24.x line so there's one answer, not packages quietly
+  # diverging from what every other consumer pins.
+  '@types/node': ^24.13.3
   '@types/pg': ^8.23.1
   '@types/react': ^19.2.5
   '@types/react-dom': ^19.2.5
   '@typescript-eslint/eslint-plugin': ^8.68.0
   '@typescript-eslint/parser': ^8.68.0
-  '@vitejs/plugin-react': ^4.7.0,
+  '@vitejs/plugin-react': ^4.7.0
 
   electron: ^44.0.0
 

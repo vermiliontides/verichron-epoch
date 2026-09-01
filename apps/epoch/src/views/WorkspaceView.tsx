@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { FolderOpen, HardDrive, Play, AlertCircle, ChevronDown, ChevronRight, Smartphone } from 'lucide-react';
+import { FolderOpen, HardDrive, Play, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, XCircle, Pencil } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
+import { BackupRow } from '../components/BackupRow';
+import { TerminalLog } from '../components/TerminalLog';
 import type { MvtLogEntry, MvtFinishedResult, StartPipelineOptions } from '../types/window';
 import type { Backup } from '@verichron/contracts';
+import { applyMvtLogLine, initMvtRunProgress, type MvtRunProgress } from '../lib/mvtLogParser';
 
 export function WorkspaceView() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -23,12 +26,21 @@ export function WorkspaceView() {
   const [logLines, setLogLines] = useState<MvtLogEntry[]>([]);
   const [finishResult, setFinishResult] = useState<MvtFinishedResult | null>(null);
 
+  // Plain-English progress, derived from the same log lines as logLines
+  // above. null until the first run of this session starts; stays
+  // populated after a run finishes so the backup list can show last-run
+  // results once it reverts to checkboxes.
+  const [runProgress, setRunProgress] = useState<MvtRunProgress | null>(null);
+
   const [pendingPasswordFor, setPendingPasswordFor] = useState<string | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
   const [submittingPassword, setSubmittingPassword] = useState(false);
 
   useEffect(() => {
-    const unsubLog = window.epoch.onMvtLog((entry) => setLogLines((prev) => [...prev, entry]));
+    const unsubLog = window.epoch.onMvtLog((entry) => {
+      setLogLines((prev) => [...prev, entry]);
+      setRunProgress((prev) => (prev ? applyMvtLogLine(prev, entry.line) : prev));
+    });
     const unsubPassword = window.epoch.onMvtPasswordRequired((backupName) => {
       setPendingPasswordFor(backupName);
       setPasswordInput('');
@@ -101,17 +113,20 @@ export function WorkspaceView() {
     setStartError(null);
     setLogLines([]);
     setFinishResult(null);
+    const selected = Array.from(selectedLabels);
+    setRunProgress(initMvtRunProgress(selected));
     try {
       const options: StartPipelineOptions = {
         workspace: workspace.trim() || undefined,
         forceDecrypt,
         refreshIOCs,
-        only: Array.from(selectedLabels),
+        only: selected,
       };
       await window.epoch.startPipeline(selectedPath, options);
       setIsRunning(true);
     } catch (err) {
       setStartError(err instanceof Error ? err.message : 'Unknown error');
+      setRunProgress(null);
     } finally {
       setIsStarting(false);
     }
@@ -132,211 +147,227 @@ export function WorkspaceView() {
 
   const busy = isStarting || isRunning;
 
+  const doneCount = runProgress ? runProgress.order.filter((l) => runProgress.byLabel[l].overall === 'done').length : 0;
+  const failedCount = runProgress
+    ? runProgress.order.filter((l) => runProgress.byLabel[l].overall === 'failed').length
+    : 0;
+
   return (
-    <div className="flex-1 flex flex-col p-8 max-w-4xl mx-auto w-full min-h-full">
-      <div className="mb-6">
-        <h1 className="font-display text-lg font-medium text-foreground mb-2">New Investigation</h1>
+    <div className="flex-1 flex flex-col p-8 max-w-4xl mx-auto w-full min-h-full gap-5">
+      <div>
+        <h1 className="font-display text-lg font-medium text-foreground mb-1">New Investigation</h1>
         <p className="text-sm text-muted-foreground">
           Select a directory of already-encrypted mobile backups to decrypt and scan with mvt-runner.
         </p>
       </div>
 
-      <div
-        onClick={busy ? undefined : handleSelectDirectory}
-        className={`group relative flex flex-col items-center justify-center p-12 border-2 border-dashed border-border rounded-xl bg-surface/30 transition-all mb-6 ${
-          busy ? 'opacity-50' : 'hover:bg-surface/60 hover:border-accent cursor-pointer'
-        }`}
-      >
-        <div className="bg-surface p-4 rounded-full border border-border mb-4">
-          <FolderOpen size="2rem" className="text-muted-foreground group-hover:text-accent transition-colors" />
+      {!selectedPath ? (
+        <div
+          onClick={handleSelectDirectory}
+          className="group relative flex flex-col items-center justify-center p-12 border-2 border-dashed border-border rounded-xl bg-surface/30 hover:bg-surface/60 hover:border-accent cursor-pointer transition-all"
+        >
+          <div className="bg-surface p-4 rounded-full border border-border mb-4">
+            <FolderOpen size="2rem" className="text-muted-foreground group-hover:text-accent transition-colors" />
+          </div>
+          <h3 className="font-display text-base font-medium text-foreground mb-1">Import Directory</h3>
+          <p className="text-sm text-muted-foreground font-mono mb-4 text-center max-w-md">
+            macOS: ~/Library/Application Support/MobileSync/Backup/
+            <br />
+            Windows: %appdata%\Apple Computer\MobileSync\Backup\
+          </p>
+          <Badge variant="neutral">Browse Local Files</Badge>
         </div>
-        <h3 className="font-display text-base font-medium text-foreground mb-1">Import Directory</h3>
-        <p className="text-sm text-muted-foreground font-mono mb-4 text-center max-w-md">
-          macOS: ~/Library/Application Support/MobileSync/Backup/
-          <br />
-          Windows: %appdata%\Apple Computer\MobileSync\Backup\
-        </p>
-        <Badge variant="neutral">Browse Local Files</Badge>
-      </div>
-
-      {selectedPath && (
-        <div className="bg-surface border border-border rounded-lg p-5 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3 overflow-hidden pr-4">
-              <HardDrive className="text-accent shrink-0" size="1.25rem" />
-              <div className="min-w-0">
-                <p className="text-2xs text-muted-foreground uppercase tracking-wide font-medium mb-1">
-                  Source Directory
-                </p>
-                <p className="text-sm font-mono text-foreground truncate" title={selectedPath}>
-                  {selectedPath}
-                </p>
-              </div>
+      ) : (
+        <>
+          {/* Compact source bar -- replaces the import hero once a directory is
+              picked, so it doesn't keep eating a third of the screen while the
+              actual work (backup list, progress, log) needs the room. */}
+          <div className="flex items-center gap-3 bg-surface border border-border rounded-lg px-4 py-3">
+            <HardDrive className="text-accent shrink-0" size="1.125rem" />
+            <div className="min-w-0 flex-1">
+              <p className="text-2xs text-muted-foreground uppercase tracking-wide font-medium">Source directory</p>
+              <p className="text-sm font-mono text-foreground truncate" title={selectedPath}>
+                {selectedPath}
+              </p>
             </div>
-            <button
-              onClick={handleStartPipeline}
-              disabled={busy || discoveringBackups || selectedLabels.size === 0}
-              className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-md font-medium text-sm transition-colors shrink-0"
-            >
-              {busy ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
-                  {isStarting ? 'Starting...' : 'Running...'}
-                </>
-              ) : (
-                <>
-                  <Play size="1rem" fill="currentColor" />
-                  Run mvt-runner{selectedLabels.size > 0 ? ` (${selectedLabels.size})` : ''}
-                </>
-              )}
-            </button>
+            {!busy && (
+              <button
+                onClick={handleSelectDirectory}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-accent transition-colors shrink-0"
+              >
+                <Pencil size="0.8rem" />
+                Change
+              </button>
+            )}
           </div>
 
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-2xs text-muted-foreground uppercase tracking-wide font-medium">
-                Backups Found{backups.length > 0 ? ` (${backups.length})` : ''}
+          <div className="bg-surface border border-border rounded-lg p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-medium text-foreground">
+                Backups{backups.length > 0 ? ` (${backups.length})` : ''}
               </p>
-              {backups.length > 1 && !busy && (
-                <div className="flex items-center gap-2 text-2xs">
-                  <button onClick={selectAllBackups} className="text-accent hover:underline">
-                    Select all
-                  </button>
-                  <span className="text-muted-foreground">/</span>
-                  <button onClick={selectNoBackups} className="text-accent hover:underline">
-                    Select none
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-3">
+                {backups.length > 1 && !busy && (
+                  <div className="flex items-center gap-2 text-2xs">
+                    <button onClick={selectAllBackups} className="text-accent hover:underline">
+                      Select all
+                    </button>
+                    <span className="text-muted-foreground">/</span>
+                    <button onClick={selectNoBackups} className="text-accent hover:underline">
+                      Select none
+                    </button>
+                  </div>
+                )}
+                <button
+                  onClick={handleStartPipeline}
+                  disabled={busy || discoveringBackups || selectedLabels.size === 0}
+                  className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-md font-medium text-sm transition-colors shrink-0"
+                >
+                  {busy ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
+                      {isStarting ? 'Starting...' : 'Running...'}
+                    </>
+                  ) : (
+                    <>
+                      <Play size="1rem" fill="currentColor" />
+                      Run{selectedLabels.size > 0 ? ` (${selectedLabels.size})` : ''}
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
-            {discoveringBackups && (
-              <p className="text-sm text-muted-foreground">Scanning directory for backups...</p>
-            )}
+            {discoveringBackups && <p className="text-sm text-muted-foreground">Scanning directory for backups...</p>}
 
             {!discoveringBackups && discoverError && (
-              <p className="text-sm text-flag">Could not scan directory: {discoverError}</p>
+              <p className="text-sm text-danger">Could not scan directory: {discoverError}</p>
             )}
 
             {!discoveringBackups && !discoverError && backups.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No backups found under this directory (looked for Manifest.db / Info.plist in
-                subdirectories).
+                No backups found under this directory (looked for Manifest.db / Info.plist in subdirectories).
               </p>
             )}
 
             {!discoveringBackups && backups.length > 0 && (
-              <div className="border border-border rounded-md divide-y divide-border max-h-56 overflow-auto">
-                {backups.map((b) => (
-                  <label
-                    key={b.label}
-                    className={`flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-surface/60 ${
-                      busy ? 'opacity-50 pointer-events-none' : ''
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedLabels.has(b.label)}
-                      onChange={() => toggleBackup(b.label)}
+              <div className="border border-border rounded-md divide-y divide-border max-h-72 overflow-auto">
+                {backups.map((b) => {
+                  const progress = runProgress?.byLabel[b.label];
+                  const isLive = busy && !!progress;
+                  const overall = progress?.overall;
+                  const lastResult: 'done' | 'failed' | undefined =
+                    !busy && (overall === 'done' || overall === 'failed') ? overall : undefined;
+                  return (
+                    <BackupRow
+                      key={b.label}
+                      backup={b}
+                      selected={selectedLabels.has(b.label)}
+                      onToggle={() => toggleBackup(b.label)}
                       disabled={busy}
+                      liveProgress={isLive ? progress : undefined}
+                      awaitingPassword={isLive && pendingPasswordFor === b.label}
+                      lastResult={lastResult}
                     />
-                    <Smartphone size="1rem" className="text-muted-foreground shrink-0" />
-                    <span className="font-mono text-foreground truncate" title={b.path}>
-                      {b.label}
-                    </span>
-                  </label>
-                ))}
+                  );
+                })}
               </div>
             )}
-          </div>
 
-          <button
-            onClick={() => setShowOptions((v) => !v)}
-            disabled={busy}
-            className="flex items-center gap-1 text-2xs uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-          >
-            {showOptions ? <ChevronDown size="0.875rem" /> : <ChevronRight size="0.875rem" />}
-            Options
-          </button>
-          {showOptions && (
-            <div className="mt-3 flex flex-col gap-3">
-              <label className="flex flex-col gap-1">
-                <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-                  Workspace (default: ~/mvt-workspace)
-                </span>
-                <input
-                  type="text"
-                  value={workspace}
-                  onChange={(e) => setWorkspace(e.target.value)}
-                  disabled={busy}
-                  placeholder="~/mvt-workspace"
-                  className="bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground disabled:opacity-50"
-                />
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={forceDecrypt}
-                  onChange={(e) => setForceDecrypt(e.target.checked)}
-                  disabled={busy}
-                />
-                Re-decrypt even if already decrypted
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={refreshIOCs}
-                  onChange={(e) => setRefreshIOCs(e.target.checked)}
-                  disabled={busy}
-                />
-                Refresh IOC indicator feeds before scanning
-              </label>
+            <div className="mt-4 pt-4 border-t border-border">
+              <button
+                onClick={() => setShowOptions((v) => !v)}
+                disabled={busy}
+                className="flex items-center gap-1 text-2xs uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              >
+                {showOptions ? <ChevronDown size="0.875rem" /> : <ChevronRight size="0.875rem" />}
+                Options
+              </button>
+              {showOptions && (
+                <div className="mt-3 flex flex-col gap-3">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-2xs uppercase tracking-wide text-muted-foreground">
+                      Workspace (default: ~/mvt-workspace)
+                    </span>
+                    <input
+                      type="text"
+                      value={workspace}
+                      onChange={(e) => setWorkspace(e.target.value)}
+                      disabled={busy}
+                      placeholder="~/mvt-workspace"
+                      className="bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground disabled:opacity-50"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={forceDecrypt}
+                      onChange={(e) => setForceDecrypt(e.target.checked)}
+                      disabled={busy}
+                    />
+                    Re-decrypt even if already decrypted
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={refreshIOCs}
+                      onChange={(e) => setRefreshIOCs(e.target.checked)}
+                      disabled={busy}
+                    />
+                    Refresh IOC indicator feeds before scanning
+                  </label>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        </>
       )}
 
       {startError && (
-        <div className="text-flag bg-flag/10 border border-flag/30 rounded-md p-3 text-sm mb-6">
-          Error: {startError}
+        <div className="flex items-start gap-2 text-danger bg-danger/10 border border-danger/30 rounded-md p-3 text-sm">
+          <AlertCircle size="1rem" className="shrink-0 mt-0.5" />
+          {startError}
         </div>
       )}
 
-      {(isRunning || logLines.length > 0) && (
-        <div className="bg-surface border border-border rounded-lg mb-6 overflow-hidden">
-          <div className="px-4 py-2 border-b border-border text-2xs uppercase tracking-wide text-muted-foreground">
-            mvt-runner output
-          </div>
-          <pre className="p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-64 text-foreground">
-            {logLines.map((entry, i) => (
-              <div key={i} className={entry.stream === 'stderr' ? 'text-flag' : undefined}>
-                {entry.line}
-              </div>
-            ))}
-          </pre>
-        </div>
-      )}
-
-      {finishResult && (
+      {finishResult && runProgress && (
         <div
-          className={`rounded-md p-3 text-sm mb-6 border ${
-            finishResult.success ? 'bg-accent/10 border-accent/30 text-accent' : 'bg-flag/10 border-flag/30 text-flag'
+          className={`flex items-center gap-3 rounded-lg p-4 border ${
+            failedCount === 0 ? 'bg-accent/10 border-accent/30' : 'bg-danger/10 border-danger/30'
           }`}
         >
-          {finishResult.success
-            ? 'mvt-runner finished successfully.'
-            : `mvt-runner failed${finishResult.error ? `: ${finishResult.error}` : ` (exit code ${finishResult.exitCode})`}.`}
+          {failedCount === 0 ? (
+            <CheckCircle2 className="text-accent shrink-0" size="1.25rem" />
+          ) : (
+            <XCircle className="text-danger shrink-0" size="1.25rem" />
+          )}
+          <div className="text-sm">
+            <p className={failedCount === 0 ? 'text-accent font-medium' : 'text-danger font-medium'}>
+              {failedCount === 0
+                ? `All ${doneCount} backup${doneCount === 1 ? '' : 's'} finished successfully.`
+                : `${doneCount} of ${runProgress.order.length} backup${
+                    runProgress.order.length === 1 ? '' : 's'
+                  } finished; ${failedCount} couldn't be completed.`}
+            </p>
+            {!finishResult.success && finishResult.error && (
+              <p className="text-muted-foreground text-xs mt-0.5">{finishResult.error}</p>
+            )}
+          </div>
         </div>
       )}
 
-      <div className="flex items-start gap-3 bg-surface border border-border rounded-lg p-4">
-        <AlertCircle className="text-muted-foreground shrink-0 mt-1" size="1rem" />
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          <strong className="text-foreground">Tip:</strong> Live device extraction over USB is currently disabled.
-          Please use an external tool (like Finder, iTunes, or libimobiledevice) to stage the evidence before running
-          Verichron.
-        </p>
-      </div>
+      {(isRunning || logLines.length > 0) && <TerminalLog lines={logLines} live={isRunning} />}
+
+      {!selectedPath && (
+        <div className="flex items-start gap-3 bg-surface border border-border rounded-lg p-4">
+          <AlertCircle className="text-muted-foreground shrink-0 mt-1" size="1rem" />
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            <strong className="text-foreground">Tip:</strong> Live device extraction over USB is currently disabled.
+            Please use an external tool (like Finder, iTunes, or libimobiledevice) to stage the evidence before
+            running Verichron.
+          </p>
+        </div>
+      )}
 
       {pendingPasswordFor && (
         <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50">

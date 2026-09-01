@@ -35,7 +35,9 @@ export function TerminalLog({ lines, live, defaultOpen = false }: TerminalLogPro
     if (stickToBottom && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deliberately omits stickToBottom/scrollRef from deps -- this should
+    // only re-run when new lines arrive or the panel opens, not whenever
+    // stickToBottom changes (that's handled by the scroll handler itself).
   }, [lines.length, open]);
 
   useEffect(() => {

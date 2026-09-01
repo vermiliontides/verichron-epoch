@@ -110,6 +110,17 @@ export const App: React.FC = () => {
     }
   };
 
+  const refreshStages = async (runId: string) => {
+    try {
+      const data = await window.epoch.getStageStatus(runId);
+      setStages(data);
+      setDbStatus('connected');
+    } catch (err) {
+      console.error('Failed to refresh stages:', err);
+      setDbStatus('error');
+    }
+  };
+
   const loadRecords = async (run: PipelineRunRow) => {
     try {
       const data = await window.epoch.getForensicRecords(run.run_id);
@@ -202,6 +213,7 @@ export const App: React.FC = () => {
                 selectedRun={selectedRun}
                 stages={stages}
                 onSelectRun={selectRun}
+                onRefreshStages={refreshStages}
               />
             )}
 

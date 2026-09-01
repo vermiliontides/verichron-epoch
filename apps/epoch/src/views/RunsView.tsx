@@ -94,7 +94,6 @@ export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRu
 
     const interval = setInterval(async () => {
       try {
-        const data = await window.epoch.getStageStatus(selectedRun.run_id);
         if (onRefreshStages) {
           onRefreshStages(selectedRun.run_id);
         }

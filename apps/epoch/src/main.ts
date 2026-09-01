@@ -122,8 +122,8 @@ ipcMain.handle('epoch:getReport', async (_event, backupSource: string) => {
   try {
     const content = await fs.readFile(reportPath, 'utf-8');
     return { status: 'ok' as const, content, path: reportPath };
-  } catch (err: any) {
-    if (err?.code === 'ENOENT') {
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
       return { status: 'not-found' as const, path: reportPath };
     }
     console.error('Report read error:', err);

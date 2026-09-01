@@ -61,7 +61,6 @@ export function systemPackageInstallCommand(platform: NodeJS.Platform): string {
  * check. */
 export function compileFromSourceSteps(buildDir: string, installPrefix: string): ToolAcquisitionCommand[] {
   const steps: ToolAcquisitionCommand[] = [];
-  const pkgConfigPath = path.join(installPrefix, 'lib', 'pkgconfig');
   // Each repo after the first needs the previous ones' .pc files on
   // PKG_CONFIG_PATH to find them at installPrefix rather than system
   // locations -- autogen.sh reads this from the environment, not as a

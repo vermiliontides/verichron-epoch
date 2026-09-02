@@ -42,11 +42,28 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines.length, open]);
 
-  useEffect(() => {
+  // Reset the unseen-count badge the moment the panel opens -- adjusted
+  // during render (comparing against the previous `open` value) rather
+  // than in an effect, since this is exactly the "resetting state when a
+  // prop changes" case React's own docs recommend against an effect for:
+  // no DOM/external system involved, just synchronizing state to a prop
+  // transition. React bails out of the extra render pass for this pattern,
+  // so it doesn't cause the cascading-render problem the effect version did.
+  const [prevOpenForReset, setPrevOpenForReset] = useState(open);
+  if (open !== prevOpenForReset) {
+    setPrevOpenForReset(open);
     if (open) {
       unseenCountRef.current = 0;
       setUnseenCount(0);
-      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }
+
+  // Scroll-to-bottom on open stays in an effect -- this part genuinely is a
+  // DOM mutation (an external system from React's point of view), which is
+  // exactly what effects are for.
+  useEffect(() => {
+    if (open && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [open]);
 
@@ -119,4 +136,4 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
       )}
     </div>
   );
-}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+}

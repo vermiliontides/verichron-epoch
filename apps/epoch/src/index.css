@@ -1,44 +1,112 @@
 @import "tailwindcss";
- 
+
 :root {
-  --background: 217 17% 9%;
-  --surface: 217 17% 15%;
-  --foreground: 47 5% 88%;
-  --accent: 186 50% 54%;
-  --flag: 34 77% 60%;
-  --danger: 6 78% 62%;
-  --border: 217 15% 17%;
-  --muted-foreground: 220 17% 64%;
+  /* High-end Obsidian / Tactical Slate Palette */
+  --background: 224 25% 6%;         /* #090c15 */
+  --surface: 222 22% 10%;            /* #0f1420 */
+  --surface-raised: 221 20% 14%;     /* #151b2a */
+  --surface-hover: 221 20% 18%;      /* #1c2438 */
+  --foreground: 210 25% 96%;         /* #f1f5f9 */
+  --muted-foreground: 217 15% 60%;   /* #8b9bb4 */
+  --border: 222 18% 18%;             /* #1f2738 */
+  --border-subtle: 222 18% 13%;      /* #161c28 */
+  
+  /* Telemetry Accents */
+  --accent: 192 95% 50%;             /* Verichron Cyan #00d2ff */
+  --accent-muted: 192 60% 25%;
+  --success: 152 76% 45%;            /* Evidence Emerald #10b981 */
+  --flag: 38 92% 52%;                /* Anomaly Amber #f59e0b */
+  --danger: 348 85% 60%;             /* Threat Crimson #f43f5e */
 }
- 
+
 @theme {
   --color-background: hsl(var(--background));
   --color-surface: hsl(var(--surface));
+  --color-surface-raised: hsl(var(--surface-raised));
+  --color-surface-hover: hsl(var(--surface-hover));
   --color-foreground: hsl(var(--foreground));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-border: hsl(var(--border));
+  --color-border-subtle: hsl(var(--border-subtle));
+  
   --color-accent: hsl(var(--accent));
+  --color-accent-muted: hsl(var(--accent-muted));
+  --color-success: hsl(var(--success));
   --color-flag: hsl(var(--flag));
   --color-danger: hsl(var(--danger));
-  --color-border: hsl(var(--border));
-  --color-muted-foreground: hsl(var(--muted-foreground));
- 
-  --font-sans: 'Inter', sans-serif;
-  --font-display: 'Space Grotesk', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
 
-  /* Fixes missing text-2xs token mapping in Tailwind v4 */
+  /* Air-gapped safe local font stack with native priority */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+
+  /* Typography scale tokens */
   --text-2xs: 0.65rem;
   --text-2xs--line-height: 0.875rem;
+  --text-3xs: 0.58rem;
+  --text-3xs--line-height: 0.75rem;
 }
- 
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
- 
+
 body {
   font-family: var(--font-sans);
   background: var(--color-background);
   color: var(--color-foreground);
   overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Electron window drag utilities */
+.app-drag-region {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Precision desktop scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Smooth forensic focus ring */
+:focus-visible {
+  outline: 2px solid hsl(var(--accent));
+  outline-offset: 1px;
+}
+
+/* Monospace numbers for telemetry data */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fine subtle hairline glow effect */
+.forensic-glow {
+  box-shadow: 0 0 20px -5px hsl(var(--accent) / 0.15);
+}
+
+.forensic-glow-threat {
+  box-shadow: 0 0 25px -5px hsl(var(--danger) / 0.25);
 }

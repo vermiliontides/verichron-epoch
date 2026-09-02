@@ -8,7 +8,7 @@ import { Pool } from 'pg';
 import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/db-reader';
 import { deriveResultsPath, discoverBackups, type Backup } from '@verichron/contracts';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
-import dotenv from 'dotenv'
+import { config as dotenvConfig } from 'dotenv';
 import { listDeviceBackupSources, getDeviceBackupSource, getAcquisitionStrategy } from './tools/device-backup/registry';
 import type { DeviceInfo, ToolAcquisitionCommand } from './tools/device-backup/types';
  
@@ -18,7 +18,7 @@ console.log('\n=======================================');
 console.log('MAIN PROCESS IS EXECUTING!');
 console.log('=======================================\n');
  
-dotenv.config({ path: '../../../.env' })
+dotenvConfig({ path: '../../../.env' });
 // 1. Catch silent crashes and print them to the terminal
 process.on('uncaughtException', (error) => {
   console.error('\n--- FATAL UNCAUGHT EXCEPTION ---');
@@ -122,8 +122,8 @@ ipcMain.handle('epoch:getReport', async (_event, backupSource: string) => {
   try {
     const content = await fs.readFile(reportPath, 'utf-8');
     return { status: 'ok' as const, content, path: reportPath };
-  } catch (err: any) {
-    if (err?.code === 'ENOENT') {
+  } catch (err: unknown) {
+    if ((err as { code?: string })?.code === 'ENOENT') {
       return { status: 'not-found' as const, path: reportPath };
     }
     console.error('Report read error:', err);
@@ -408,23 +408,28 @@ let mainWindow: BrowserWindowType | null = null;
  
 const createWindow = (): void => {
   const windowOptions: BrowserWindowConstructorOptions = {
-    width: 1400,
-    height: 900,
+    width: 1440,
+    height: 920,
+    minWidth: 1100,
+    minHeight: 720,
+    backgroundColor: '#090c15',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    trafficLightPosition: { x: 20, y: 18 },
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // enableRemoteModule was removed from Electron's types in v14+ —
-      // remote module is gone entirely as of Electron 22. If tsc is
-      // flagging this line specifically, that's why: it's not a missing
-      // type, it's a property that no longer exists on
-      // BrowserWindowConstructorOptions/WebPreferences.
     },
   };
- 
+
   mainWindow = new BrowserWindow(windowOptions);
- 
-// 2. Safely check for injected variables to prevent ReferenceErrors
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+  });
+
+  // 2. Safely check for injected variables to prevent ReferenceErrors
   if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== 'undefined') {
     // Force IPv4 loopback to avoid Node/Chromium IPv6 resolution mismatch
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL.replace('localhost', '127.0.0.1'));
@@ -433,9 +438,12 @@ const createWindow = (): void => {
   } else {
     console.error('Vite target variables are missing.');
   }
- 
-  mainWindow.webContents.openDevTools();
- 
+
+  // Only open DevTools if explicitly requested in environment
+  if (process.env.EPOCH_DEVTOOLS === 'true') {
+    mainWindow.webContents.openDevTools();
+  }
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });

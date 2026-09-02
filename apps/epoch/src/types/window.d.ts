@@ -40,6 +40,7 @@ export interface MvtFinishedResult {
 declare global {
   interface Window {
     epoch: {
+      platform: string;
       selectBackupDirectory: () => Promise<string | null>;
       selectDeviceBackupDestination: () => Promise<string | null>;
       discoverBackups: (source: string) => Promise<Backup[]>;

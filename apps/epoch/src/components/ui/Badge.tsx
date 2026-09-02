@@ -3,23 +3,26 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-md px-2 py-0.5 text-2xs font-mono font-medium',
+  'inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-2xs font-mono font-medium tracking-tight border transition-colors',
   {
     variants: {
       variant: {
-        accent: 'bg-accent/15 text-accent',
-        flag: 'bg-flag/20 text-flag',
-        neutral: 'bg-surface text-muted-foreground border border-border',
+        accent: 'bg-accent/10 text-accent border-accent/25',
+        success: 'bg-success/10 text-success border-success/30',
+        flag: 'bg-flag/10 text-flag border-flag/30',
+        danger: 'bg-danger/15 text-danger border-danger/40 font-semibold',
+        neutral: 'bg-surface text-muted-foreground border-border',
+        subtle: 'bg-surface-raised/80 text-foreground/80 border-border-subtle',
+        threat: 'bg-danger/20 text-danger border-danger/50 font-bold uppercase tracking-wider',
         // pipeline_stage_status.status CHECK constraint values
-        pending: 'bg-muted-foreground/10 text-muted-foreground',
-        running: 'bg-flag/15 text-flag',
-        succeeded: 'bg-accent/15 text-accent',
-        failed: 'bg-danger/20 text-danger font-semibold',
-        skipped: 'bg-muted-foreground/8 text-muted-foreground',
-        // pipeline_runs has no status column -- this is the derived
-        // two-state phase (finished_at set or not), not a success claim.
-        in_progress: 'bg-flag/15 text-flag',
-        finished: 'bg-accent/15 text-accent',
+        pending: 'bg-surface text-muted-foreground/70 border-border/60',
+        running: 'bg-accent/10 text-accent border-accent/30',
+        succeeded: 'bg-success/10 text-success border-success/30',
+        failed: 'bg-danger/15 text-danger border-danger/40 font-semibold',
+        skipped: 'bg-surface text-muted-foreground/60 border-border-subtle',
+        // pipeline_runs phase
+        in_progress: 'bg-accent/10 text-accent border-accent/30',
+        finished: 'bg-success/10 text-success border-success/30',
       },
     },
     defaultVariants: {
@@ -30,8 +33,46 @@ const badgeVariants = cva(
 
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLSpanElement>,
-    VariantProps<typeof badgeVariants> {}
+    VariantProps<typeof badgeVariants> {
+  dot?: boolean;
+  pulse?: boolean;
+}
 
-export function Badge({ className, variant, ...props }: BadgeProps) {
-  return <span className={cn(badgeVariants({ variant }), className)} {...props} />;
+export function Badge({ className, variant, dot, pulse, children, ...props }: BadgeProps) {
+  const showDot = dot || variant === 'running' || variant === 'in_progress';
+  const showPulse = pulse || variant === 'running' || variant === 'in_progress';
+
+  return (
+    <span className={cn(badgeVariants({ variant }), className)} {...props}>
+      {showDot && (
+        <span className="relative flex h-1.5 w-1.5 shrink-0">
+          {showPulse && (
+            <span
+              className={cn(
+                'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75',
+                variant === 'danger' || variant === 'threat'
+                  ? 'bg-danger'
+                  : variant === 'flag'
+                  ? 'bg-flag'
+                  : 'bg-accent'
+              )}
+            />
+          )}
+          <span
+            className={cn(
+              'relative inline-flex rounded-full h-1.5 w-1.5',
+              variant === 'danger' || variant === 'threat'
+                ? 'bg-danger'
+                : variant === 'flag'
+                ? 'bg-flag'
+                : variant === 'success' || variant === 'succeeded'
+                ? 'bg-success'
+                : 'bg-accent'
+            )}
+          />
+        </span>
+      )}
+      {children}
+    </span>
+  );
 }

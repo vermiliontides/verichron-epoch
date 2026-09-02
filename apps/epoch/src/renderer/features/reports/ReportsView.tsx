@@ -11,14 +11,6 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
   const [reportLoadError, setReportLoadError] = useState<string | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
 
-  useEffect(() => {
-    if (selectedRun) {
-      loadReport(selectedRun);
-    } else {
-      setReport(null);
-    }
-  }, [selectedRun]);
-
   const loadReport = async (run: PipelineRunRow) => {
     setReportLoading(true);
     setReportLoadError(null);
@@ -32,6 +24,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
       setReportLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedRun) {
+      loadReport(selectedRun);
+    } else {
+      setReport(null);
+    }
+  }, [selectedRun]);
 
   const openReportFile = async () => {
     if (!selectedRun) return;

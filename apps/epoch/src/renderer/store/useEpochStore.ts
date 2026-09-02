@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { PipelineRunRow, StageStatusRow, ForensicRecordRow } from '@verichron/db-reader';
 import type { Section } from '../components/layout/Sidebar';
-import type { ReportResult } from '../shared/types/window';
+import type { ReportResult } from '../../shared/types/window';
 
 interface EpochState {
   section: Section;

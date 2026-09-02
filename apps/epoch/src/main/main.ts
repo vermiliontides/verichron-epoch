@@ -3,7 +3,7 @@ import electron from 'electron';
 import path from 'path';
 import { Pool } from 'pg';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
-import dotenv from 'dotenv';
+import { config as loadEnv } from 'dotenv';
 import { registerDbHandlers } from './ipc/dbHandlers';
 import { registerReportHandlers } from './ipc/reportHandlers';
 import { registerPipelineHandlers } from './ipc/pipelineHandlers';

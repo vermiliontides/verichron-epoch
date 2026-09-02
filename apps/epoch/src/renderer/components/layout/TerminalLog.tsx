@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, ArrowDown, TerminalSquare } from 'lucide-react';
-import type { MvtLogEntry } from '../types/window';
+import type { MvtLogEntry } from '../../../shared/types/window';
 
 interface TerminalLogProps {
   lines: MvtLogEntry[];
@@ -119,4 +119,4 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
       )}
     </div>
   );
-}
+}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   

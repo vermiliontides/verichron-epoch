@@ -3,8 +3,9 @@ import type {
   BackupProgress,
   DeviceInfo,
   ToolAcquisitionAction,
+  ToolAcquisitionCommand,
   ToolAvailabilityStatus,
-} from '../../shared/types/tools.';
+} from '../../shared/types/tools';
 
 export type Phase = 'checking' | 'unavailable' | 'available' | 'acquiring' | 'pulling' | 'pulled';
 
@@ -88,8 +89,8 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     setPhase('acquiring');
     setAcquisitionOutput([]);
     setAcquisitionError(null);
-    const prefixArg = action.steps.find((s) => s.args.some((a) => a.startsWith('--prefix=')));
-    const installPrefix = prefixArg?.args.find((a) => a.startsWith('--prefix='))?.slice('--prefix='.length) ?? '';
+    const prefixArg = action.steps.find((s: ToolAcquisitionCommand) => s.args.some((a: string) => a.startsWith('--prefix=')));
+    const installPrefix = prefixArg?.args.find((a: string) => a.startsWith('--prefix='))?.slice('--prefix='.length) ?? '';
     await window.epoch.runToolAcquisitionSteps(action.steps, installPrefix);
   };
 

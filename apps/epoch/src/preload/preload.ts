@@ -7,7 +7,7 @@ import type {
   ToolAcquisitionAction,
   ToolAcquisitionCommand,
   ToolAvailabilityStatus,
-} from '../shared/types/tools.';
+} from '../shared/types/tools';
  
 // This file previously created its own `pg.Pool` and issued its own SQL
 // directly from the preload script, bypassing main.ts's `ipcMain.handle`

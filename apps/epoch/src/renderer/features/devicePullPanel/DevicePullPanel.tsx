@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Smartphone, CheckCircle2, XCircle, Loader2, Wrench } from 'lucide-react';
-import { Badge } from './ui/Badge';
+import { Badge } from '../../components/ui/Badge';
 import type {
   BackupProgress,
   DeviceInfo,
   ToolAcquisitionAction,
   ToolAvailabilityStatus,
-} from '../tools/device-backup/types';
+} from '../../shared/tools/device-backup/types';
 
 /**
  * "Pull from Device" -- the stage-0 alternative to WorkspaceView's existing

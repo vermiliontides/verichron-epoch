@@ -1,13 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Backup } from '@verichron/contracts';
-import type { ReportResult } from './types/window';
+import type { ReportResult } from '../shared/types/window';
 import type {
   BackupProgress,
   DeviceInfo,
   ToolAcquisitionAction,
   ToolAcquisitionCommand,
   ToolAvailabilityStatus,
-} from './tools/device-backup/types';
+} from '../shared/types/tools';
  
 // This file previously created its own `pg.Pool` and issued its own SQL
 // directly from the preload script, bypassing main.ts's `ipcMain.handle`

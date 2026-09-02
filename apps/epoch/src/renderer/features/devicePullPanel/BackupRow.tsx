@@ -1,7 +1,7 @@
 import React from 'react';
 import { Smartphone, Circle, Loader2, CheckCircle2, XCircle, KeyRound } from 'lucide-react';
 import type { Backup } from '@verichron/contracts';
-import { STAGE_ORDER, STAGE_LABELS, type BackupProgress } from '../lib/mvtLogParser';
+import { STAGE_ORDER, STAGE_LABELS, type BackupProgress } from '../../../shared/lib/mvtLogParser';
 
 interface BackupRowProps {
   backup: Backup;

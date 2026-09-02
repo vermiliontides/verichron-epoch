@@ -10,7 +10,7 @@ import { deriveResultsPath, discoverBackups, type Backup } from '@verichron/cont
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
 import dotenv from 'dotenv'
 import { listDeviceBackupSources, getDeviceBackupSource, getAcquisitionStrategy } from './tools/device-backup/registry';
-import type { DeviceInfo, ToolAcquisitionCommand } from './tools/device-backup/types';
+import type { DeviceInfo, ToolAcquisitionCommand } from '../shared/types/tools';
  
 const { app, BrowserWindow, ipcMain, shell, dialog } = electron;
  

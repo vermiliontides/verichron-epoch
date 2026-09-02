@@ -1,4 +1,4 @@
-import type { DeviceBackupSource, ToolAcquisitionStrategy } from './types';
+import type { DeviceBackupSource, ToolAcquisitionStrategy } from '../../../shared/types/tools';
 import { IosBackupSource } from './ios/iosBackupSource';
 import { IosToolAcquisitionStrategy } from './ios/iosAcquisitionStrategy';
 

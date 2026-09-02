@@ -1,5 +1,5 @@
 import path from 'path';
-import type { ToolAcquisitionCommand } from '../types';
+import type { ToolAcquisitionCommand } from '../../../../shared/types/tools';
 
 /**
  * Real build sequence, sourced from libimobiledevice/libimobiledevice's own

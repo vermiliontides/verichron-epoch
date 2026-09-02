@@ -3,6 +3,11 @@ import { defineConfig } from 'vite';
 // https://vitejs.dev/config
 export default defineConfig({
   build: {
+    lib: {
+      entry: 'src/main/main.ts',
+      formats: ['cjs'],
+      fileName: () => 'main.js', // forces exact output filename
+    },
     rollupOptions: {
       // @verichron/db-reader is a CJS workspace package (compiled via
       // tsc, not Vite/Rollup) whose re-exports use TypeScript's
@@ -22,7 +27,7 @@ export default defineConfig({
       // @verichron/contracts is built the same way (tsc, same getter
       // re-export pattern) and hits the identical Rollup limitation --
       // same fix, same reason.
-      external: ['@verichron/db-reader', '@verichron/contracts', 'pg'],
+      external: ['@verichron/db-reader', '@verichron/contracts', 'pg', 'electron', /^node:.+/],
     },
   },
 });

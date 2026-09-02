@@ -1,18 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { FolderOpen, HardDrive, Play, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, XCircle, Pencil, Microscope, ArrowRight } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
-import { BackupRow } from '../components/BackupRow';
-import { TerminalLog } from '../components/TerminalLog';
-import { DevicePullPanel } from '../components/DevicePullPanel';
-import type { MvtLogEntry, MvtFinishedResult, StartPipelineOptions } from '../types/window';
+import { BackupRow } from '../features/devicePullPanel/BackupRow';
+import { TerminalLog } from '../components/layout/TerminalLog';
+import { DevicePullPanel } from '../features/devicePullPanel/DevicePullPanel';
+import type { MvtLogEntry, MvtFinishedResult, StartPipelineOptions } from '../../shared/types/window';
 import type { Backup } from '@verichron/contracts';
-import { applyMvtLogLine, initMvtRunProgress, type MvtRunProgress } from '../lib/mvtLogParser';
+import { applyMvtLogLine, initMvtRunProgress, type MvtRunProgress } from '../../shared/lib/mvtLogParser';
 
 export interface WorkspaceViewProps {
-  // Called once Stage 3 (orchestrator) finishes successfully -- lets App.tsx
-  // switch to the Runs section and refresh its (mount-only) run list, since
-  // otherwise a freshly-created pipeline_runs row wouldn't show up until an
-  // unrelated reload happened to occur.
   onAnalysisComplete: () => void;
 }
 
@@ -35,21 +31,12 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
   const [logLines, setLogLines] = useState<MvtLogEntry[]>([]);
   const [finishResult, setFinishResult] = useState<MvtFinishedResult | null>(null);
 
-  // Plain-English progress, derived from the same log lines as logLines
-  // above. null until the first run of this session starts; stays
-  // populated after a run finishes so the backup list can show last-run
-  // results once it reverts to checkboxes.
   const [runProgress, setRunProgress] = useState<MvtRunProgress | null>(null);
 
   const [pendingPasswordFor, setPendingPasswordFor] = useState<string | null>(null);
   const [passwordInput, setPasswordInput] = useState('');
   const [submittingPassword, setSubmittingPassword] = useState(false);
 
-  // Stage 3 (orchestrator) -- runs after mvt-runner finishes, against the
-  // exact workspace mvt-runner just used. This is what actually creates a
-  // pipeline_runs row; without it, a completed Stage 1 run has nowhere to
-  // go (see epoch:startAnalysis's own comment in main.ts for the full
-  // Stage 1 vs Stage 3 split).
   const [lastRunWorkspace, setLastRunWorkspace] = useState<string | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
   const [analysisLog, setAnalysisLog] = useState<MvtLogEntry[]>([]);
@@ -90,9 +77,6 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
     if (dir) setSelectedPath(dir);
   };
 
-  // Re-discover whenever the source directory changes, so the checkbox
-  // list always reflects what mvt-runner would actually find under it --
-  // not a stale list from a previously selected directory.
   useEffect(() => {
     if (!selectedPath) {
       setBackups([]);
@@ -108,7 +92,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       .then((found) => {
         if (cancelled) return;
         setBackups(found);
-        setSelectedLabels(new Set(found.map((b) => b.label))); // default: everything selected
+        setSelectedLabels(new Set(found.map((b) => b.label)));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -142,8 +126,6 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
     setStartError(null);
     setLogLines([]);
     setFinishResult(null);
-    // A fresh Stage 1 run invalidates any prior Stage 3 result -- it was
-    // for a previous set of backups, not this one.
     setAnalysisResult(null);
     setAnalysisLog([]);
     setAnalysisStartError(null);
@@ -231,9 +213,6 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
         </>
       ) : (
         <>
-          {/* Compact source bar -- replaces the import hero once a directory is
-              picked, so it doesn't keep eating a third of the screen while the
-              actual work (backup list, progress, log) needs the room. */}
           <div className="flex items-center gap-3 bg-surface border border-border rounded-lg px-4 py-3">
             <HardDrive className="text-accent shrink-0" size="1.125rem" />
             <div className="min-w-0 flex-1">
@@ -410,11 +389,6 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
       {(isRunning || logLines.length > 0) && <TerminalLog lines={logLines} live={isRunning} />}
 
-      {/* Stage 3: only offered once Stage 1 has at least one successfully
-          decrypted+scanned backup to analyze. Nothing here happens
-          automatically -- mvt-runner's own summary above is real and
-          already complete on its own; this is a distinct next step, not a
-          continuation of the same run. */}
       {finishResult && runProgress && doneCount > 0 && lastRunWorkspace && (
         <div className="bg-surface border border-border rounded-lg p-6">
           <div className="flex items-center gap-2 mb-3">

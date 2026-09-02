@@ -1,144 +1,33 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Smartphone, CheckCircle2, XCircle, Loader2, Wrench } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
-import type {
-  BackupProgress,
-  DeviceInfo,
-  ToolAcquisitionAction,
-  ToolAvailabilityStatus,
-} from '../../shared/tools/device-backup/types';
-
-/**
- * "Pull from Device" -- the stage-0 alternative to WorkspaceView's existing
- * "Import Directory" flow. Everything here runs through main.ts's IPC
- * handlers; no raw terminal is ever shown to the user even though real
- * shell commands run underneath for tool acquisition -- output is streamed
- * into this panel the same way mvt-runner's own output already is
- * elsewhere in WorkspaceView.
- */
-
-type Phase = 'checking' | 'unavailable' | 'available' | 'acquiring' | 'pulling' | 'pulled';
+import { useDevicePull } from '../../hooks/useDevicePull';
 
 interface DevicePullPanelProps {
   onBackupPulled: (destDir: string) => void;
 }
 
 export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
-  const [sources, setSources] = useState<Array<{ id: string; label: string }>>([]);
-  const [sourceId, setSourceId] = useState<string | null>(null);
-  const [phase, setPhase] = useState<Phase>('checking');
-  const [toolStatus, setToolStatus] = useState<ToolAvailabilityStatus | null>(null);
-  const [actions, setActions] = useState<ToolAcquisitionAction[]>([]);
-  const [acquisitionOutput, setAcquisitionOutput] = useState<string[]>([]);
-  const [acquisitionStep, setAcquisitionStep] = useState<string | null>(null);
-  const [acquisitionError, setAcquisitionError] = useState<string | null>(null);
-
-  const [devices, setDevices] = useState<DeviceInfo[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<DeviceInfo | null>(null);
-  const [destDir, setDestDir] = useState<string | null>(null);
-  const [pullProgress, setPullProgress] = useState<BackupProgress[]>([]);
-  const [pullError, setPullError] = useState<string | null>(null);
-
-  // Load available sources once, select the first (only iOS today, but
-  // this loop doesn't change when a second source is added later).
-  useEffect(() => {
-    window.epoch.listDeviceBackupSources().then((found) => {
-      setSources(found);
-      if (found.length > 0) setSourceId(found[0].id);
-    });
-  }, []);
-
-  const checkTool = async (id: string) => {
-    setPhase('checking');
-    const status = await window.epoch.checkDeviceBackupToolAvailable(id);
-    setToolStatus(status);
-    if (status.available) {
-      setPhase('available');
-      const found = await window.epoch.listConnectedDevices(id);
-      setDevices(found);
-    } else {
-      setPhase('unavailable');
-      const acts = await window.epoch.getToolAcquisitionActions(id);
-      setActions(acts);
-    }
-  };
-
-  useEffect(() => {
-    if (sourceId) checkTool(sourceId);
-  }, [sourceId]);
-
-  useEffect(() => {
-    const unsubStep = window.epoch.onToolAcquisitionStepStarted((label) => {
-      setAcquisitionStep(label);
-      setAcquisitionOutput((prev) => [...prev, `\n--- ${label} ---`]);
-    });
-    const unsubOutput = window.epoch.onToolAcquisitionOutput(({ line }) =>
-      setAcquisitionOutput((prev) => [...prev, line])
-    );
-    const unsubFinished = window.epoch.onToolAcquisitionFinished((result) => {
-      if (result.success) {
-        setAcquisitionStep(null);
-        if (sourceId) checkTool(sourceId);
-      } else {
-        setAcquisitionError(`Failed at: ${result.failedStep}`);
-      }
-    });
-    const unsubProgress = window.epoch.onDeviceBackupProgress((progress) => {
-      setPullProgress((prev) => [...prev, progress]);
-      if (progress.phase === 'done') {
-        setPhase('pulled');
-        if (destDir) onBackupPulled(destDir);
-      } else if (progress.phase === 'error') {
-        setPullError(progress.message);
-      }
-    });
-    return () => {
-      unsubStep();
-      unsubOutput();
-      unsubFinished();
-      unsubProgress();
-    };
-    // destDir/onBackupPulled intentionally omitted -- this subscribes once
-    // for the panel's lifetime; the progress callback reads current values
-    // via closure over state set immediately before pullBackup is invoked.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceId]);
-
-  const runCompileFromSource = async (action: Extract<ToolAcquisitionAction, { kind: 'compile-from-source' }>) => {
-    setPhase('acquiring');
-    setAcquisitionOutput([]);
-    setAcquisitionError(null);
-    // installPrefix is implicit in main.ts's handler via
-    // idevicebackup2InstallPrefix() -- but runToolAcquisitionSteps needs it
-    // explicitly for PKG_CONFIG_PATH threading. The steps themselves were
-    // already built against that same prefix (see buildSteps.ts), so this
-    // just needs *a* consistent value, not a second source of truth; using
-    // the cwd of the last step's parent (buildDir) to derive it would be
-    // fragile, so this reads it back from the first compile step's own
-    // structure instead -- every step in the sequence was generated with
-    // the same prefix baked into its --prefix arg.
-    const prefixArg = action.steps.find((s) => s.args.some((a) => a.startsWith('--prefix=')));
-    const installPrefix = prefixArg?.args.find((a) => a.startsWith('--prefix='))?.slice('--prefix='.length) ?? '';
-    await window.epoch.runToolAcquisitionSteps(action.steps, installPrefix);
-  };
-
-  const handleSelectDestination = async () => {
-    const dir = await window.epoch.selectDeviceBackupDestination();
-    if (dir) setDestDir(dir);
-  };
-
-  const handlePull = async () => {
-    if (!sourceId || !selectedDevice || !destDir) return;
-    setPhase('pulling');
-    setPullProgress([]);
-    setPullError(null);
-    try {
-      await window.epoch.pullDeviceBackup(sourceId, selectedDevice, destDir);
-    } catch (err) {
-      setPullError(err instanceof Error ? err.message : 'Unknown error');
-      setPhase('available');
-    }
-  };
+  const {
+    sources,
+    sourceId,
+    setSourceId,
+    phase,
+    toolStatus,
+    actions,
+    acquisitionOutput,
+    acquisitionStep,
+    acquisitionError,
+    devices,
+    selectedDevice,
+    setSelectedDevice,
+    destDir,
+    pullProgress,
+    pullError,
+    runCompileFromSource,
+    handleSelectDestination,
+    handlePull,
+  } = useDevicePull(onBackupPulled);
 
   if (!sourceId) return null;
 

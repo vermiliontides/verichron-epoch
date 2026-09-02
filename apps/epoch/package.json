@@ -48,13 +48,13 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.5",
     "@typescript-eslint/eslint-plugin": "^8.68.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
     "@typescript-eslint/parser": "^8.68.0",
     "@vitejs/plugin-react": "^4.7.0",
     "electron": "44.0.0",
     "eslint": "^10.9.1",
     "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.11.0",
     "tailwindcss": "^4.1.8",
     "tsx": "4.23.12",
@@ -73,6 +73,7 @@
     "pg": "^8.13.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "zustand": "^5.0.15"
   }
 }

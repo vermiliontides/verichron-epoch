@@ -1,5 +1,5 @@
 import { spawn, execFileSync } from 'child_process';
-import type { BackupProgress, DeviceBackupSource, DeviceInfo, ToolAvailabilityStatus } from '../../../../shared/types/tools';
+import type { BackupProgress, DeviceBackupSource, DeviceInfo, ToolAvailabilityStatus } from '../../../../shared/types/tools.';
 import { bundledToolPath, detectBinary } from '../detection';
 import { idevicebackup2InstallPrefix } from './iosAcquisitionStrategy';
 

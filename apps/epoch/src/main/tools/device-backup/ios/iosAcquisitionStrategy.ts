@@ -1,6 +1,6 @@
 import { app } from 'electron';
 import path from 'path';
-import type { ToolAcquisitionAction, ToolAcquisitionStrategy } from '../../../../shared/types/tools';
+import type { ToolAcquisitionAction, ToolAcquisitionStrategy } from '../../../../shared/types/tools.';
 import { compileFromSourceSteps, compileFromSourceStepsViaWsl, systemPackageInstallCommand } from './buildSteps';
 
 /** Where a self-compiled or downloaded idevicebackup2 ends up, and where

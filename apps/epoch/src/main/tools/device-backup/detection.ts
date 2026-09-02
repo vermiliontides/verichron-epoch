@@ -1,7 +1,7 @@
 import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import type { ToolAvailabilityStatus } from '../../../shared/types/tools';
+import type { ToolAvailabilityStatus } from '../../../shared/types/tools.';
 
 /**
  * Looks for `binaryName` in two places, in order:

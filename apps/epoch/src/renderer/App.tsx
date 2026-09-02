@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import type { PipelineRunRow, StageStatusRow, ForensicRecordRow } from '@verichron/db-reader';
+import React, { useEffect } from 'react';
+import type { PipelineRunRow } from '@verichron/db-reader';
 import { Sidebar, type Section } from './components/layout/Sidebar';
 import { WorkspaceView } from './views/WorkspaceView';
 import { RunsView } from './views/RunsView';
@@ -8,6 +8,7 @@ import { IocsView } from './features/forensics/IocsView';
 import { ReportsView } from './features/reports/ReportsView';
 import { EvidenceTag } from './components/ui/EvidenceTag';
 import { TooltipProvider } from './components/ui/Tooltip';
+import { useEpochStore } from './store/useEpochStore';
 
 function runPhase(run: PipelineRunRow): 'in_progress' | 'finished' {
   return run.finished_at ? 'finished' : 'in_progress';
@@ -16,16 +17,29 @@ function runPhase(run: PipelineRunRow): 'in_progress' | 'finished' {
 const IOC_SOURCE_TYPES = ['mvt_ioc_detection', 'timestamp_anomaly'] as const;
 
 export const App: React.FC = () => {
-  const [section, setSection] = useState<Section>('runs');
-  const [runs, setRuns] = useState<PipelineRunRow[]>([]);
-  const [selectedRun, setSelectedRun] = useState<PipelineRunRow | null>(null);
-  const [stages, setStages] = useState<StageStatusRow[]>([]);
-  const [records, setRecords] = useState<ForensicRecordRow[]>([]);
-  const [recordsLoaded, setRecordsLoaded] = useState(false);
-  const [sourceTypeFilter, setSourceTypeFilter] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [dbStatus, setDbStatus] = useState<'connected' | 'error' | 'unknown'>('unknown');
+  const {
+    section,
+    runs,
+    selectedRun,
+    stages,
+    records,
+    recordsLoaded,
+    sourceTypeFilter,
+    loading,
+    error,
+    dbStatus,
+    setSection,
+    setRuns,
+    setSelectedRun,
+    setStages,
+    setRecords,
+    setRecordsLoaded,
+    setSourceTypeFilter,
+    setLoading,
+    setError,
+    setDbStatus,
+    resetRunState,
+  } = useEpochStore();
 
   useEffect(() => {
     loadRuns();
@@ -49,9 +63,7 @@ export const App: React.FC = () => {
 
   const selectRun = async (run: PipelineRunRow) => {
     setSelectedRun(run);
-    setRecords([]);
-    setRecordsLoaded(false);
-    setSourceTypeFilter(null);
+    resetRunState();
     try {
       const data = await window.epoch.getStageStatus(run.run_id);
       setStages(data);

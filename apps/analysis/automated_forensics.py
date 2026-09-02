@@ -42,6 +42,10 @@ import sys
 from pathlib import Path
 
 from runtime_env import fatal_if_missing_venv
+from etl_run import ETLRunResult
+from db_writer import ingest
+from normalized_record import NormalizedRecord, SourceType
+import psycopg2
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, UTC
@@ -58,11 +62,17 @@ OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"  # cheap connectivity check
 DEFAULT_MODEL_NAME = "llama3:8b-instruct-q4_K_M"
 DEFAULT_MAX_CONCURRENT_CHUNKS = 1
 
-DIR_MAY28 = "./results/iPhone_16_Pro_Max_20260528_44GB"
-DIR_JUNE01 = "./results/iPhone_16_Pro_Max_20260601_26GB"
-FINAL_REPORT_PATH = "comprehensive_forensic_report.md"
-CHECKPOINT_DB_PATH = "forensic_checkpoint.sqlite3"
+# Output filenames, scoped under --results-path/automated_forensics/ at
+# runtime (see main()) so that analyzing two different backups never share
+# -- and silently corrupt -- one checkpoint DB or report. Originally these
+# were bare relative paths pointing at one hardcoded investigation's
+# directory (./results/iPhone_16_Pro_Max_20260528_44GB); --results-path
+# replaces that now that this runs as an orchestrator stage instead of a
+# one-off script.
+FINAL_REPORT_FILENAME = "comprehensive_forensic_report.md"
+CHECKPOINT_DB_FILENAME = "forensic_checkpoint.sqlite3"
 LOG_PATH = "automated_forensics.log"
+
 
 MAX_ATTEMPTS_PER_CHUNK = 3
 RETRY_BACKOFF_SECONDS = 5  # paced sleep on failure, so a struggling/restarting
@@ -111,7 +121,7 @@ log = setup_logging()
 # CHECKPOINT STORE (SQLite)
 # ----------------------------------------------------------------------------
 
-def init_checkpoint_db(db_path: str = CHECKPOINT_DB_PATH) -> sqlite3.Connection:
+def init_checkpoint_db(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.execute(
         """
@@ -275,6 +285,63 @@ def collect_flagged_rows(conn: sqlite3.Connection, file_name: str) -> list[str]:
         rows.extend(json.loads(result_json))
     return rows
 
+
+def flagged_row_to_record(raw_row: str) -> NormalizedRecord:
+    """One LLM-flagged markdown table row -> one NormalizedRecord.
+
+    The row is kept verbatim in `fields.raw_finding` rather than parsed
+    into separate columns: the LLM's own output format is
+    `| PID | Process | Severity | Reasoning |`-shaped prose, not a stable
+    machine schema, and re-parsing model output text into typed fields
+    would be presenting a guess as structured fact. incident_id and
+    process/bundle identity are left unset for the same reason -- this
+    is a judgment call about a chunk of already-normalized mvt output,
+    not a fresh primary-source parse the way alert_to_record's
+    mvt_ioc_detection is (see apps/extractors/mvt_iocs/main.py, which
+    this deliberately does not imitate for that field).
+    """
+    return NormalizedRecord(
+        incident_id=None,
+        source_type=SourceType.LLM_FLAGGED_ANOMALY,
+        event_time=None,
+        bug_type=None,
+        process_name=None,
+        pid=None,
+        bundle_id=None,
+        fields={"raw_finding": raw_row},
+    )
+
+
+def ingest_file_findings(
+    pg_conn,
+    run_id: str,
+    file_path: str,
+    checkpoint_conn: sqlite3.Connection,
+    filename: str,
+) -> ETLRunResult:
+    """Writes this file's flagged findings (if any) to Postgres, once the
+    file's chunks are all done being analyzed. One ingest() unit per file,
+    same granularity as mvt_iocs's process_alerts/process_timeline, so a
+    file with zero flagged rows still gets a completed ledger entry (an
+    empty result is still a real, dedup-able result -- not the same as
+    never having checked).
+    """
+    result = ETLRunResult()
+    record_count = 0
+    try:
+        with ingest(pg_conn, run_id, file_path, source_type=SourceType.LLM_FLAGGED_ANOMALY.value) as unit:
+            if unit.already_ingested:
+                return result  # dedup: a prior run already finished this file
+            raw_rows = collect_flagged_rows(checkpoint_conn, filename)
+            records = [flagged_row_to_record(row) for row in raw_rows]
+            record_count = len(records)
+            unit.write(records)
+    except Exception as e:
+        result.fail(filename, f"could not ingest LLM findings ({e})")
+        return result
+    result.ok(record_count)
+    return result
+
 # ----------------------------------------------------------------------------
 # CHUNKING & PARSING HELPERS
 # ----------------------------------------------------------------------------
@@ -366,33 +433,50 @@ def query_local_llm(log_chunk: str, schema_keys: list[str], model_name: str) -> 
 # DIFFERENTIAL ANALYSIS & REPORTING (unchanged in spirit, not chunked, cheap to redo)
 # ----------------------------------------------------------------------------
 
-def run_differential_analysis() -> list[str]:
-    if not os.path.exists(DIR_MAY28) or not os.path.exists(DIR_JUNE01):
+def run_differential_analysis(results_dir: str, diff_baseline: str | None) -> list[str]:
+    """Compares `results_dir` (this run's backup) against `diff_baseline`
+    (an earlier snapshot of the same device, if the caller has one) to
+    flag files that vanished or shrank dramatically between the two --
+    classic anti-forensic wipe/tamper signatures. Optional: with no
+    baseline to compare against, this phase is skipped entirely rather
+    than erroring, since a single-backup analysis run has nothing to diff
+    against by definition.
+    """
+    if diff_baseline is None:
+        return []
+    if not os.path.exists(results_dir) or not os.path.exists(diff_baseline):
         return ["| N/A | Baseline Error | HIGH | Results directory mapping missing. |"]
 
     tampering_alerts = []
-    may_files = {f for f in os.listdir(DIR_MAY28) if f.endswith(".json")}
-    june_files = {f for f in os.listdir(DIR_JUNE01) if f.endswith(".json")}
+    current_files = {f for f in os.listdir(results_dir) if f.endswith(".json")}
+    baseline_files = {f for f in os.listdir(diff_baseline) if f.endswith(".json")}
 
-    for f in may_files - june_files:
-        tampering_alerts.append(f"| N/A | `{f}` | CRITICAL | File present on May 28, but MISSING on June 01. |")
+    for f in baseline_files - current_files:
+        tampering_alerts.append(f"| N/A | `{f}` | CRITICAL | File present in baseline, but MISSING in this run. |")
 
-    for f in may_files & june_files:
-        path_may = os.path.join(DIR_MAY28, f)
-        path_june = os.path.join(DIR_JUNE01, f)
-        size_may = os.path.getsize(path_may)
-        size_june = os.path.getsize(path_june)
-        if size_june < (size_may * 0.5) and size_may > 1024:
-            tampering_alerts.append(f"| N/A | `{f}` | HIGH | File size dropped significantly from {size_may} to {size_june} bytes. |")
+    for f in baseline_files & current_files:
+        path_baseline = os.path.join(diff_baseline, f)
+        path_current = os.path.join(results_dir, f)
+        size_baseline = os.path.getsize(path_baseline)
+        size_current = os.path.getsize(path_current)
+        if size_current < (size_baseline * 0.5) and size_baseline > 1024:
+            tampering_alerts.append(f"| N/A | `{f}` | HIGH | File size dropped significantly from {size_baseline} to {size_current} bytes. |")
 
     return tampering_alerts
 
-def write_final_report(conn: sqlite3.Connection, differential_alerts: list[str], all_files: list[str]) -> None:
-    with open(FINAL_REPORT_PATH, "w", encoding="utf-8") as repo:
+def write_final_report(
+    conn: sqlite3.Connection,
+    report_path: str,
+    results_dir: str,
+    diff_baseline: str | None,
+    differential_alerts: list[str],
+    all_files: list[str],
+) -> None:
+    with open(report_path, "w", encoding="utf-8") as repo:
         repo.write("# Comprehensive iOS Forensic Anomaly Report\n")
         repo.write("**Target Device:** iPhone 16 Pro Max  \n")
-        repo.write(f"**Primary Baseline:** `{DIR_MAY28}`  \n")
-        repo.write(f"**Comparative Target:** `{DIR_JUNE01}`  \n\n")
+        repo.write(f"**Primary Baseline:** `{results_dir}`  \n")
+        repo.write(f"**Comparative Target:** `{diff_baseline or '(none -- single-backup run)'}`  \n\n")
 
         # --- Honesty section: what's actually complete vs. outstanding ---
         repo.write("## Analysis Completeness\n\n")
@@ -451,6 +535,11 @@ def write_final_report(conn: sqlite3.Connection, differential_alerts: list[str],
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="LLM-assisted triage over MVT log output.")
+    parser.add_argument("--run-id", required=True, help="Pipeline run ID (orchestrator passes this automatically).")
+    parser.add_argument("--backup-path", default=None, help="Accepted for contract consistency with every other stage; unused here (--results-path is what this stage actually reads).")
+    parser.add_argument("--db-url", required=True, help="Postgres connection string for writing flagged findings.")
+    parser.add_argument("--results-path", type=str, required=True, help="mvt-runner's results/<n>/ output directory to analyze (orchestrator passes this automatically).")
+    parser.add_argument("--diff-baseline", type=str, default=None, help="Optional: an earlier results/<n>/ snapshot of the same device, to flag files that vanished or shrank between the two runs. Skipped entirely if omitted.")
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL_NAME, help="Ollama model name to run.")
     parser.add_argument("--max-concurrent", type=int, default=DEFAULT_MAX_CONCURRENT_CHUNKS, help="Max concurrent request threads.")
     parser.add_argument("--remodel", action="store_true", help="Re-queue chunks processed under a different model.")
@@ -484,7 +573,17 @@ def process_file(conn: sqlite3.Connection, filename: str, chunks: list[str], sch
 def main() -> None:
     fatal_if_missing_venv()
     args = parse_args()
-    conn = init_checkpoint_db()
+
+    # Scoped under results-path/automated_forensics/ so two different
+    # backups' checkpoint DBs and reports never collide -- see the module
+    # docstring's note on why that matters (a shared checkpoint DB would
+    # silently reuse chunk verdicts from an unrelated backup's data).
+    output_dir = os.path.join(args.results_path, "automated_forensics")
+    os.makedirs(output_dir, exist_ok=True)
+    checkpoint_db_path = os.path.join(output_dir, CHECKPOINT_DB_FILENAME)
+    report_path = os.path.join(output_dir, FINAL_REPORT_FILENAME)
+
+    conn = init_checkpoint_db(checkpoint_db_path)
 
     stale = stale_model_chunk_counts(conn, args.model)
     if stale:
@@ -496,7 +595,7 @@ def main() -> None:
             log.warning(f"{sum(c for _, c in stale)} chunk(s) were analyzed under a different model ({stale_desc}). Pass --remodel to reprocess.")
 
     log.info("Phase 1: Gathering differential statistics")
-    differential_alerts = run_differential_analysis()
+    differential_alerts = run_differential_analysis(args.results_path, args.diff_baseline)
     if differential_alerts:
         log.warning(f"{len(differential_alerts)} differential alert(s) found")
 
@@ -511,15 +610,15 @@ def main() -> None:
         sys.exit(1)
     log.info("Ollama connectivity check passed")
 
-    if not os.path.exists(DIR_MAY28):
-        log.error(f"Baseline directory missing: {DIR_MAY28}")
+    if not os.path.exists(args.results_path):
+        log.error(f"Results directory missing: {args.results_path}")
         sys.exit(1)
 
-    all_json_files = sorted([f for f in os.listdir(DIR_MAY28) if f.endswith(".json")])
+    all_json_files = sorted([f for f in os.listdir(args.results_path) if f.endswith(".json")])
     log.info(f"Phase 2: Analyzing {len(all_json_files)} file(s) with model '{args.model}' (Concurrency: {args.max_concurrent})")
 
     for filename in all_json_files:
-        file_path = os.path.join(DIR_MAY28, filename)
+        file_path = os.path.join(args.results_path, filename)
         chunk_size = get_chunk_size(filename)
         schema_keys = extract_schema_keys(file_path)
         chunks = chunk_log_file(file_path, chunk_size)
@@ -546,10 +645,37 @@ def main() -> None:
         process_file(conn, filename, chunks, schema_keys, outstanding, args.model, args.max_concurrent)
         # Report is rewritten after every file so progress is never lost,
         # and it always reflects true per-chunk completeness, not a guess.
-        write_final_report(conn, differential_alerts, all_json_files)
+        write_final_report(conn, report_path, args.results_path, args.diff_baseline, differential_alerts, all_json_files)
 
     log.info("Phase 3: Finalizing forensic report")
-    write_final_report(conn, differential_alerts, all_json_files)
+    write_final_report(conn, report_path, args.results_path, args.diff_baseline, differential_alerts, all_json_files)
+
+    # Phase 4: write flagged findings to Postgres. A separate pass over
+    # every file, not folded into the Phase 2 loop above, because a file
+    # can be "complete" without having gone through process_file() in
+    # THIS invocation -- it may have finished analysis in an earlier run
+    # and hit the `continue` above. ingest()'s dedup is keyed by file
+    # content hash, independent of the SQLite chunk checkpoint, so this
+    # correctly re-attempts Postgres ingestion for a file whose LLM
+    # analysis finished previously but whose DB write never landed (e.g.
+    # Postgres was unreachable last time), without re-running any chunks.
+    log.info("Phase 4: Writing flagged findings to Postgres")
+    ingest_result = ETLRunResult()
+    try:
+        pg_conn = psycopg2.connect(args.db_url)
+    except Exception as e:
+        log.error(f"could not connect to database: {e}")
+        conn.close()
+        sys.exit(1)
+    try:
+        for filename in all_json_files:
+            if not file_completion_summary(conn, filename)["complete"]:
+                continue
+            file_path = os.path.join(args.results_path, filename)
+            ingest_result = ingest_result.merge(ingest_file_findings(pg_conn, args.run_id, file_path, conn, filename))
+    finally:
+        pg_conn.close()
+    ingest_result.print_summary("automated_forensics")
 
     # --- Run summary ---
     log.info("=" * 60)
@@ -568,11 +694,17 @@ def main() -> None:
             )
     else:
         log.info("All files fully analyzed.")
-    log.info(f"Report: {FINAL_REPORT_PATH}")
-    log.info(f"Checkpoint DB: {CHECKPOINT_DB_PATH} (safe to inspect with sqlite3 directly)")
+    log.info(f"Report: {report_path}")
+    log.info(f"Checkpoint DB: {checkpoint_db_path} (safe to inspect with sqlite3 directly)")
     log.info("=" * 60)
 
     conn.close()
+    # Analysis chunks can be incomplete (Ollama down mid-run, etc.) without
+    # that being this stage's failure to report to orchestrator -- resuming
+    # later is the documented recovery path. What DOES make this stage fail
+    # is Postgres ingestion itself failing, the same bar every other stage
+    # in the pipeline uses.
+    sys.exit(ingest_result.exit_code)
 
 if __name__ == "__main__":
     fatal_if_missing_venv()

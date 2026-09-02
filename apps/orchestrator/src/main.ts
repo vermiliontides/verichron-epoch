@@ -71,6 +71,7 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 const EXTRACTORS_DIR = path.join(REPO_ROOT, "apps", "extractors");
 const REPORTING_DIR = path.join(REPO_ROOT, "apps", "reporting");
+const ANALYSIS_DIR = path.join(REPO_ROOT, "apps", "analysis");
 
 interface StageManifest {
   entrypoint: string;
@@ -133,7 +134,10 @@ async function loadStageFromDir(dir: string, name: string): Promise<StageDefinit
 
 /**
  * Discovers every enabled stage from disk: each subdirectory of
- * apps/extractors/ with a stage.json, plus apps/reporting/ itself.
+ * apps/extractors/ with a stage.json, plus apps/reporting/ and
+ * apps/analysis/ themselves (both live outside apps/extractors/ as their
+ * own uv workspace members -- see root pyproject.toml -- so each is
+ * special-cased here the same way, rather than moved to fit the glob).
  * Fails fast (before any stage runs) on: an invalid manifest, a missing
  * entrypoint file, two enabled stages sharing an `order` value, or an
  * extractor stage whose `order` is not strictly less than the reporting
@@ -145,6 +149,7 @@ async function discoverStages(): Promise<StageDefinition[]> {
   const candidateDirs = extractorEntries
     .filter((e) => e.isDirectory())
     .map((e) => ({ dir: path.join(EXTRACTORS_DIR, e.name), name: e.name }));
+  candidateDirs.push({ dir: ANALYSIS_DIR, name: path.basename(ANALYSIS_DIR) });
   candidateDirs.push({ dir: REPORTING_DIR, name: path.basename(REPORTING_DIR) });
 
   const loaded = await Promise.all(candidateDirs.map((c) => loadStageFromDir(c.dir, c.name)));

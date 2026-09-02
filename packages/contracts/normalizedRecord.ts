@@ -29,6 +29,7 @@ export const SourceType = z.enum([
   "mvt_ioc_detection",
   "timestamp_anomaly",
   "ileapp_record",
+  "llm_flagged_anomaly",
   // END SOURCE_TYPE
 ]);
 

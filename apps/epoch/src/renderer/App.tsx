@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import type { PipelineRunRow } from '@verichron/db-reader';
 import { Sidebar, type Section } from './components/layout/Sidebar';
 import { WorkspaceView } from './views/WorkspaceView';
@@ -41,11 +41,7 @@ export const App: React.FC = () => {
     resetRunState,
   } = useEpochStore();
 
-  useEffect(() => {
-    loadRuns();
-  }, []);
-
-  const loadRuns = async () => {
+  const loadRuns = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -59,7 +55,11 @@ export const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setLoading, setError, setRuns, setDbStatus]);
+
+  useEffect(() => {
+    loadRuns();
+  }, [loadRuns]);
 
   const selectRun = async (run: PipelineRunRow) => {
     setSelectedRun(run);
@@ -104,7 +104,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const nonIocRecords = records.filter((r) => !IOC_SOURCE_TYPES.includes(r.source_type as any));
+  const nonIocRecords = records.filter((r) => !(IOC_SOURCE_TYPES as readonly string[]).includes(r.source_type));
   const availableSourceTypes = Array.from(new Set(nonIocRecords.map((r) => r.source_type))).sort();
   const visibleRecords = sourceTypeFilter
     ? nonIocRecords.filter((r) => r.source_type === sourceTypeFilter)

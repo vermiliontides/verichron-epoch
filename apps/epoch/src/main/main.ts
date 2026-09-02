@@ -15,7 +15,7 @@ console.log('\n=======================================');
 console.log('MAIN PROCESS IS EXECUTING!');
 console.log('=======================================\n');
 
-dotenv.config({ path: '../../../.env' });
+loadEnv({ path: '../../../.env' });
 
 process.on('uncaughtException', (error) => {
   console.error('\n--- FATAL UNCAUGHT EXCEPTION ---');

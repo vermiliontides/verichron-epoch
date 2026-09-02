@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { spawn } from 'child_process';
 import { listDeviceBackupSources, getDeviceBackupSource, getAcquisitionStrategy } from '../tools/device-backup/registry';
-import type { DeviceInfo, ToolAcquisitionCommand } from '../../shared/types/tools';
+import type { DeviceInfo, ToolAcquisitionCommand, BackupProgress } from '../../shared/types/tools';
 
 export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null) {
   function sendToRenderer(channel: string, ...args: unknown[]) {
@@ -59,7 +59,7 @@ export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null
 
       deviceBackupInFlight = true;
       try {
-        return await source.pullBackup(device, destDir, (progress) => {
+        return await source.pullBackup(device, destDir, (progress: BackupProgress) => {
           sendToRenderer('epoch:deviceBackupProgress', progress);
         });
       } finally {

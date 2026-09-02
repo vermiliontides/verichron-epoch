@@ -19,7 +19,6 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
   const [open, setOpen] = useState(defaultOpen);
   const [stickToBottom, setStickToBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const unseenCountRef = useRef(0);
   const [unseenCount, setUnseenCount] = useState(0);
 
   // Auto-scroll runs on every new line, but only while the panel is open
@@ -29,8 +28,14 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
   // something mid-run.
   useEffect(() => {
     if (!open) {
-      unseenCountRef.current += 1;
-      setUnseenCount(unseenCountRef.current);
+      // Functional updater, not a ref: each effect firing needs the count
+      // from the PREVIOUS firing, not whatever `unseenCount` closed over
+      // when this effect was created -- the updater form gets that
+      // without needing a ref to smuggle the current value across
+      // renders (which is itself a rule-of-hooks violation: refs can't
+      // be mutated during render, and this component's `open`-transition
+      // reset below runs during render).
+      setUnseenCount((prev) => prev + 1);
       return;
     }
     if (stickToBottom && scrollRef.current) {
@@ -53,7 +58,6 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
   if (open !== prevOpenForReset) {
     setPrevOpenForReset(open);
     if (open) {
-      unseenCountRef.current = 0;
       setUnseenCount(0);
     }
   }

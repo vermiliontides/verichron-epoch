@@ -67,7 +67,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               <p className="text-sm font-medium text-foreground mb-3">{action.title}</p>
               {action.kind === 'install-instructions' && (
                 <div className="bg-background rounded-md p-3 font-mono text-xs text-muted-foreground">
-                  {action.commands.map((c, j) => (
+                  {action.commands.map((c: string, j: number) => (
                     <div key={j}>{c}</div>
                   ))}
                 </div>

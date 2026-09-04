@@ -8,7 +8,8 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   unrs-resolver: true
-  node-linker: 
+  node-linker: true
+
 
 catalog:
   # Compiler — pinned exact, not caret. typescript-eslint's peer range

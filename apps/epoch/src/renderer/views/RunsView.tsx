@@ -41,6 +41,7 @@ interface RunsViewProps {
   stages: StageStatusRow[];
   onSelectRun: (run: PipelineRunRow) => void;
   onRefreshStages?: (runId: string) => void;
+  onRefreshRun?: (runId: string) => void | Promise<void>;
 }
  
 const thClass =
@@ -86,24 +87,32 @@ function RunsTableSkeleton() {
   );
 }
  
-export function RunsView({ runs, loading, error, selectedRun, stages, onSelectRun, onRefreshStages }: RunsViewProps) {
-  // Polling effect for in-progress runs
+export function RunsView({
+  runs,
+  loading,
+  error,
+  selectedRun,
+  stages,
+  onSelectRun,
+  onRefreshStages,
+  onRefreshRun,
+}: RunsViewProps) {
   useEffect(() => {
     const hasInProgressRun = runs.some(run => runPhase(run) === 'in_progress');
     if (!hasInProgressRun || !selectedRun) return;
 
     const interval = setInterval(async () => {
       try {
-        if (onRefreshStages) {
-          onRefreshStages(selectedRun.run_id);
-        }
+        await onRefreshRun?.(selectedRun.run_id);
+        onRefreshStages?.(selectedRun.run_id);
       } catch (err) {
-        console.error('Failed to poll stage status:', err);
+        console.error('Failed to poll run status:', err);
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [runs, selectedRun, onRefreshStages]);
+  }, [runs, selectedRun, onRefreshRun, onRefreshStages]);
+
 
   return (
     <div className="flex flex-1 min-h-0 divide-x divide-border h-full overflow-hidden">

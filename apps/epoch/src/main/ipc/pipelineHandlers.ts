@@ -13,6 +13,7 @@ const PASSWORD_PROMPT_RE = /password for (.+): $/;
 
 export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | null, repoRoot: string) {
   let runningMvtProcess: ChildProcessWithoutNullStreams | null = null;
+  let runningOrchestratorProcess: ChildProcessWithoutNullStreams | null = null;
   let pendingPasswordResolve: ((password: string) => void) | null = null;
 
   function sendToRenderer(channel: string, ...args: unknown[]) {
@@ -43,6 +44,18 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
           sendToRenderer('epoch:mvtPasswordRequired', match[1]);
           pending = '';
         }
+      }
+    };
+  }
+
+  function makeOrchestratorStreamBuffer(stream: 'stdout' | 'stderr') {
+    let pending = '';
+    return (chunk: Buffer) => {
+      pending += chunk.toString('utf-8');
+      const lines = pending.split('\n');
+      pending = lines.pop() ?? '';
+      for (const line of lines) {
+        sendToRenderer('epoch:orchestratorLog', { stream, line });
       }
     };
   }
@@ -108,5 +121,36 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
     const resolve = pendingPasswordResolve;
     pendingPasswordResolve = null;
     resolve(password);
+  });
+
+  ipcMain.handle('epoch:startAnalysis', async (_event, workspace: string) => {
+    if (runningOrchestratorProcess) {
+      throw new Error('The orchestrator is already running -- wait for analysis to finish before starting another.');
+    }
+    if (!workspace || !workspace.trim()) {
+      throw new Error('An analysis workspace is required.');
+    }
+
+    const child = spawn(
+      'pnpm',
+      ['--filter', '@verichron/orchestrator', 'investigate', '--', '--workspace', workspace.trim()],
+      { cwd: repoRoot, stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    runningOrchestratorProcess = child;
+
+    child.stdout.on('data', makeOrchestratorStreamBuffer('stdout'));
+    child.stderr.on('data', makeOrchestratorStreamBuffer('stderr'));
+
+    child.on('error', (err) => {
+      runningOrchestratorProcess = null;
+      sendToRenderer('epoch:orchestratorFinished', { success: false, error: err.message });
+    });
+
+    child.on('close', (code) => {
+      runningOrchestratorProcess = null;
+      sendToRenderer('epoch:orchestratorFinished', { success: code === 0, exitCode: code });
+    });
+
+    return { started: true };
   });
 }

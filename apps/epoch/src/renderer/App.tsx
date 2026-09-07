@@ -85,6 +85,19 @@ export const App: React.FC = () => {
     }
   };
 
+  const refreshRun = useCallback(async (runId: string) => {
+    try {
+      const data = await window.epoch.getPipelineRuns();
+      setRuns(data);
+      const refreshedRun = data.find((run) => run.run_id === runId);
+      if (refreshedRun) setSelectedRun(refreshedRun);
+      setDbStatus('connected');
+    } catch (err) {
+      console.error('Failed to refresh run:', err);
+      setDbStatus('error');
+    }
+  }, [setDbStatus, setRuns, setSelectedRun]);
+
   const loadRecords = async (run: PipelineRunRow) => {
     try {
       const data = await window.epoch.getForensicRecords(run.run_id);
@@ -137,6 +150,7 @@ export const App: React.FC = () => {
                 stages={stages}
                 onSelectRun={selectRun}
                 onRefreshStages={refreshStages}
+                onRefreshRun={refreshRun}
               />
             )}
 

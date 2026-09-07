@@ -184,6 +184,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
   const failedCount = failedBackups?.length ?? (runProgress
     ? runProgress.order.filter((l) => runProgress.byLabel[l].overall === 'failed').length
     : 0);
+  const analysisFailedCount = analysisResult?.analysis?.filter((result) => result.status === 'failed').length ?? 0;
 
   return (
     <div className="flex-1 flex flex-col p-8 max-w-4xl mx-auto w-full min-h-full gap-6">
@@ -422,7 +423,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
           {analysisResult && (
             <div>
-              {analysisResult.success ? (
+              {analysisResult.success && analysisFailedCount === 0 ? (
                 <>
                   <p className="text-sm text-accent flex items-center gap-2 mb-3">
                     <CheckCircle2 size="1rem" /> Analysis complete.
@@ -449,7 +450,10 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
               ) : (
                 <div>
                   <p className="text-sm text-danger flex items-center gap-2">
-                    <XCircle size="1rem" /> Analysis failed{analysisResult.error ? `: ${analysisResult.error}` : '.'}
+                    <XCircle size="1rem" />
+                    {analysisFailedCount > 0
+                      ? `Analysis completed with ${analysisFailedCount} investigation${analysisFailedCount === 1 ? '' : 's'} needing attention.`
+                      : `Analysis failed${analysisResult.error ? `: ${analysisResult.error}` : '.'}`}
                   </p>
                   {analysisResult.analysis && (
                     <p className="text-xs text-muted-foreground mt-1">

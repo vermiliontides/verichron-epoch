@@ -86,10 +86,24 @@ export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null
       for (const step of steps) {
         sendToRenderer('epoch:toolAcquisitionStepStarted', step.label);
         const pkgConfigPath = path.join(installPrefix, 'lib', 'pkgconfig');
-        const env = {
+        
+        // Base environment configuration preserving PKG_CONFIG_PATH
+        const env: NodeJS.ProcessEnv = {
           ...process.env,
           PKG_CONFIG_PATH: [pkgConfigPath, process.env.PKG_CONFIG_PATH].filter(Boolean).join(path.delimiter),
         };
+
+        // macOS-specific PATH injection for Homebrew and libtool
+        if (process.platform === 'darwin') {
+          const macPaths = [
+            '/opt/homebrew/bin',
+            '/usr/local/bin',
+            '/opt/homebrew/opt/libtool/bin',
+            '/usr/local/opt/libtool/bin'
+          ].join(':');
+          
+          env.PATH = env.PATH ? `${macPaths}:${env.PATH}` : macPaths;
+        }
 
         const exitCode = await new Promise<number>((resolve, reject) => {
           const child = spawn(step.command, step.args, { cwd: step.cwd, env });

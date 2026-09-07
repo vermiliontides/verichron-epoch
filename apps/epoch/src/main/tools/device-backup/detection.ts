@@ -19,8 +19,14 @@ import type { ToolAvailabilityStatus } from '../../../shared/types/tools';
  * somewhere" -- so a caller can spawn it directly without re-resolving.
  */
 export function detectBinary(binaryName: string, bundledPath?: string): ToolAvailabilityStatus {
-  if (bundledPath && fs.existsSync(bundledPath)) {
-    return { available: true, path: bundledPath };
+  if (bundledPath) {
+    try {
+      if (fs.statSync(bundledPath).isFile()) {
+        return { available: true, path: bundledPath };
+      }
+    } catch {
+      // Stat error means the file is unavailable; fallback to PATH lookup
+    }
   }
 
   try {
@@ -54,7 +60,7 @@ export function detectBinary(binaryName: string, bundledPath?: string): ToolAvai
  * keeps a Windows binary, a macOS binary, and a Linux binary from ever
  * colliding in the same install. */
 export function bundledToolPath(resourcesPath: string, toolName: string): string {
-  const platformDir = `${process.platform}-${process.arch}`;
-  const exeName = process.platform === 'win32' ? `${toolName}.exe` : toolName;
-  return path.join(resourcesPath, 'bin', platformDir, exeName);
+  const isWindows = process.platform === 'win32';
+  const executableName = isWindows ? `${toolName}.exe` : toolName;
+  return path.join(resourcesPath, 'bin', executableName);
 }

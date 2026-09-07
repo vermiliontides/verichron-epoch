@@ -27,6 +27,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
     runCompileFromSource,
     handleSelectDestination,
     handlePull,
+    checkAvailability,
   } = useDevicePull(onBackupPulled);
 
   if (!sourceId) return null;
@@ -62,6 +63,13 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           <p className="text-sm text-flag flex items-center gap-2 mb-4">
             <XCircle size="1rem" /> iPhone import is not set up on this computer yet.
           </p>
+
+          {acquisitionError && (
+            <div className="bg-flag/10 border border-flag rounded-md p-3 text-sm text-flag mb-4">
+              <strong>Error:</strong> {acquisitionError}
+            </div>
+          )}
+
           {actions.map((action, i) => (
             <div key={i} className="border border-border rounded-md p-4 mb-3">
               <p className="text-sm font-medium text-foreground mb-1">
@@ -78,21 +86,27 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                   ? 'Epoch can prepare the required components locally on this computer.'
                   : 'A verified package can provide the components needed for direct iPhone import.'}
               </p>
+              
               {action.kind === 'install-instructions' && (
-                <div className="bg-background rounded-md p-3 font-mono text-xs text-muted-foreground">
-                  {action.commands.map((c: string, j: number) => (
-                    <div key={j}>{c}</div>
-                  ))}
-                </div>
+                <details className="mt-2 text-sm text-muted-foreground">
+                  <summary className="font-medium cursor-pointer">Technical prerequisite instructions</summary>
+                  <div className="bg-background rounded-md p-3 font-mono text-xs text-muted-foreground mt-2">
+                    {action.commands.map((c: string, j: number) => (
+                      <div key={j}>{c}</div>
+                    ))}
+                  </div>
+                </details>
               )}
+
               {action.kind === 'compile-from-source' && (
                 <button
                   onClick={() => runCompileFromSource(action)}
                   className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 px-4 py-2 rounded-md text-xs font-medium"
                 >
-                  <Wrench size="0.875rem" /> Build automatically
+                  <Wrench size="0.875rem" /> {acquisitionError ? 'Retry setup' : 'Build automatically'}
                 </button>
               )}
+
               {action.kind === 'download-verified-release' && (
                 <p className="text-xs text-muted-foreground italic">
                   This option is not available yet. You can import an existing backup folder below instead.
@@ -100,6 +114,15 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               )}
             </div>
           ))}
+          
+          <div className="mt-4">
+            <button
+              onClick={checkAvailability}
+              className="flex items-center gap-2 bg-background border border-border hover:bg-background/80 px-4 py-2 rounded-md text-xs font-medium text-foreground transition-colors"
+            >
+              Check again
+            </button>
+          </div>
         </div>
       )}
 
@@ -111,7 +134,6 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           <pre className="bg-background border border-border rounded-md p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-48 text-muted-foreground">
             {acquisitionOutput.join('\n')}
           </pre>
-          {acquisitionError && <p className="text-sm text-flag mt-3">{acquisitionError}</p>}
         </div>
       )}
 

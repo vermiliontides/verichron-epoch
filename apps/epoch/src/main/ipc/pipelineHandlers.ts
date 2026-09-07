@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { discoverBackups, type Backup } from '@verichron/contracts';
+import type { MvtFinishedResult } from '../../shared/types/window';
 
 interface StartPipelineOptions {
   workspace?: string;

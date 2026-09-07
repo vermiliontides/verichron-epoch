@@ -184,6 +184,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
   const failedCount = failedBackups?.length ?? (runProgress
     ? runProgress.order.filter((l) => runProgress.byLabel[l].overall === 'failed').length
     : 0);
+  const analysisFailedCount = analysisResult?.analysis?.filter((result) => result.status === 'failed').length ?? 0;
 
   return (
     <div className="flex-1 flex flex-col p-8 max-w-4xl mx-auto w-full min-h-full gap-6">
@@ -422,11 +423,22 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
           {analysisResult && (
             <div>
-              {analysisResult.success ? (
+              {analysisResult.success && analysisFailedCount === 0 ? (
                 <>
                   <p className="text-sm text-accent flex items-center gap-2 mb-3">
                     <CheckCircle2 size="1rem" /> Analysis complete.
                   </p>
+                  {analysisResult.analysis && (
+                    <p className="text-xs text-muted-foreground mb-3">
+                      {analysisResult.analysis.filter((result) => result.status === 'succeeded').length} investigation
+                      {analysisResult.analysis.filter((result) => result.status === 'succeeded').length === 1 ? '' : 's'}
+                      analyzed
+                      {analysisResult.analysis.filter((result) => result.status === 'skipped').length > 0
+                        ? `, ${analysisResult.analysis.filter((result) => result.status === 'skipped').length} already up to date`
+                        : ''}
+                      .
+                    </p>
+                  )}
                   <button
                     onClick={onAnalysisComplete}
                     className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 px-4 py-2 rounded-md font-medium text-sm transition-colors"
@@ -438,8 +450,18 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
               ) : (
                 <div>
                   <p className="text-sm text-danger flex items-center gap-2">
-                    <XCircle size="1rem" /> Analysis failed{analysisResult.error ? `: ${analysisResult.error}` : '.'}
+                    <XCircle size="1rem" />
+                    {analysisFailedCount > 0
+                      ? `Analysis completed with ${analysisFailedCount} investigation${analysisFailedCount === 1 ? '' : 's'} needing attention.`
+                      : `Analysis failed${analysisResult.error ? `: ${analysisResult.error}` : '.'}`}
                   </p>
+                  {analysisResult.analysis && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {analysisResult.analysis.filter((result) => result.status === 'failed').length} investigation
+                      {analysisResult.analysis.filter((result) => result.status === 'failed').length === 1 ? '' : 's'}
+                      need attention.
+                    </p>
+                  )}
                   <button onClick={handleStartAnalysis} className="text-xs text-accent hover:underline mt-2">
                     Try again
                   </button>

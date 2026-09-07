@@ -26,6 +26,7 @@ interface StartPipelineOptions {
 }
  
 const dbApi = {
+  platform: process.platform,
   selectBackupDirectory: () => ipcRenderer.invoke('epoch:selectBackupDirectory'),
   selectDeviceBackupDestination: (): Promise<string | null> => ipcRenderer.invoke('epoch:selectDeviceBackupDestination'),
   discoverBackups: (source: string): Promise<Backup[]> => ipcRenderer.invoke('epoch:discoverBackups', source),

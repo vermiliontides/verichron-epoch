@@ -53,13 +53,7 @@ const createWindow = (): void => {
     width: 1400,
     height: 900,
     webPreferences: {
-      // vite.preload.config.mts builds this with `formats: ['es']`, which
-      // Vite names preload.mjs, not preload.js -- Electron doesn't guess
-      // extensions for this path, so a mismatch here means the preload
-      // script silently never loads and contextBridge.exposeInMainWorld
-      // never runs (renderer sees `window.epoch` as undefined, not an
-      // error naming the real cause).
-      preload: path.join(__dirname, 'preload.mjs'),
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },

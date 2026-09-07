@@ -59,10 +59,10 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
     <div>
       <h2 className="font-display text-base font-medium text-accent mb-6">Indicator Matches</h2>
       {!selectedRun ? (
-        <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
+        <p className="text-muted-foreground text-sm">Select an investigation first.</p>
       ) : iocRecords.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          No mvt_ioc_detection or timestamp_anomaly records for this run.
+          No indicator matches or timing anomalies were found for this investigation.
         </p>
       ) : (
         <div className="flex flex-col gap-3">

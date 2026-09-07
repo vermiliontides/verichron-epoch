@@ -12,7 +12,7 @@ interface SidebarProps {
 export function Sidebar({ active, onSelect, dbStatus }: SidebarProps) {
   const navItems = [
     { id: 'workspace', label: 'New Run', icon: PlusCircle },
-    { id: 'runs', label: 'Pipeline Runs', icon: Activity },
+    { id: 'runs', label: 'Investigations', icon: Activity },
     { id: 'records', label: 'Forensic Records', icon: Database },
     { id: 'iocs', label: 'Indicator Matches', icon: Target },
     { id: 'reports', label: 'Reports', icon: FileText },

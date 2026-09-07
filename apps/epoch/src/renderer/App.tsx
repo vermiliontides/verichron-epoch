@@ -90,7 +90,10 @@ export const App: React.FC = () => {
       const data = await window.epoch.getPipelineRuns();
       setRuns(data);
       const refreshedRun = data.find((run) => run.run_id === runId);
-      if (refreshedRun) setSelectedRun(refreshedRun);
+      const currentSelectedRun = useEpochStore.getState().selectedRun;
+      if (refreshedRun && currentSelectedRun?.run_id === runId) {
+        setSelectedRun(refreshedRun);
+      }
       setDbStatus('connected');
     } catch (err) {
       console.error('Failed to refresh run:', err);

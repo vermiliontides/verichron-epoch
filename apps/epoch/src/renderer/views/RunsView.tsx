@@ -63,7 +63,7 @@ function RunsTableSkeleton() {
     <table className="w-full text-sm border-collapse relative">
       <thead>
         <tr>
-          <th className={thClass}>Backup</th>
+          <th className={thClass}>Evidence source</th>
           <th className={thClass}>Status</th>
           <th className={thClass}>Started</th>
         </tr>
@@ -118,7 +118,7 @@ export function RunsView({
     <div className="flex flex-1 min-h-0 divide-x divide-border h-full overflow-hidden">
       <div className="flex-1 overflow-auto p-8 relative">
         <h2 className="font-display text-base font-medium text-accent mb-6 flex items-baseline gap-2">
-          Pipeline Runs
+          Investigations
           {!loading && !error && runs.length > 0 && (
             <span className="font-mono text-2xs text-muted-foreground">{runs.length}</span>
           )}
@@ -128,12 +128,16 @@ export function RunsView({
         ) : loading ? (
           <RunsTableSkeleton />
         ) : runs.length === 0 ? (
-          <EmptyState icon={Inbox} title="No pipeline runs found" detail="Run full_pipeline.py to create one" />
+          <EmptyState
+            icon={Inbox}
+            title="No investigations yet"
+            detail="Import an iPhone backup or connect a device from New Run to begin."
+          />
         ) : (
           <table className="w-full text-sm border-collapse relative">
             <thead>
               <tr>
-                <th className={thClass}>Backup</th>
+                <th className={thClass}>Evidence source</th>
                 <th className={thClass}>Status</th>
                 <th className={thClass}>Started</th>
               </tr>
@@ -179,7 +183,7 @@ export function RunsView({
       </div>
  
       <div className="flex-1 overflow-auto p-8">
-        <h2 className="font-display text-base font-medium text-accent mb-6">Stage Breakdown</h2>
+        <h2 className="font-display text-base font-medium text-accent mb-6">Analysis progress</h2>
         {selectedRun ? (
           stages.length === 0 ? (
             <EmptyState icon={Layers} title="No stages found for this run" />
@@ -226,7 +230,7 @@ export function RunsView({
             </div>
           )
         ) : (
-          <EmptyState icon={MousePointerClick} title="Select a pipeline run to view stages" />
+          <EmptyState icon={MousePointerClick} title="Select an investigation to view analysis progress" />
         )}
       </div>
     </div>

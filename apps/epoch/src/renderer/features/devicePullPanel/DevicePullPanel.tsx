@@ -35,7 +35,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
     <div className="bg-surface border border-border rounded-lg p-6 mb-6">
       <div className="flex items-center gap-2 mb-5">
         <Smartphone className="text-accent" size="1.25rem" />
-        <h3 className="font-display text-base font-medium text-foreground">Pull from Device</h3>
+        <h3 className="font-display text-base font-medium text-foreground">Import from iPhone</h3>
         {sources.length > 1 && (
           <select
             value={sourceId}
@@ -60,11 +60,24 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
       {phase === 'unavailable' && toolStatus && !toolStatus.available && (
         <div>
           <p className="text-sm text-flag flex items-center gap-2 mb-4">
-            <XCircle size="1rem" /> {toolStatus.reason}
+            <XCircle size="1rem" /> iPhone import is not set up on this computer yet.
           </p>
           {actions.map((action, i) => (
             <div key={i} className="border border-border rounded-md p-4 mb-3">
-              <p className="text-sm font-medium text-foreground mb-3">{action.title}</p>
+              <p className="text-sm font-medium text-foreground mb-1">
+                {action.kind === 'install-instructions'
+                  ? 'Install the required system tools'
+                  : action.kind === 'compile-from-source'
+                  ? 'Set up iPhone import automatically'
+                  : 'Use a verified tool package'}
+              </p>
+              <p className="text-xs text-muted-foreground mb-3">
+                {action.kind === 'install-instructions'
+                  ? 'Complete this one-time setup, then return here to import a backup directly from your iPhone.'
+                  : action.kind === 'compile-from-source'
+                  ? 'Epoch can prepare the required components locally on this computer.'
+                  : 'A verified package can provide the components needed for direct iPhone import.'}
+              </p>
               {action.kind === 'install-instructions' && (
                 <div className="bg-background rounded-md p-3 font-mono text-xs text-muted-foreground">
                   {action.commands.map((c: string, j: number) => (
@@ -82,7 +95,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               )}
               {action.kind === 'download-verified-release' && (
                 <p className="text-xs text-muted-foreground italic">
-                  Not yet available -- no verified release has been published yet.
+                  This option is not available yet. You can import an existing backup folder below instead.
                 </p>
               )}
             </div>
@@ -105,7 +118,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
       {(phase === 'available' || phase === 'pulling' || phase === 'pulled') && toolStatus?.available && (
         <div>
           <p className="text-2xs text-muted-foreground uppercase tracking-wide font-medium mb-3 flex items-center gap-1">
-            <CheckCircle2 size="0.875rem" className="text-accent" /> Tool ready
+            <CheckCircle2 size="0.875rem" className="text-accent" /> Device ready
           </p>
 
           {devices.length === 0 ? (
@@ -162,8 +175,8 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           )}
           {pullError && <p className="text-sm text-flag mt-3">{pullError}</p>}
           {phase === 'pulled' && (
-            <p className="text-sm text-accent flex items-center gap-2 mt-3">
-              <CheckCircle2 size="1rem" /> Backup pulled -- feeding into the pipeline below.
+              <p className="text-sm text-accent flex items-center gap-2 mt-3">
+              <CheckCircle2 size="1rem" /> Backup imported and ready for analysis.
             </p>
           )}
         </div>

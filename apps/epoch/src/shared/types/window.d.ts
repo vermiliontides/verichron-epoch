@@ -35,6 +35,15 @@ export interface MvtFinishedResult {
   success: boolean;
   exitCode?: number | null;
   error?: string;
+  workspace?: string;
+  backups?: Array<{ label: string; success: boolean; decrypted: boolean }>;
+  analysis?: Array<{
+    backupPath: string;
+    status: 'succeeded' | 'failed' | 'skipped';
+    runId?: string;
+    stages?: Array<{ stage: string; success: boolean }>;
+    error?: string;
+  }>;
 }
  
 declare global {

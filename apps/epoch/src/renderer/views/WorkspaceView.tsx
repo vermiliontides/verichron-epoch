@@ -178,17 +178,19 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
   const busy = isStarting || isRunning;
 
-  const doneCount = runProgress ? runProgress.order.filter((l) => runProgress.byLabel[l].overall === 'done').length : 0;
-  const failedCount = runProgress
+  const completedBackups = finishResult?.backups?.filter((backup) => backup.success && backup.decrypted);
+  const failedBackups = finishResult?.backups?.filter((backup) => !backup.success);
+  const doneCount = completedBackups?.length ?? (runProgress ? runProgress.order.filter((l) => runProgress.byLabel[l].overall === 'done').length : 0);
+  const failedCount = failedBackups?.length ?? (runProgress
     ? runProgress.order.filter((l) => runProgress.byLabel[l].overall === 'failed').length
-    : 0;
+    : 0);
 
   return (
     <div className="flex-1 flex flex-col p-8 max-w-4xl mx-auto w-full min-h-full gap-6">
       <div>
-        <h1 className="font-display text-lg font-medium text-foreground mb-2">New Investigation</h1>
+        <h1 className="font-display text-lg font-medium text-foreground mb-2">Start an investigation</h1>
         <p className="text-sm text-muted-foreground">
-          Select a directory of already-encrypted mobile backups to decrypt and scan with mvt-runner.
+          Import an iPhone backup or connect a device to examine evidence for suspicious activity.
         </p>
       </div>
 
@@ -202,13 +204,11 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
             <div className="bg-surface p-4 rounded-full border border-border mb-4">
               <FolderOpen size="2rem" className="text-muted-foreground group-hover:text-accent transition-colors" />
             </div>
-            <h3 className="font-display text-base font-medium text-foreground mb-1">Import Directory</h3>
+            <h3 className="font-display text-base font-medium text-foreground mb-1">Import an iPhone backup</h3>
             <p className="text-sm text-muted-foreground font-mono mb-4 text-center max-w-md">
-              macOS: ~/Library/Application Support/MobileSync/Backup/
-              <br />
-              Windows: %appdata%\Apple Computer\MobileSync\Backup\
+              Choose the folder containing your iPhone backups. Epoch will identify compatible backups automatically.
             </p>
-            <Badge variant="neutral">Browse Local Files</Badge>
+            <Badge variant="neutral">Choose backup folder</Badge>
           </div>
         </>
       ) : (
@@ -216,7 +216,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           <div className="flex items-center gap-3 bg-surface border border-border rounded-lg px-4 py-3">
             <HardDrive className="text-accent shrink-0" size="1.125rem" />
             <div className="min-w-0 flex-1">
-              <p className="text-2xs text-muted-foreground uppercase tracking-wide font-medium">Source directory</p>
+              <p className="text-2xs text-muted-foreground uppercase tracking-wide font-medium">Evidence location</p>
               <p className="text-sm font-mono text-foreground truncate" title={selectedPath}>
                 {selectedPath}
               </p>
@@ -235,7 +235,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           <div className="bg-surface border border-border rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm font-medium text-foreground">
-                Backups{backups.length > 0 ? ` (${backups.length})` : ''}
+                Backups found{backups.length > 0 ? ` (${backups.length})` : ''}
               </p>
               <div className="flex items-center gap-3">
                 {backups.length > 1 && !busy && (
@@ -262,14 +262,14 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                   ) : (
                     <>
                       <Play size="1rem" fill="currentColor" />
-                      Run{selectedLabels.size > 0 ? ` (${selectedLabels.size})` : ''}
+                      Prepare evidence{selectedLabels.size > 0 ? ` (${selectedLabels.size})` : ''}
                     </>
                   )}
                 </button>
               </div>
             </div>
 
-            {discoveringBackups && <p className="text-sm text-muted-foreground">Scanning directory for backups...</p>}
+            {discoveringBackups && <p className="text-sm text-muted-foreground">Looking for compatible iPhone backups...</p>}
 
             {!discoveringBackups && discoverError && (
               <p className="text-sm text-danger">Could not scan directory: {discoverError}</p>
@@ -277,7 +277,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
             {!discoveringBackups && !discoverError && backups.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No backups found under this directory (looked for Manifest.db / Info.plist in subdirectories).
+                No compatible iPhone backups were found here. Choose the folder where your device backups are stored.
               </p>
             )}
 
@@ -312,20 +312,20 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                 className="flex items-center gap-1 text-2xs uppercase tracking-wide text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
               >
                 {showOptions ? <ChevronDown size="0.875rem" /> : <ChevronRight size="0.875rem" />}
-                Options
+                Advanced settings
               </button>
               {showOptions && (
                 <div className="mt-3 flex flex-col gap-3">
                   <label className="flex flex-col gap-1">
                     <span className="text-2xs uppercase tracking-wide text-muted-foreground">
-                      Workspace (default: ~/mvt-workspace)
+                      Analysis workspace (optional)
                     </span>
                     <input
                       type="text"
                       value={workspace}
                       onChange={(e) => setWorkspace(e.target.value)}
                       disabled={busy}
-                      placeholder="~/mvt-workspace"
+                      placeholder="Use the default workspace"
                       className="bg-background border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground disabled:opacity-50"
                     />
                   </label>
@@ -336,7 +336,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                       onChange={(e) => setForceDecrypt(e.target.checked)}
                       disabled={busy}
                     />
-                    Re-decrypt even if already decrypted
+                    Process backups again, even if they were previously imported
                   </label>
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -345,7 +345,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                       onChange={(e) => setRefreshIOCs(e.target.checked)}
                       disabled={busy}
                     />
-                    Refresh IOC indicator feeds before scanning
+                    Update threat indicators before analysis
                   </label>
                 </div>
               )}
@@ -375,7 +375,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           <div className="text-sm">
             <p className={failedCount === 0 ? 'text-accent font-medium' : 'text-danger font-medium'}>
               {failedCount === 0
-                ? `All ${doneCount} backup${doneCount === 1 ? '' : 's'} finished successfully.`
+                ? `Analysis completed for all ${doneCount} backup${doneCount === 1 ? '' : 's'}.`
                 : `${doneCount} of ${runProgress.order.length} backup${
                     runProgress.order.length === 1 ? '' : 's'
                   } finished; ${failedCount} couldn't be completed.`}
@@ -393,22 +393,21 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
         <div className="bg-surface border border-border rounded-lg p-6">
           <div className="flex items-center gap-2 mb-3">
             <Microscope className="text-accent" size="1.125rem" />
-            <h3 className="font-display text-base font-medium text-foreground">Analyze results</h3>
+            <h3 className="font-display text-base font-medium text-foreground">Run forensic analysis</h3>
           </div>
 
           {!analysisRunning && !analysisResult && (
             <>
               <p className="text-sm text-muted-foreground mb-4">
-                Run the forensic extractors against the {doneCount} decrypted backup
-                {doneCount === 1 ? '' : 's'} above and record the results -- this is what makes them show up under
-                Runs, Records, and Reports.
+                Run forensic analysis on the {doneCount} prepared backup{doneCount === 1 ? '' : 's'} to find indicators,
+                and timeline anomalies.
               </p>
               <button
                 onClick={handleStartAnalysis}
                 className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 px-4 py-2 rounded-md font-medium text-sm transition-colors"
               >
                 <Microscope size="1rem" />
-                Analyze {doneCount} backup{doneCount === 1 ? '' : 's'}
+                Run forensic analysis on {doneCount} backup{doneCount === 1 ? '' : 's'}
               </button>
               {analysisStartError && <p className="text-sm text-danger mt-2">{analysisStartError}</p>}
             </>
@@ -417,7 +416,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           {analysisRunning && (
             <p className="text-sm text-flag flex items-center gap-2">
               <div className="w-4 h-4 border-2 border-flag/30 border-t-flag rounded-full animate-spin" />
-              Running the forensic extractors...
+              Examining the imported evidence...
             </p>
           )}
 
@@ -432,7 +431,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                     onClick={onAnalysisComplete}
                     className="flex items-center gap-2 bg-accent text-background hover:bg-accent/90 px-4 py-2 rounded-md font-medium text-sm transition-colors"
                   >
-                    View results in Runs
+                    View investigation
                     <ArrowRight size="1rem" />
                   </button>
                 </>
@@ -449,9 +448,9 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
             </div>
           )}
 
-          {(analysisRunning || analysisLog.length > 0) && (
+              {(analysisRunning || analysisLog.length > 0) && (
             <div className="mt-3">
-              <TerminalLog lines={analysisLog} live={analysisRunning} label="Orchestrator log" />
+              <TerminalLog lines={analysisLog} live={analysisRunning} label="Analysis details" />
             </div>
           )}
         </div>
@@ -461,8 +460,8 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
         <div className="flex items-start gap-3 bg-surface border border-border rounded-lg p-5">
           <AlertCircle className="text-muted-foreground shrink-0 mt-1" size="1rem" />
           <p className="text-xs text-muted-foreground leading-relaxed">
-            <strong className="text-foreground">Tip:</strong> Pull a fresh backup directly from a connected iOS
-            device above, or import a directory of backups already staged by Finder, iTunes, or another tool.
+            <strong className="text-foreground">Tip:</strong> Connect an iPhone by USB to import a fresh backup,
+            or choose an existing backup folder from your computer.
           </p>
         </div>
       )}
@@ -472,7 +471,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           <div className="bg-surface border border-border rounded-lg p-6 w-full max-w-sm">
             <h3 className="font-display text-base font-medium mb-2">Password required</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              mvt-runner needs the backup password for{' '}
+              The selected backup requires its password for{' '}
               <span className="font-mono text-foreground">{pendingPasswordFor}</span>.
             </p>
             <input

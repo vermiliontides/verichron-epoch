@@ -249,6 +249,16 @@ async function markStage(
     [status, errorMessage ?? null, runId, stageName]
   );
 }
+
+async function markRunFailed(client: Client, runId: string, errorMessage: string): Promise<void> {
+  await client.query(
+    `UPDATE pipeline_stage_status
+     SET status = 'failed', error_message = $1, finished_at = now()
+     WHERE run_id = $2 AND status IN ('pending', 'running')`,
+    [errorMessage, runId]
+  );
+  await client.query(`UPDATE pipeline_runs SET finished_at = now() WHERE run_id = $1`, [runId]);
+}
  
 function runStage(
   stage: StageDefinition,
@@ -349,25 +359,31 @@ async function runPipelineForBackup(
   dbUrl: string,
   pythonBin: string,
   stages: StageDefinition[]
-): Promise<{ runId: string; results: { stage: string; success: boolean }[] }> {
+): Promise<{ runId: string; results: { stage: string; success: boolean }[]; success: boolean }> {
   const runId = await createRun(client, backupPath, stages);
   const resultsPath = deriveResultsPath(backupPath);
   const results: { stage: string; success: boolean }[] = [];
- 
-  for (const stage of stages) {
-    await markStage(client, runId, stage.name, "running");
-    const { success, stderr } = await runStage(stage, { backupPath, resultsPath, dbUrl, pythonBin }, runId);
- 
-    if (success) {
-      await markStage(client, runId, stage.name, "succeeded");
-    } else {
-      await markStage(client, runId, stage.name, "failed", stderr || "unknown error");
+
+  try {
+    for (const stage of stages) {
+      await markStage(client, runId, stage.name, "running");
+      const { success, stderr } = await runStage(stage, { backupPath, resultsPath, dbUrl, pythonBin }, runId);
+
+      if (success) {
+        await markStage(client, runId, stage.name, "succeeded");
+      } else {
+        await markStage(client, runId, stage.name, "failed", stderr || "unknown error");
+      }
+      results.push({ stage: stage.name, success });
     }
-    results.push({ stage: stage.name, success });
-  }
  
-  await client.query(`UPDATE pipeline_runs SET finished_at = now() WHERE run_id = $1`, [runId]);
-  return { runId, results };
+    await client.query(`UPDATE pipeline_runs SET finished_at = now() WHERE run_id = $1`, [runId]);
+    return { runId, results, success: results.every((result) => result.success) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await markRunFailed(client, runId, message);
+    throw err;
+  }
 }
  
 async function main() {
@@ -379,19 +395,52 @@ async function main() {
     process.exit(1);
   }
 
+  if (cfg.backupPaths.length === 0) {
+    console.error("[orchestrator] no successfully decrypted backups were found in the workspace.");
+    process.exitCode = 1;
+    return;
+  }
+
   const client = new Client({ connectionString: cfg.dbUrl });
   await client.connect();
- 
+
+  let failedBackups = 0;
+  const analysisResults: Array<{
+    backupPath: string;
+    status: "succeeded" | "failed" | "skipped";
+    runId?: string;
+    stages?: { stage: string; success: boolean }[];
+    error?: string;
+  }> = [];
   for (const backupPath of cfg.backupPaths) {
-    if (await hasSucceededRun(client, backupPath)) continue;
+    if (await hasSucceededRun(client, backupPath)) {
+      analysisResults.push({ backupPath, status: "skipped" });
+      continue;
+    }
     try {
-      await runPipelineForBackup(client, backupPath, cfg.dbUrl, pythonBin, stages);
+      const result = await runPipelineForBackup(client, backupPath, cfg.dbUrl, pythonBin, stages);
+      if (!result.success) failedBackups += 1;
+      analysisResults.push({
+        backupPath,
+        status: result.success ? "succeeded" : "failed",
+        runId: result.runId,
+        stages: result.results,
+      });
     } catch (err) {
       console.error(`[orchestrator] failure for ${backupPath}:`, err);
+      failedBackups += 1;
+      analysisResults.push({
+        backupPath,
+        status: "failed",
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
  
   await client.end();
+  const workspacePath = path.dirname(path.dirname(cfg.backupPaths[0]));
+  await fsp.writeFile(path.join(workspacePath, "analysis-summary.json"), JSON.stringify({ results: analysisResults }, null, 2));
+  if (failedBackups > 0) process.exitCode = 1;
 }
  
 main().catch((err) => {

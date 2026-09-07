@@ -43,7 +43,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
     <div>
       <h2 className="font-display text-base font-medium text-accent mb-6">Reports</h2>
       {!selectedRun ? (
-        <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
+        <p className="text-muted-foreground text-sm">Select an investigation first.</p>
       ) : reportLoadError ? (
         <div className="text-flag bg-flag/10 border border-flag/30 rounded-lg p-4 text-sm">
           Error: {reportLoadError}

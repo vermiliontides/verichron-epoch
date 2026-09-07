@@ -1,5 +1,8 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
+import os from 'node:os';
+import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { discoverBackups, type Backup } from '@verichron/contracts';
 
 interface StartPipelineOptions {
@@ -50,7 +53,13 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
 
   function makeOrchestratorStreamBuffer(stream: 'stdout' | 'stderr') {
     let pending = '';
-    return (chunk: Buffer) => {
+    const emitPending = () => {
+      if (pending) {
+        sendToRenderer('epoch:orchestratorLog', { stream, line: pending });
+        pending = '';
+      }
+    };
+    const onChunk = (chunk: Buffer) => {
       pending += chunk.toString('utf-8');
       const lines = pending.split('\n');
       pending = lines.pop() ?? '';
@@ -58,6 +67,33 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
         sendToRenderer('epoch:orchestratorLog', { stream, line });
       }
     };
+    return { onChunk, emitPending };
+  }
+
+  async function readPreparationSummary(workspace: string) {
+    try {
+      const raw = await readFile(path.join(workspace, 'summary.json'), 'utf8');
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { backups?: unknown }).backups)) {
+        return undefined;
+      }
+      return (parsed as { backups: Array<{ label: string; success: boolean; decrypted: boolean }> }).backups;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function readAnalysisSummary(workspace: string) {
+    try {
+      const raw = await readFile(path.join(workspace, 'analysis-summary.json'), 'utf8');
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { results?: unknown }).results)) {
+        return undefined;
+      }
+      return (parsed as { results: MvtFinishedResult['analysis'] }).results;
+    } catch {
+      return undefined;
+    }
   }
 
   ipcMain.handle('epoch:selectBackupDirectory', async () => {
@@ -86,8 +122,9 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
       throw new Error('A source directory is required.');
     }
 
+    const workspacePath = options?.workspace?.trim() || path.join(os.homedir(), 'mvt-workspace');
     const args = ['--filter', '@verichron/mvt-runner', 'dev', '--', '--source', source];
-    if (options?.workspace) args.push('--workspace', options.workspace);
+    args.push('--workspace', workspacePath);
     if (options?.forceDecrypt) args.push('--force-decrypt');
     if (options?.refreshIOCs) args.push('--refresh-iocs');
     if (options?.only && options.only.length > 0) args.push('--only', options.only.join(','));
@@ -108,10 +145,17 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
     child.on('close', (code) => {
       runningMvtProcess = null;
       pendingPasswordResolve = null;
-      sendToRenderer('epoch:mvtFinished', { success: code === 0, exitCode: code });
+      void readPreparationSummary(workspacePath).then((backups) => {
+        sendToRenderer('epoch:mvtFinished', {
+          success: code === 0,
+          exitCode: code,
+          workspace: workspacePath,
+          backups,
+        });
+      });
     });
 
-    return { started: true };
+    return { started: true, workspace: workspacePath };
   });
 
   ipcMain.handle('epoch:submitMvtPassword', async (_event, password: string) => {
@@ -138,8 +182,10 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
     );
     runningOrchestratorProcess = child;
 
-    child.stdout.on('data', makeOrchestratorStreamBuffer('stdout'));
-    child.stderr.on('data', makeOrchestratorStreamBuffer('stderr'));
+    const stdoutBuffer = makeOrchestratorStreamBuffer('stdout');
+    const stderrBuffer = makeOrchestratorStreamBuffer('stderr');
+    child.stdout.on('data', stdoutBuffer.onChunk);
+    child.stderr.on('data', stderrBuffer.onChunk);
 
     child.on('error', (err) => {
       runningOrchestratorProcess = null;
@@ -147,8 +193,12 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
     });
 
     child.on('close', (code) => {
+      stdoutBuffer.emitPending();
+      stderrBuffer.emitPending();
       runningOrchestratorProcess = null;
-      sendToRenderer('epoch:orchestratorFinished', { success: code === 0, exitCode: code });
+      void readAnalysisSummary(workspace.trim()).then((analysis) => {
+        sendToRenderer('epoch:orchestratorFinished', { success: code === 0, exitCode: code, analysis });
+      });
     });
 
     return { started: true };

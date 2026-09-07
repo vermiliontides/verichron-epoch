@@ -27,7 +27,7 @@ export function RecordsView({
       <h2 className="font-display text-base font-medium text-accent mb-6">Forensic Records</h2>
 
       {!selectedRun ? (
-        <p className="text-muted-foreground text-sm">Select a pipeline run first.</p>
+        <p className="text-muted-foreground text-sm">Select an investigation first.</p>
       ) : records.length === 0 && !sourceTypeFilter ? (
         <p className="text-muted-foreground text-sm">No records for this run.</p>
       ) : (

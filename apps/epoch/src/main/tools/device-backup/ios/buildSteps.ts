@@ -47,6 +47,9 @@ export function systemPackageInstallCommand(platform: NodeJS.Platform): string {
   if (platform === 'darwin') {
     return 'brew install autoconf automake libtool pkg-config openssl';
   }
+  if (platform === 'win32') {
+    return 'wsl -- bash -lc "sudo apt-get install -y build-essential pkg-config checkinstall git autoconf automake libtool-bin libssl-dev usbmuxd"';
+  }
   // Debian/Ubuntu is the only Linux distro this targets today -- matches
   // the userMemories' own Ubuntu/Debian environment. Other distros' package
   // names differ (dnf/pacman equivalents) and aren't covered by this pass.

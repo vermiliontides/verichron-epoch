@@ -496,11 +496,11 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           )}
 
           {analysisResult && (
-            <div className="mt-4">
+            <div>
               {analysisResult.success && analysisFailedCount === 0 ? (
-                <div>
-                  <p className="text-sm font-medium text-accent flex items-center gap-2 mb-2">
-                    <CheckCircle2 size="1.125rem" /> Analysis complete.
+                <>
+                  <p className="text-sm text-accent flex items-center gap-2 mb-3">
+                    <CheckCircle2 size="1rem" /> Analysis complete.
                   </p>
                   {analysisResult.analysis && (
                     <p className="text-xs text-muted-foreground mb-3">
@@ -523,8 +523,8 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                 </div>
               ) : (
                 <div>
-                  <p className="text-sm font-medium text-danger flex items-center gap-2">
-                    <XCircle size="1.125rem" />
+                  <p className="text-sm text-danger flex items-center gap-2">
+                    <XCircle size="1rem" />
                     {analysisFailedCount > 0
                       ? `Analysis completed with ${analysisFailedCount} investigation${analysisFailedCount === 1 ? '' : 's'} needing attention.`
                       : `Analysis failed${analysisResult.error ? `: ${analysisResult.error}` : '.'}`}

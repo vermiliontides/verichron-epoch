@@ -64,6 +64,7 @@ class SourceType(str, Enum):
     MVT_IOC_DETECTION = "mvt_ioc_detection"
     TIMESTAMP_ANOMALY = "timestamp_anomaly"
     ILEAPP_RECORD = "ileapp_record"
+    LLM_FLAGGED_ANOMALY = "llm_flagged_anomaly"
     # END SOURCE_TYPE
 
 

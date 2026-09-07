@@ -207,6 +207,7 @@ async function run(cfg: Config): Promise<void> {
   let cachedPassword = "";
   let haveCached = false;
   const repairFailuresByBackup = new Map<string, string[]>();
+  const failedBackups = new Set<string>();
 
   for (const backup of backups) {
     const name = backup.label;
@@ -217,6 +218,7 @@ async function run(cfg: Config): Promise<void> {
       await hashBackup(cfg, name, src);
     } catch (err) {
       console.error(`  [hash] error: ${err instanceof Error ? err.message : err}`);
+      failedBackups.add(name);
       continue;
     }
 
@@ -234,6 +236,7 @@ async function run(cfg: Config): Promise<void> {
           pw = await promptPassword(`  password for ${name}: `);
         } catch (err) {
           console.error(`  [decrypt] error reading password: ${err instanceof Error ? err.message : err}`);
+          failedBackups.add(name);
           continue;
         }
         if (cfg.samePass) {
@@ -250,6 +253,7 @@ async function run(cfg: Config): Promise<void> {
         if (cfg.samePass) {
           haveCached = false;
         }
+        failedBackups.add(name);
         continue;
       }
       await writeMarker(decMarker);
@@ -280,6 +284,7 @@ async function run(cfg: Config): Promise<void> {
               result.failed > 0 ? `, ${result.failed} could not be fully recovered` : ""
             } (scanned ${result.scanned} candidate file(s))`
           );
+          if (result.failed > 0) failedBackups.add(name);
         }
         if (result.scanned !== null) {
           await fsp.writeFile(repairFailuresPath, JSON.stringify(result.failedFiles, null, 2));
@@ -288,6 +293,7 @@ async function run(cfg: Config): Promise<void> {
         await writeMarker(repairMarker);
       } catch (err) {
         console.error(`  [repair] error: ${err instanceof Error ? err.message : err}`);
+        failedBackups.add(name);
         continue;
       }
     }
@@ -303,6 +309,7 @@ async function run(cfg: Config): Promise<void> {
         await checkBackup(cfg, decDir, resDir, logPath);
       } catch (err) {
         console.error(`  [check] error: ${err instanceof Error ? err.message : err}`);
+        failedBackups.add(name);
         continue;
       }
       await writeMarker(resMarker);
@@ -312,7 +319,22 @@ async function run(cfg: Config): Promise<void> {
   }
 
   const summaryPath = await writeSummary(cfg, backups, repairFailuresByBackup);
+  const backupResults = await Promise.all(
+    backups.map(async (backup) => ({
+      label: backup.label,
+      success: !failedBackups.has(backup.label),
+      decrypted: await pathExists(path.join(cfg.workspace, "decrypted", backup.label, ".mvt_decrypted_ok")),
+    }))
+  );
+  await fsp.writeFile(
+    path.join(cfg.workspace, "summary.json"),
+    JSON.stringify({ backups: backupResults }, null, 2)
+  );
   console.log("summary written to", summaryPath);
+  if (failedBackups.size > 0) {
+    console.error(`completed with ${failedBackups.size} backup(s) that need attention`);
+    process.exitCode = 1;
+  }
 }
 
 // ensureIOCs downloads mvt's indicator feeds if missing or stale.

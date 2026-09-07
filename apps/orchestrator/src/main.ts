@@ -71,6 +71,7 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 const EXTRACTORS_DIR = path.join(REPO_ROOT, "apps", "extractors");
 const REPORTING_DIR = path.join(REPO_ROOT, "apps", "reporting");
+const ANALYSIS_DIR = path.join(REPO_ROOT, "apps", "analysis");
 
 interface StageManifest {
   entrypoint: string;
@@ -133,7 +134,10 @@ async function loadStageFromDir(dir: string, name: string): Promise<StageDefinit
 
 /**
  * Discovers every enabled stage from disk: each subdirectory of
- * apps/extractors/ with a stage.json, plus apps/reporting/ itself.
+ * apps/extractors/ with a stage.json, plus apps/reporting/ and
+ * apps/analysis/ themselves (both live outside apps/extractors/ as their
+ * own uv workspace members -- see root pyproject.toml -- so each is
+ * special-cased here the same way, rather than moved to fit the glob).
  * Fails fast (before any stage runs) on: an invalid manifest, a missing
  * entrypoint file, two enabled stages sharing an `order` value, or an
  * extractor stage whose `order` is not strictly less than the reporting
@@ -145,6 +149,7 @@ async function discoverStages(): Promise<StageDefinition[]> {
   const candidateDirs = extractorEntries
     .filter((e) => e.isDirectory())
     .map((e) => ({ dir: path.join(EXTRACTORS_DIR, e.name), name: e.name }));
+  candidateDirs.push({ dir: ANALYSIS_DIR, name: path.basename(ANALYSIS_DIR) });
   candidateDirs.push({ dir: REPORTING_DIR, name: path.basename(REPORTING_DIR) });
 
   const loaded = await Promise.all(candidateDirs.map((c) => loadStageFromDir(c.dir, c.name)));
@@ -244,6 +249,16 @@ async function markStage(
     [status, errorMessage ?? null, runId, stageName]
   );
 }
+
+async function markRunFailed(client: Client, runId: string, errorMessage: string): Promise<void> {
+  await client.query(
+    `UPDATE pipeline_stage_status
+     SET status = 'failed', error_message = $1, finished_at = now()
+     WHERE run_id = $2 AND status IN ('pending', 'running')`,
+    [errorMessage, runId]
+  );
+  await client.query(`UPDATE pipeline_runs SET finished_at = now() WHERE run_id = $1`, [runId]);
+}
  
 function runStage(
   stage: StageDefinition,
@@ -272,6 +287,7 @@ function runStage(
     });
  
     let stderr = "";
+    child.stdout?.pipe(process.stdout);
     child.stderr?.on("data", (chunk) => {
       stderr += chunk.toString();
     });
@@ -343,25 +359,31 @@ async function runPipelineForBackup(
   dbUrl: string,
   pythonBin: string,
   stages: StageDefinition[]
-): Promise<{ runId: string; results: { stage: string; success: boolean }[] }> {
+): Promise<{ runId: string; results: { stage: string; success: boolean }[]; success: boolean }> {
   const runId = await createRun(client, backupPath, stages);
   const resultsPath = deriveResultsPath(backupPath);
   const results: { stage: string; success: boolean }[] = [];
- 
-  for (const stage of stages) {
-    await markStage(client, runId, stage.name, "running");
-    const { success, stderr } = await runStage(stage, { backupPath, resultsPath, dbUrl, pythonBin }, runId);
- 
-    if (success) {
-      await markStage(client, runId, stage.name, "succeeded");
-    } else {
-      await markStage(client, runId, stage.name, "failed", stderr || "unknown error");
+
+  try {
+    for (const stage of stages) {
+      await markStage(client, runId, stage.name, "running");
+      const { success, stderr } = await runStage(stage, { backupPath, resultsPath, dbUrl, pythonBin }, runId);
+
+      if (success) {
+        await markStage(client, runId, stage.name, "succeeded");
+      } else {
+        await markStage(client, runId, stage.name, "failed", stderr || "unknown error");
+      }
+      results.push({ stage: stage.name, success });
     }
-    results.push({ stage: stage.name, success });
-  }
  
-  await client.query(`UPDATE pipeline_runs SET finished_at = now() WHERE run_id = $1`, [runId]);
-  return { runId, results };
+    await client.query(`UPDATE pipeline_runs SET finished_at = now() WHERE run_id = $1`, [runId]);
+    return { runId, results, success: results.every((result) => result.success) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await markRunFailed(client, runId, message);
+    throw err;
+  }
 }
  
 async function main() {
@@ -373,19 +395,52 @@ async function main() {
     process.exit(1);
   }
 
+  if (cfg.backupPaths.length === 0) {
+    console.error("[orchestrator] no successfully decrypted backups were found in the workspace.");
+    process.exitCode = 1;
+    return;
+  }
+
   const client = new Client({ connectionString: cfg.dbUrl });
   await client.connect();
- 
+
+  let failedBackups = 0;
+  const analysisResults: Array<{
+    backupPath: string;
+    status: "succeeded" | "failed" | "skipped";
+    runId?: string;
+    stages?: { stage: string; success: boolean }[];
+    error?: string;
+  }> = [];
   for (const backupPath of cfg.backupPaths) {
-    if (await hasSucceededRun(client, backupPath)) continue;
+    if (await hasSucceededRun(client, backupPath)) {
+      analysisResults.push({ backupPath, status: "skipped" });
+      continue;
+    }
     try {
-      await runPipelineForBackup(client, backupPath, cfg.dbUrl, pythonBin, stages);
+      const result = await runPipelineForBackup(client, backupPath, cfg.dbUrl, pythonBin, stages);
+      if (!result.success) failedBackups += 1;
+      analysisResults.push({
+        backupPath,
+        status: result.success ? "succeeded" : "failed",
+        runId: result.runId,
+        stages: result.results,
+      });
     } catch (err) {
       console.error(`[orchestrator] failure for ${backupPath}:`, err);
+      failedBackups += 1;
+      analysisResults.push({
+        backupPath,
+        status: "failed",
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
  
   await client.end();
+  const workspacePath = path.dirname(path.dirname(cfg.backupPaths[0]));
+  await fsp.writeFile(path.join(workspacePath, "analysis-summary.json"), JSON.stringify({ results: analysisResults }, null, 2));
+  if (failedBackups > 0) process.exitCode = 1;
 }
  
 main().catch((err) => {

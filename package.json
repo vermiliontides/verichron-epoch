@@ -16,5 +16,9 @@
     "typescript": "^6.0.3",
     "zod": "^4.5.2"
   },
-  "packageManager": "pnpm@10.34.5"
+  "packageManager": "pnpm@10.34.5",
+  "dependencies": {
+    "approve-builds": "^1.0.0",
+    "node-linker": "^1.0.1"
+  }
 }

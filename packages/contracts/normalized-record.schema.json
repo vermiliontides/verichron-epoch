@@ -25,7 +25,8 @@
         "syslog_line",
         "mvt_ioc_detection",
         "timestamp_anomaly",
-        "ileapp_record"
+        "ileapp_record",
+        "llm_flagged_anomaly"
       ]
     },
     "event_time": {

@@ -1,0 +1,8 @@
+{
+  "$schema": "../../packages/contracts/stage-manifest.schema.json",
+  "entrypoint": "automated_forensics.py",
+  "runtime": "python",
+  "order": 80,
+  "requiresResultsPath": true,
+  "enabled": true
+}

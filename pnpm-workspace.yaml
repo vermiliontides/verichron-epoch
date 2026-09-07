@@ -9,6 +9,11 @@ allowBuilds:
   esbuild: true
   unrs-resolver: true
 
+nodeLinker: hoisted
+publicHoistPattern:
+  - '*'
+
+
 catalog:
   # Compiler — pinned exact, not caret. typescript-eslint's peer range
   # (>=4.8.4 <6.1.0) hard-blocks TS7 until 7.1 ships a stable API, so we
@@ -28,9 +33,8 @@ catalog:
   '@typescript-eslint/eslint-plugin': ^8.68.0
   '@typescript-eslint/parser': ^8.68.0
   '@vitejs/plugin-react': ^4.7.0
-
+  node-linker: ^1.0.1
   electron: ^44.0.0
-
   # Lint stack — must move together (eslint9+ flat config <-> typescript-eslint8)
   eslint: ^10.9.1
   pg: ^8.23.0

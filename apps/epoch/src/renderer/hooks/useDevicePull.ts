@@ -38,10 +38,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     setPhase('checking');
     setAcquisitionStep(null);
     setAcquisitionError(null);
-<<<<<<< HEAD
     setHomebrewFallbackAvailable(false);
-=======
->>>>>>> 694cff9 (refactor: fixing stage 0 download actions)
     setDevices([]);
     setSelectedDevice(null);
     setActions([]);
@@ -58,17 +55,10 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
         const acts = await window.epoch.getToolAcquisitionActions(id);
         setActions(acts);
       }
-<<<<<<< HEAD
     } catch (error: unknown) {
       setPhase('unavailable');
       setAcquisitionStep(null);
       setAcquisitionError(error instanceof Error ? error.message : 'Failed to communicate with the device service.');
-=======
-    } catch (error: any) {
-      setPhase('unavailable');
-      setAcquisitionStep(null);
-      setAcquisitionError(error.message || 'Failed to communicate with the device service.');
->>>>>>> 694cff9 (refactor: fixing stage 0 download actions)
     }
   }, []);
 

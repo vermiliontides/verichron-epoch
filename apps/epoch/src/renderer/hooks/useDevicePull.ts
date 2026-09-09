@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type {
   BackupProgress,
   DeviceInfo,
@@ -32,24 +32,41 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     });
   }, []);
 
-  const checkTool = async (id: string) => {
+  const checkTool = useCallback(async (id: string) => {
+    // Reset stale state before rechecking
     setPhase('checking');
-    const status = await window.epoch.checkDeviceBackupToolAvailable(id);
-    setToolStatus(status);
-    if (status.available) {
-      setPhase('available');
-      const found = await window.epoch.listConnectedDevices(id);
-      setDevices(found);
-    } else {
+    setAcquisitionStep(null);
+    setAcquisitionError(null);
+    setDevices([]);
+    setSelectedDevice(null);
+    setActions([]);
+
+    try {
+      const status = await window.epoch.checkDeviceBackupToolAvailable(id);
+      setToolStatus(status);
+      if (status.available) {
+        setPhase('available');
+        const found = await window.epoch.listConnectedDevices(id);
+        setDevices(found);
+      } else {
+        setPhase('unavailable');
+        const acts = await window.epoch.getToolAcquisitionActions(id);
+        setActions(acts);
+      }
+    } catch (error: any) {
       setPhase('unavailable');
-      const acts = await window.epoch.getToolAcquisitionActions(id);
-      setActions(acts);
+      setAcquisitionStep(null);
+      setAcquisitionError(error.message || 'Failed to communicate with the device service.');
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (sourceId) checkTool(sourceId);
-  }, [sourceId]);
+  }, [sourceId, checkTool]);
+
+  const checkAvailability = useCallback(() => {
+    if (sourceId) checkTool(sourceId);
+  }, [sourceId, checkTool]);
 
   useEffect(() => {
     const unsubStep = window.epoch.onToolAcquisitionStepStarted((label) => {
@@ -64,6 +81,8 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
         setAcquisitionStep(null);
         if (sourceId) checkTool(sourceId);
       } else {
+        setPhase('unavailable');
+        setAcquisitionStep(null);
         setAcquisitionError(`Failed at: ${result.failedStep}`);
       }
     });
@@ -83,15 +102,23 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
       unsubFinished();
       unsubProgress();
     };
-  }, [sourceId, destDir, onBackupPulled]);
+  }, [sourceId, destDir, onBackupPulled, checkTool]);
 
   const runCompileFromSource = async (action: Extract<ToolAcquisitionAction, { kind: 'compile-from-source' }>) => {
     setPhase('acquiring');
     setAcquisitionOutput([]);
     setAcquisitionError(null);
-    const prefixArg = action.steps.find((s: ToolAcquisitionCommand) => s.args.some((a: string) => a.startsWith('--prefix=')));
-    const installPrefix = prefixArg?.args.find((a: string) => a.startsWith('--prefix='))?.slice('--prefix='.length) ?? '';
-    await window.epoch.runToolAcquisitionSteps(action.steps, installPrefix);
+    setAcquisitionStep('Preparing build...');
+    
+    try {
+      const prefixArg = action.steps.find((s: ToolAcquisitionCommand) => s.args.some((a: string) => a.startsWith('--prefix=')));
+      const installPrefix = prefixArg?.args.find((a: string) => a.startsWith('--prefix='))?.slice('--prefix='.length) ?? '';
+      await window.epoch.runToolAcquisitionSteps(action.steps, installPrefix);
+    } catch (error: any) {
+      setPhase('unavailable');
+      setAcquisitionStep(null);
+      setAcquisitionError(error.message || 'IPC rejection during tool acquisition.');
+    }
   };
 
   const handleSelectDestination = async () => {
@@ -131,5 +158,6 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     runCompileFromSource,
     handleSelectDestination,
     handlePull,
+    checkAvailability,
   };
 }

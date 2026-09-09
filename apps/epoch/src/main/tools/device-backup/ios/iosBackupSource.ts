@@ -29,16 +29,16 @@ import { idevicebackup2InstallPrefix } from './iosAcquisitionStrategy';
 
 function toolBinaryPath(): { available: boolean; idevicebackup2?: string; idevice_id?: string; ideviceinfo?: string } {
   const installPrefix = idevicebackup2InstallPrefix();
+  
   const backup2 = detectBinary('idevicebackup2', bundledToolPath(installPrefix, 'idevicebackup2'));
-  if (!backup2.available) return { available: false };
+  const idTool = detectBinary('idevice_id', bundledToolPath(installPrefix, 'idevice_id'));
+  const infoTool = detectBinary('ideviceinfo', bundledToolPath(installPrefix, 'ideviceinfo'));
 
-  const binDir = backup2.path.substring(0, backup2.path.lastIndexOf(process.platform === 'win32' ? '\\' : '/'));
-  const idDelim = process.platform === 'win32' ? '\\' : '/';
   return {
-    available: true,
-    idevicebackup2: backup2.path,
-    idevice_id: `${binDir}${idDelim}idevice_id${process.platform === 'win32' ? '.exe' : ''}`,
-    ideviceinfo: `${binDir}${idDelim}ideviceinfo${process.platform === 'win32' ? '.exe' : ''}`,
+    available: backup2.available,
+    idevicebackup2: backup2.available ? backup2.path : undefined,
+    idevice_id: idTool.available ? idTool.path : undefined,
+    ideviceinfo: infoTool.available ? infoTool.path : undefined,
   };
 }
 
@@ -63,7 +63,7 @@ export class IosBackupSource implements DeviceBackupSource {
 
   async listConnectedDevices(): Promise<DeviceInfo[]> {
     const tools = toolBinaryPath();
-    if (!tools.available || !tools.idevice_id || !tools.ideviceinfo) return [];
+    if (!tools.idevice_id || !tools.ideviceinfo) return [];
 
     let idOutput: string;
     try {

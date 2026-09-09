@@ -3,30 +3,6 @@ import type { BackupProgress, DeviceBackupSource, DeviceInfo, ToolAvailabilitySt
 import { bundledToolPath, detectBinary } from '../detection';
 import { idevicebackup2InstallPrefix } from './iosAcquisitionStrategy';
 
-/**
- * CLI syntax and behavior below verified against libimobiledevice's real
- * man pages and tools/idevicebackup2.c source, not guessed:
- *   idevicebackup2 [OPTIONS] backup --full DIRECTORY -u UDID
- *   idevice_id -l                          -- one UDID per line
- *   ideviceinfo -u UDID -k KEY              -- single lockdown value
- *
- * Known, deliberate gap: encrypted/password-protected device backups.
- * idevicebackup2 supports these via -i (interactive prompt, which would
- * hang forever with no TTY in a spawned Electron process) or the
- * BACKUP_PASSWORD environment variable. Neither is wired up here --
- * that's a real feature (password entry UI, secure handling of the value)
- * that today's scope doesn't cover. pullBackup() will fail against an
- * encrypted-backup device rather than hang or silently mishandle a
- * password; that failure surfaces through the normal error path.
- *
- * Also not implemented: a confirmed numeric progress percentage.
- * idevicebackup2's own source prints status strings ("Moving N files",
- * "Receiving files") rather than a documented, stable percent format --
- * forwarding those as BackupProgress.message with percent left undefined
- * is honest about what's actually knowable from stdout, rather than
- * inventing a parser for a format that was never confirmed to exist.
- */
-
 function toolBinaryPath(): { available: boolean; idevicebackup2?: string; idevice_id?: string; ideviceinfo?: string } {
   const installPrefix = idevicebackup2InstallPrefix();
   
@@ -88,7 +64,8 @@ export class IosBackupSource implements DeviceBackupSource {
   async pullBackup(
     device: DeviceInfo,
     destDir: string,
-    onProgress: (progress: BackupProgress) => void
+    onProgress: (progress: BackupProgress) => void,
+    password?: string
   ): Promise<string> {
     const tools = toolBinaryPath();
     if (!tools.available || !tools.idevicebackup2) {
@@ -98,7 +75,12 @@ export class IosBackupSource implements DeviceBackupSource {
     onProgress({ phase: 'preparing', message: `Starting backup of ${device.name}...` });
 
     return new Promise((resolve, reject) => {
-      const proc = spawn(tools.idevicebackup2!, ['backup', '--full', destDir, '-u', device.id]);
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        ...(password ? { BACKUP_PASSWORD: password } : {}),
+      };
+
+      const proc = spawn(tools.idevicebackup2!, ['backup', '--full', destDir, '-u', device.id], { env });
 
       proc.stdout.on('data', (chunk: Buffer) => {
         const lines = chunk
@@ -116,12 +98,12 @@ export class IosBackupSource implements DeviceBackupSource {
         stderrOutput += chunk.toString('utf-8');
       });
 
-      proc.once('error', (err) => {
+      proc.once('error', (err: Error) => {
         onProgress({ phase: 'error', message: err.message });
         reject(err);
       });
 
-      proc.once('close', (code) => {
+      proc.once('close', (code: number | null) => {
         if (code === 0) {
           onProgress({ phase: 'done', message: 'Backup complete.' });
           resolve(destDir);

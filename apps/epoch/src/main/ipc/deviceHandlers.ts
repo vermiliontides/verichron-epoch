@@ -50,7 +50,7 @@ export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null
 
   ipcMain.handle(
     'epoch:pullDeviceBackup',
-    async (_event, sourceId: string, device: DeviceInfo, destDir: string) => {
+    async (_event, sourceId: string, device: DeviceInfo, destDir: string, password?: string) => {
       if (deviceBackupInFlight) {
         throw new Error('A device backup is already in progress -- wait for it to finish before starting another.');
       }
@@ -59,9 +59,14 @@ export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null
 
       deviceBackupInFlight = true;
       try {
-        return await source.pullBackup(device, destDir, (progress: BackupProgress) => {
-          sendToRenderer('epoch:deviceBackupProgress', progress);
-        });
+        return await source.pullBackup(
+          device,
+          destDir,
+          (progress: BackupProgress) => {
+            sendToRenderer('epoch:deviceBackupProgress', progress);
+          },
+          password
+        );
       } finally {
         deviceBackupInFlight = false;
       }
@@ -87,13 +92,11 @@ export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null
         sendToRenderer('epoch:toolAcquisitionStepStarted', step.label);
         const pkgConfigPath = path.join(installPrefix, 'lib', 'pkgconfig');
         
-        // Base environment configuration preserving PKG_CONFIG_PATH
         const env: NodeJS.ProcessEnv = {
           ...process.env,
           PKG_CONFIG_PATH: [pkgConfigPath, process.env.PKG_CONFIG_PATH].filter(Boolean).join(path.delimiter),
         };
 
-        // macOS-specific PATH injection for Homebrew and libtool
         if (process.platform === 'darwin') {
           const macPaths = [
             '/opt/homebrew/bin',

@@ -56,30 +56,16 @@ export interface BackupProgress {
 }
 
 export interface DeviceBackupSource {
-  /** Stable id, e.g. 'ios'. Used as the key in the source registry and in
-   * IPC calls -- never shown to the user directly (use `label` for that). */
   readonly id: string;
-  /** Display name, e.g. "iOS Device". */
   readonly label: string;
-
-  /** Is the underlying CLI tool available right now on this machine? */
   checkToolAvailable(): Promise<ToolAvailabilityStatus>;
-
-  /** Devices of this kind currently connected. Only meaningful once
-   * checkToolAvailable() reports available -- callers should gate on that
-   * first rather than rely on this returning an empty list to mean "no
-   * tool", since a real "no devices connected" empty list and a "the tool
-   * itself isn't installed" empty list mean very different things to show
-   * the user. */
   listConnectedDevices(): Promise<DeviceInfo[]>;
-
-  /** Pull a full backup of `device` into `destDir` (which must already
-   * exist and be empty), reporting progress as it goes. Resolves with the
-   * backup directory path on success -- the same shape WorkspaceView's
-   * existing selectBackupDirectory() flow already hands to startPipeline,
-   * so a caller doesn't need to know whether a directory came from the
-   * user's own filesystem or a fresh pull. */
-  pullBackup(device: DeviceInfo, destDir: string, onProgress: (progress: BackupProgress) => void): Promise<string>;
+  pullBackup(
+    device: DeviceInfo,
+    destDir: string,
+    onProgress: (progress: BackupProgress) => void,
+    password?: string
+  ): Promise<string>;
 }
 
 export type ToolAcquisitionAction =

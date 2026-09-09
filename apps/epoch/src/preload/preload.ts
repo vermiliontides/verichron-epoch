@@ -92,8 +92,8 @@ const dbApi = {
     ipcRenderer.invoke('epoch:listConnectedDevices', sourceId),
   getToolAcquisitionActions: (sourceId: string): Promise<ToolAcquisitionAction[]> =>
     ipcRenderer.invoke('epoch:getToolAcquisitionActions', sourceId),
-  pullDeviceBackup: (sourceId: string, device: DeviceInfo, destDir: string): Promise<string> =>
-    ipcRenderer.invoke('epoch:pullDeviceBackup', sourceId, device, destDir),
+  pullDeviceBackup: (sourceId: string, device: DeviceInfo, destDir: string, password?: string): Promise<string> =>
+    ipcRenderer.invoke('epoch:pullDeviceBackup', sourceId, device, destDir, password),
   runToolAcquisitionSteps: (
     steps: ToolAcquisitionCommand[],
     installPrefix: string

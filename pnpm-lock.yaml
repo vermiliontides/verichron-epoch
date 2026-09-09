@@ -262,11 +262,10 @@ importers:
         version: 6.0.3
 
   packages/logs:
-    dependencies:
+    devDependencies:
       pino:
         specifier: ^10.3.1
         version: 10.3.1
-    devDependencies:
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

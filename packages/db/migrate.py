@@ -13,7 +13,7 @@ pick it up. This script is what keeps a long-lived database in sync with
 migrations/ as the schema evolves after first boot.
 
 Usage:
-    python3 packages-py/db/migrate.py --db-url postgresql://forensics:forensics_dev_only@localhost:5432/forensics
+    python3 packages/db/migrate.py --db-url postgresql://forensics:forensics_dev_only@localhost:5432/forensics
 
 Tracks applied migrations in a schema_migrations table. Migrations are
 applied in filename order (hence the 0001_, 0002_ prefix convention), each
@@ -21,13 +21,14 @@ inside its own transaction — one failing migration stops the run and leaves
 everything before it committed, everything from it on untouched.
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 from pathlib import Path
 
-from runtime_env import fatal_if_missing_venv
-
 import psycopg2
+from runtime_env import load_runtime_env  # Standard workspace import via uv environment
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 

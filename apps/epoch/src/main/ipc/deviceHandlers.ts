@@ -3,7 +3,8 @@ import path from 'path';
 import fs from 'fs/promises';
 import { spawn } from 'child_process';
 import { listDeviceBackupSources, getDeviceBackupSource, getAcquisitionStrategy } from '../tools/device-backup/registry';
-import type { DeviceInfo, ToolAcquisitionCommand, BackupProgress } from '../../shared/types/tools';
+import { isHomebrewAvailable } from '../tools/device-backup/ios/buildSteps';
+import type { DeviceInfo, ToolAcquisitionCommand, BackupProgress, ToolAcquisitionResult } from '../../shared/types/tools';
 
 export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null) {
   function sendToRenderer(channel: string, ...args: unknown[]) {
@@ -75,7 +76,7 @@ export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null
 
   let acquisitionInFlight = false;
 
-  ipcMain.handle('epoch:runToolAcquisitionSteps', async (_event, steps: ToolAcquisitionCommand[], installPrefix: string) => {
+  ipcMain.handle('epoch:runToolAcquisitionSteps', async (_event, steps: ToolAcquisitionCommand[], installPrefix: string): Promise<ToolAcquisitionResult> => {
     if (acquisitionInFlight) {
       throw new Error('A tool acquisition run is already in progress.');
     }
@@ -121,13 +122,70 @@ export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null
         });
 
         if (exitCode !== 0) {
-          sendToRenderer('epoch:toolAcquisitionFinished', { success: false, failedStep: step.label });
-          return { success: false, failedStep: step.label };
+          // On macOS, a failed source-fetch/build step (e.g. "Fetch libplist
+          // source") doesn't have to be a dead end -- if brew is on this
+          // machine, tell the renderer so it can offer the Homebrew fallback
+          // instead of leaving the user staring at manual terminal
+          // instructions per the compile-from-source action's own commands.
+          const homebrewFallbackAvailable = process.platform === 'darwin' && isHomebrewAvailable();
+          const result: ToolAcquisitionResult = { success: false, failedStep: step.label, homebrewFallbackAvailable };
+          sendToRenderer('epoch:toolAcquisitionFinished', result);
+          return result;
         }
       }
 
-      sendToRenderer('epoch:toolAcquisitionFinished', { success: true });
-      return { success: true };
+      const result: ToolAcquisitionResult = { success: true };
+      sendToRenderer('epoch:toolAcquisitionFinished', result);
+      return result;
+    } finally {
+      acquisitionInFlight = false;
+    }
+  });
+
+  ipcMain.handle('epoch:runHomebrewInstall', async (_event, formulas: string[]): Promise<{ success: boolean }> => {
+    if (acquisitionInFlight) {
+      throw new Error('A tool acquisition run is already in progress.');
+    }
+    if (process.platform !== 'darwin') {
+      throw new Error('Homebrew installation is only supported on macOS.');
+    }
+    if (!isHomebrewAvailable()) {
+      throw new Error('brew was not found on PATH.');
+    }
+
+    acquisitionInFlight = true;
+    const label = `Install via Homebrew (${formulas.join(', ')})`;
+
+    try {
+      sendToRenderer('epoch:toolAcquisitionStepStarted', label);
+
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+      };
+      const macPaths = [
+        '/opt/homebrew/bin',
+        '/usr/local/bin',
+        '/opt/homebrew/opt/libtool/bin',
+        '/usr/local/opt/libtool/bin',
+      ].join(':');
+      env.PATH = env.PATH ? `${macPaths}:${env.PATH}` : macPaths;
+
+      const exitCode = await new Promise<number>((resolve, reject) => {
+        const child = spawn('brew', ['install', ...formulas], { env });
+        child.stdout?.on('data', (chunk: Buffer) => {
+          sendToRenderer('epoch:toolAcquisitionOutput', { step: label, line: chunk.toString('utf-8') });
+        });
+        child.stderr?.on('data', (chunk: Buffer) => {
+          sendToRenderer('epoch:toolAcquisitionOutput', { step: label, line: chunk.toString('utf-8') });
+        });
+        child.once('error', reject);
+        child.once('close', (code) => resolve(code ?? 1));
+      });
+
+      const success = exitCode === 0;
+      const result: ToolAcquisitionResult = success ? { success: true } : { success: false, failedStep: label };
+      sendToRenderer('epoch:toolAcquisitionFinished', result);
+      return { success };
     } finally {
       acquisitionInFlight = false;
     }

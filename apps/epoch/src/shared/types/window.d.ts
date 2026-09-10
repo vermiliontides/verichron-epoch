@@ -11,8 +11,9 @@ import type {
   DeviceInfo,
   ToolAcquisitionAction,
   ToolAcquisitionCommand,
+  ToolAcquisitionResult,
   ToolAvailabilityStatus,
-} from '../tools/device-backup/types';
+} from './tools';
  
 export type ReportResult =
   | { status: 'ok'; content: string; path: string }
@@ -84,11 +85,12 @@ declare global {
       runToolAcquisitionSteps: (
         steps: ToolAcquisitionCommand[],
         installPrefix: string
-      ) => Promise<{ success: boolean; failedStep?: string }>;
+      ) => Promise<ToolAcquisitionResult>;
+      runHomebrewInstall: (formulas: string[]) => Promise<{ success: boolean }>;
       onDeviceBackupProgress: (callback: (progress: BackupProgress) => void) => () => void;
       onToolAcquisitionStepStarted: (callback: (label: string) => void) => () => void;
       onToolAcquisitionOutput: (callback: (entry: { step: string; line: string }) => void) => () => void;
-      onToolAcquisitionFinished: (callback: (result: { success: boolean; failedStep?: string }) => void) => () => void;
+      onToolAcquisitionFinished: (callback: (result: ToolAcquisitionResult) => void) => () => void;
     };
   }
 }

@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import path from 'path';
 import type { ToolAcquisitionCommand } from '../../../../shared/types/tools';
 
@@ -118,3 +119,47 @@ export function compileFromSourceStepsViaWsl(buildDir: string, installPrefix: st
     args: ['--', 'bash', '-lc', `cd '${step.cwd}' && ${step.command} ${step.args.join(' ')}`],
   }));
 }
+
+/**
+ * Checks for a `brew` executable on PATH. Homebrew's own libimobiledevice
+ * formula resolves libplist/libimobiledevice-glue/libusbmuxd/libtatsu as
+ * dependencies automatically, so this is offered as the preferred macOS
+ * path over compileFromSourceSteps above -- but only when it's actually
+ * present, so the UI never points a user at a command that will just fail
+ * again immediately.
+ *
+ * Uses the shell builtin `command -v` (same technique as
+ * detection.ts's detectBinary POSIX branch) since `brew` itself isn't
+ * guaranteed to be resolvable via a plain execFileSync('brew', ...) call
+ * on every shell setup (e.g. Apple Silicon's /opt/homebrew/bin not yet on
+ * a non-interactive PATH).
+ */
+export function isHomebrewAvailable(): boolean {
+  try {
+    const env = {
+      ...process.env,
+      PATH: ['/opt/homebrew/bin', '/usr/local/bin', process.env.PATH].filter(Boolean).join(':'),
+    };
+    execFileSync('/bin/sh', ['-c', 'command -v brew'], { env, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `brew install <formulas>` as a single ToolAcquisitionCommand. Unlike
+ * compileFromSourceSteps, there's no dependency-order list to maintain
+ * here -- Homebrew resolves the same chain (libplist, libimobiledevice-glue,
+ * libusbmuxd, libtatsu) as dependencies of the libimobiledevice formula.
+ */
+export function homebrewInstallCommand(
+  formulas: string[] = ['libplist', 'libimobiledevice']
+): ToolAcquisitionCommand {
+  return {
+    label: `Install via Homebrew (${formulas.join(', ')})`,
+    command: 'brew',
+    args: ['install', ...formulas],
+  };
+}
+

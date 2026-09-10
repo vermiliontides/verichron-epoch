@@ -2,18 +2,20 @@
  
 :root {
   --background: 217 17% 9%;
-  --surface: 217 17% 15%;
-  --foreground: 47 5% 88%;
-  --accent: 186 50% 54%;
-  --flag: 34 77% 60%;
+  --surface: 217 17% 14%;
+  --surface-raised: 217 17% 19%;
+  --foreground: 47 5% 90%;
+  --accent: 186 54% 54%;
+  --flag: 34 80% 60%;
   --danger: 6 78% 62%;
-  --border: 217 15% 17%;
-  --muted-foreground: 220 17% 64%;
+  --border: 217 16% 23%;
+  --muted-foreground: 220 16% 65%;
 }
  
 @theme {
   --color-background: hsl(var(--background));
   --color-surface: hsl(var(--surface));
+  --color-surface-raised: hsl(var(--surface-raised));
   --color-foreground: hsl(var(--foreground));
   --color-accent: hsl(var(--accent));
   --color-flag: hsl(var(--flag));
@@ -41,4 +43,6 @@ body {
   background: var(--color-background);
   color: var(--color-foreground);
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

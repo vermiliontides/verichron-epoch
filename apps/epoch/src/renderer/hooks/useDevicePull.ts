@@ -18,6 +18,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
   const [acquisitionOutput, setAcquisitionOutput] = useState<string[]>([]);
   const [acquisitionStep, setAcquisitionStep] = useState<string | null>(null);
   const [acquisitionError, setAcquisitionError] = useState<string | null>(null);
+  const [homebrewFallbackAvailable, setHomebrewFallbackAvailable] = useState(false);
 
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<DeviceInfo | null>(null);
@@ -37,6 +38,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     setPhase('checking');
     setAcquisitionStep(null);
     setAcquisitionError(null);
+    setHomebrewFallbackAvailable(false);
     setDevices([]);
     setSelectedDevice(null);
     setActions([]);
@@ -53,10 +55,10 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
         const acts = await window.epoch.getToolAcquisitionActions(id);
         setActions(acts);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       setPhase('unavailable');
       setAcquisitionStep(null);
-      setAcquisitionError(error.message || 'Failed to communicate with the device service.');
+      setAcquisitionError(error instanceof Error ? error.message : 'Failed to communicate with the device service.');
     }
   }, []);
 
@@ -69,21 +71,48 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
   }, [sourceId, checkTool]);
 
   useEffect(() => {
+    let outputBuffer: string[] = [];
+    let outputRafId: number | null = null;
+
+    const flushOutputBuffer = () => {
+      if (outputBuffer.length > 0) {
+        const batch = [...outputBuffer];
+        outputBuffer = [];
+        setAcquisitionOutput((prev) => {
+          const next = [...prev, ...batch];
+          return next.length > 2500 ? next.slice(next.length - 2500) : next;
+        });
+      }
+      outputRafId = null;
+    };
+
     const unsubStep = window.epoch.onToolAcquisitionStepStarted((label) => {
       setAcquisitionStep(label);
-      setAcquisitionOutput((prev) => [...prev, `\n--- ${label} ---`]);
+      outputBuffer.push(`\n--- ${label} ---`);
+      if (outputRafId === null) {
+        outputRafId = requestAnimationFrame(flushOutputBuffer);
+      }
     });
-    const unsubOutput = window.epoch.onToolAcquisitionOutput(({ line }) =>
-      setAcquisitionOutput((prev) => [...prev, line])
-    );
+    const unsubOutput = window.epoch.onToolAcquisitionOutput(({ line }) => {
+      outputBuffer.push(line);
+      if (outputRafId === null) {
+        outputRafId = requestAnimationFrame(flushOutputBuffer);
+      }
+    });
     const unsubFinished = window.epoch.onToolAcquisitionFinished((result) => {
+      if (outputRafId !== null) {
+        cancelAnimationFrame(outputRafId);
+        flushOutputBuffer();
+      }
       if (result.success) {
         setAcquisitionStep(null);
+        setHomebrewFallbackAvailable(false);
         if (sourceId) checkTool(sourceId);
       } else {
         setPhase('unavailable');
         setAcquisitionStep(null);
         setAcquisitionError(`Failed at: ${result.failedStep}`);
+        setHomebrewFallbackAvailable(!!result.homebrewFallbackAvailable);
       }
     });
     const unsubProgress = window.epoch.onDeviceBackupProgress((progress) => {
@@ -97,6 +126,9 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     });
 
     return () => {
+      if (outputRafId !== null) {
+        cancelAnimationFrame(outputRafId);
+      }
       unsubStep();
       unsubOutput();
       unsubFinished();
@@ -114,10 +146,29 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
       const prefixArg = action.steps.find((s: ToolAcquisitionCommand) => s.args.some((a: string) => a.startsWith('--prefix=')));
       const installPrefix = prefixArg?.args.find((a: string) => a.startsWith('--prefix='))?.slice('--prefix='.length) ?? '';
       await window.epoch.runToolAcquisitionSteps(action.steps, installPrefix);
-    } catch (error: any) {
+    } catch (error: unknown) {
       setPhase('unavailable');
       setAcquisitionStep(null);
-      setAcquisitionError(error.message || 'IPC rejection during tool acquisition.');
+      setAcquisitionError(error instanceof Error ? error.message : 'IPC rejection during tool acquisition.');
+    }
+  };
+
+  const runHomebrewInstall = async (formulas: string[]) => {
+    setPhase('acquiring');
+    setAcquisitionOutput([]);
+    setAcquisitionError(null);
+    setAcquisitionStep(`Install via Homebrew (${formulas.join(', ')})`);
+    setHomebrewFallbackAvailable(false);
+
+    try {
+      await window.epoch.runHomebrewInstall(formulas);
+      // Success/failure UI state is driven by the onToolAcquisitionFinished
+      // listener above, same as runCompileFromSource -- this call just
+      // kicks the process off.
+    } catch (error: unknown) {
+      setPhase('unavailable');
+      setAcquisitionStep(null);
+      setAcquisitionError(error instanceof Error ? error.message : 'Failed to run Homebrew installation.');
     }
   };
 
@@ -149,6 +200,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     acquisitionOutput,
     acquisitionStep,
     acquisitionError,
+    homebrewFallbackAvailable,
     devices,
     selectedDevice,
     setSelectedDevice,
@@ -156,6 +208,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     pullProgress,
     pullError,
     runCompileFromSource,
+    runHomebrewInstall,
     handleSelectDestination,
     handlePull,
     checkAvailability,

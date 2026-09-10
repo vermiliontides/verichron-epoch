@@ -1,7 +1,12 @@
 import { app } from 'electron';
 import path from 'path';
 import type { ToolAcquisitionAction, ToolAcquisitionStrategy } from '../../../../shared/types/tools';
-import { compileFromSourceSteps, compileFromSourceStepsViaWsl, systemPackageInstallCommand } from './buildSteps';
+import {
+  compileFromSourceSteps,
+  compileFromSourceStepsViaWsl,
+  systemPackageInstallCommand,
+  isHomebrewAvailable,
+} from './buildSteps';
 
 /** Where a self-compiled or downloaded idevicebackup2 ends up, and where
  * detectBinary()'s bundled-path check should look. One app-owned location
@@ -42,15 +47,27 @@ export class IosToolAcquisitionStrategy implements ToolAcquisitionStrategy {
       ];
     }
 
-    // darwin and linux: same autotools sequence, different system package
-    // manager for the one privileged step.
-    return [
-      systemPackagesStep,
-      {
-        kind: 'compile-from-source',
-        title: 'Compile idevicebackup2 from source',
-        steps: compileFromSourceSteps(buildDir, installPrefix),
-      },
-    ];
+    const actions: ToolAcquisitionAction[] = [];
+
+    // macOS: offer Homebrew first when it's present. This is the fix for
+    // the "Fetch libplist source" failure -- rather than the source-build
+    // path being the only option and throwing an unhandled error partway
+    // through, a working macOS package manager path is offered up front
+    // and the source-build path becomes the fallback, not the only route.
+    if (process.platform === 'darwin' && isHomebrewAvailable()) {
+      actions.push({
+        kind: 'homebrew-install',
+        title: 'Install via Homebrew (recommended)',
+        formulas: ['libplist', 'libimobiledevice'],
+      });
+    }
+
+    actions.push(systemPackagesStep, {
+      kind: 'compile-from-source',
+      title: 'Compile idevicebackup2 from source',
+      steps: compileFromSourceSteps(buildDir, installPrefix),
+    });
+
+    return actions;
   }
 }

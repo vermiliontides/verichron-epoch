@@ -23,6 +23,7 @@ dependencies = [
     "requests>=2.31",
     "stix2>=3.0",
     "faker>=20.0",
+    "mvt"
 ]
 
 [tool.setuptools]
@@ -30,11 +31,12 @@ py-modules = []
 
 [tool.uv.workspace]
 members = [
-    "packages/*",
+    "packages/contracts",
+    "packages/db",
     "libs/*",
     "apps/extractors/*",
     "apps/analysis",
-    "apps/reporting",
+    "apps/reporting"
 ]
 # db-reader is a pure TypeScript/Node package (@verichron/db-reader) with no
 # Python source at all -- it belongs to the pnpm workspace, not this one.

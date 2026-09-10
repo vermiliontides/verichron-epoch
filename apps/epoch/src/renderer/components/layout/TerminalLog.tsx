@@ -11,9 +11,9 @@ interface TerminalLogProps {
 
 // How close to the bottom (in px) counts as "still at the bottom" for the
 // purposes of deciding whether to auto-scroll. A user's trackpad/wheel
-// scroll rarely lands on exactly 0, so a small tolerance avoids treating a
+// scroll rarely lands on exactly 0, so a reasonable tolerance avoids treating a
 // stable "I'm reading the end" position as "I scrolled away".
-const BOTTOM_THRESHOLD_PX = 24;
+const BOTTOM_THRESHOLD_PX = 64;
 
 export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technical log' }: TerminalLogProps) {
   const [open, setOpen] = useState(defaultOpen);
@@ -39,7 +39,10 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
       return;
     }
     if (stickToBottom && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const el = scrollRef.current;
+      requestAnimationFrame(() => {
+        if (el) el.scrollTop = el.scrollHeight;
+      });
     }
     // Deliberately omits stickToBottom/scrollRef from deps -- this should
     // only re-run when new lines arrive or the panel opens, not whenever
@@ -67,7 +70,10 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
   // exactly what effects are for.
   useEffect(() => {
     if (open && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const el = scrollRef.current;
+      requestAnimationFrame(() => {
+        if (el) el.scrollTop = el.scrollHeight;
+      });
     }
   }, [open]);
 
@@ -112,7 +118,7 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
           <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="max-h-64 overflow-y-auto px-3 py-2 font-mono text-xs leading-relaxed"
+            className="max-h-80 overflow-y-auto px-3 py-2 font-mono text-xs leading-relaxed"
           >
             {lines.length === 0 ? (
               <p className="text-muted-foreground italic">No output yet.</p>

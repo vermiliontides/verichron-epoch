@@ -71,7 +71,18 @@ export interface DeviceBackupSource {
 export type ToolAcquisitionAction =
   | { kind: 'install-instructions'; title: string; commands: string[] }
   | { kind: 'compile-from-source'; title: string; steps: ToolAcquisitionCommand[] }
-  | { kind: 'download-verified-release'; title: string; manifestUrl: string };
+  | { kind: 'download-verified-release'; title: string; manifestUrl: string }
+  | { kind: 'homebrew-install'; title: string; formulas: string[] };
+
+/** Result of running an acquisition action. `homebrewFallbackAvailable` is
+ * set only when a compile-from-source step failed on macOS AND `brew` is
+ * present on the host -- it tells the UI it can offer the Homebrew path
+ * instead of leaving the user stuck on manual terminal instructions. */
+export interface ToolAcquisitionResult {
+  success: boolean;
+  failedStep?: string;
+  homebrewFallbackAvailable?: boolean;
+}
 
 export interface ToolAcquisitionCommand {
   /** Short label shown above this step in the UI, e.g. "Install build

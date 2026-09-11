@@ -52,6 +52,10 @@ export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null
   ipcMain.handle(
     'epoch:pullDeviceBackup',
     async (_event, sourceId: string, device: DeviceInfo, destDir: string, password?: string) => {
+      if (!password || password.trim() === '') {
+        throw new Error('A secure password is required to encrypt the backup session.');
+      }
+
       if (deviceBackupInFlight) {
         throw new Error('A device backup is already in progress -- wait for it to finish before starting another.');
       }
@@ -93,13 +97,11 @@ export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null
         sendToRenderer('epoch:toolAcquisitionStepStarted', step.label);
         const pkgConfigPath = path.join(installPrefix, 'lib', 'pkgconfig');
         
-        // Base environment configuration preserving PKG_CONFIG_PATH
         const env: NodeJS.ProcessEnv = {
           ...process.env,
           PKG_CONFIG_PATH: [pkgConfigPath, process.env.PKG_CONFIG_PATH].filter(Boolean).join(path.delimiter),
         };
 
-        // macOS-specific PATH injection for Homebrew and libtool
         if (process.platform === 'darwin') {
           const macPaths = [
             '/opt/homebrew/bin',
@@ -124,11 +126,6 @@ export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null
         });
 
         if (exitCode !== 0) {
-          // On macOS, a failed source-fetch/build step (e.g. "Fetch libplist
-          // source") doesn't have to be a dead end -- if brew is on this
-          // machine, tell the renderer so it can offer the Homebrew fallback
-          // instead of leaving the user staring at manual terminal
-          // instructions per the compile-from-source action's own commands.
           const homebrewFallbackAvailable = process.platform === 'darwin' && isHomebrewAvailable();
           const result: ToolAcquisitionResult = { success: false, failedStep: step.label, homebrewFallbackAvailable };
           sendToRenderer('epoch:toolAcquisitionFinished', result);

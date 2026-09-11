@@ -93,11 +93,13 @@ export function registerDeviceHandlers(getMainWindow: () => BrowserWindow | null
         sendToRenderer('epoch:toolAcquisitionStepStarted', step.label);
         const pkgConfigPath = path.join(installPrefix, 'lib', 'pkgconfig');
         
+        // Base environment configuration preserving PKG_CONFIG_PATH
         const env: NodeJS.ProcessEnv = {
           ...process.env,
           PKG_CONFIG_PATH: [pkgConfigPath, process.env.PKG_CONFIG_PATH].filter(Boolean).join(path.delimiter),
         };
 
+        // macOS-specific PATH injection for Homebrew and libtool
         if (process.platform === 'darwin') {
           const macPaths = [
             '/opt/homebrew/bin',

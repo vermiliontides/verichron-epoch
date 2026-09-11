@@ -71,9 +71,14 @@ function toolBinaryPath(): { available: boolean; idevicebackup2?: string; idevic
   };
 }
 
-function readLockdownValue(ideviceinfoPath: string, udid: string, key: string): string | undefined {
+function readLockdownValue(ideviceinfoPath: string, udid: string, key: string, domain?: string): string | undefined {
   try {
-    const result = execFileSync(ideviceinfoPath, ['-u', udid, '-k', key], { encoding: 'utf-8' });
+    const args = ['-u', udid];
+    if (domain) {
+      args.push('-q', domain);
+    }
+    args.push('-k', key);
+    const result = execFileSync(ideviceinfoPath, args, { encoding: 'utf-8' });
     const value = result.trim();
     return value.length > 0 ? value : undefined;
   } catch {
@@ -120,17 +125,36 @@ export class IosBackupSource implements DeviceBackupSource {
     onProgress: (progress: BackupProgress) => void,
     password?: string
   ): Promise<string> {
-    const tools = toolBinaryPath();
-    if (!tools.available || !tools.idevicebackup2) {
-      throw new Error('idevicebackup2 is not available -- call checkToolAvailable() first.');
+    if (!password) {
+      throw new Error('A backup decryption password is required to perform a secure extraction.');
     }
 
-    onProgress({ phase: 'preparing', message: `Starting backup of ${device.name}...` });
+    const tools = toolBinaryPath();
+    if (!tools.available || !tools.idevicebackup2 || !tools.ideviceinfo) {
+      throw new Error('idevicebackup2 and ideviceinfo are not available -- call checkToolAvailable() first.');
+    }
+
+    onProgress({ phase: 'preparing', message: `Checking encryption status for ${device.name}...` });
+
+    const isEncrypted = readLockdownValue(tools.ideviceinfo, device.id, 'WillEncrypt', 'com.apple.mobile.backup') === 'true';
+    let encryptionToggledByUs = false;
+
+    if (!isEncrypted) {
+      onProgress({ phase: 'preparing', message: 'Enforcing backup encryption on device...' });
+      try {
+        execFileSync(tools.idevicebackup2, ['-u', device.id, 'encryption', 'on', password], { encoding: 'utf-8', stdio: 'ignore' });
+        encryptionToggledByUs = true;
+      } catch (err) {
+        throw new Error('Failed to enable encryption on the device. Please set a backup password manually via Finder/iTunes.');
+      }
+    }
+
+    onProgress({ phase: 'preparing', message: `Starting secure backup of ${device.name}...` });
 
     return new Promise((resolve, reject) => {
       const env: NodeJS.ProcessEnv = {
         ...process.env,
-        ...(password ? { BACKUP_PASSWORD: password } : {}),
+        BACKUP_PASSWORD: password,
       };
 
       const proc = spawn(tools.idevicebackup2!, ['backup', '--full', destDir, '-u', device.id], { env });
@@ -156,7 +180,16 @@ export class IosBackupSource implements DeviceBackupSource {
         reject(err);
       });
 
-      proc.once('close', (code: number | null) => {
+      proc.once('close', async (code: number | null) => {
+        if (encryptionToggledByUs) {
+          onProgress({ phase: 'preparing', message: 'Restoring original device encryption state...' });
+          try {
+            execFileSync(tools.idevicebackup2!, ['-u', device.id, 'encryption', 'off', password], { encoding: 'utf-8', stdio: 'ignore' });
+          } catch (err) {
+            console.error('Failed to disable device encryption post-backup', err);
+          }
+        }
+
         if (code === 0) {
           onProgress({ phase: 'done', message: 'Backup complete.' });
           resolve(destDir);

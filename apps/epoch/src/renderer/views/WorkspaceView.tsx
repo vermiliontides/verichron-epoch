@@ -496,17 +496,17 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           )}
 
           {analysisResult && (
-            <div className="mt-4">
+            <div>
               {analysisResult.success && analysisFailedCount === 0 ? (
-                <div>
-                  <p className="text-sm font-medium text-accent flex items-center gap-2 mb-2">
-                    <CheckCircle2 size="1.125rem" /> Analysis complete.
+                <>
+                  <p className="text-sm text-accent flex items-center gap-2 mb-3">
+                    <CheckCircle2 size="1rem" /> Analysis complete.
                   </p>
                   {analysisResult.analysis && (
-                    <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
+                    <p className="text-xs text-muted-foreground mb-3">
                       {analysisResult.analysis.filter((result) => result.status === 'succeeded').length} investigation
                       {analysisResult.analysis.filter((result) => result.status === 'succeeded').length === 1 ? '' : 's'}
-                      {' '}analyzed
+                      analyzed
                       {analysisResult.analysis.filter((result) => result.status === 'skipped').length > 0
                         ? `, ${analysisResult.analysis.filter((result) => result.status === 'skipped').length} already up to date`
                         : ''}
@@ -520,11 +520,11 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                     View investigation
                     <ArrowRight size="1rem" />
                   </button>
-                </div>
+                </>
               ) : (
                 <div>
-                  <p className="text-sm font-medium text-danger flex items-center gap-2">
-                    <XCircle size="1.125rem" />
+                  <p className="text-sm text-danger flex items-center gap-2">
+                    <XCircle size="1rem" />
                     {analysisFailedCount > 0
                       ? `Analysis completed with ${analysisFailedCount} investigation${analysisFailedCount === 1 ? '' : 's'} needing attention.`
                       : `Analysis failed${analysisResult.error ? `: ${analysisResult.error}` : '.'}`}
@@ -533,13 +533,10 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                     <p className="text-xs text-muted-foreground mt-1">
                       {analysisResult.analysis.filter((result) => result.status === 'failed').length} investigation
                       {analysisResult.analysis.filter((result) => result.status === 'failed').length === 1 ? '' : 's'}
-                      {' '}need attention.
+                      need attention.
                     </p>
                   )}
-                  <button
-                    onClick={handleStartAnalysis}
-                    className="inline-flex items-center gap-1.5 bg-surface-raised border border-border hover:border-accent/40 text-foreground hover:text-accent active:scale-[0.99] px-3.5 py-1.5 rounded-md font-medium text-xs shadow-xs cursor-pointer transition-all mt-3"
-                  >
+                  <button onClick={handleStartAnalysis} className="text-xs text-accent hover:underline mt-2">
                     Try again
                   </button>
                 </div>

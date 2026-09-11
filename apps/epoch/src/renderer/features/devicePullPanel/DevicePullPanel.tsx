@@ -12,6 +12,7 @@ import {
   FolderOpen,
   RefreshCw,
   Terminal,
+  Lock,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { useDevicePull } from '../../hooks/useDevicePull';
@@ -45,6 +46,8 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
     checkAvailability,
   } = useDevicePull(onBackupPulled);
 
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const terminalRef = useRef<HTMLPreElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
@@ -72,6 +75,21 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
     setStickToBottom(true);
     if (terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  };
+
+  const onPullClick = async () => {
+    if (!password || password.trim() === '') {
+      setPasswordError('A secure decryption password is required to create an encrypted backup.');
+      return;
+    }
+    setPasswordError(null);
+    try {
+      // Pass the password to the hook's pull handler
+      await handlePull(password);
+    } finally {
+      // Immediately flush the password from renderer memory
+      setPassword('');
     }
   };
 
@@ -308,33 +326,58 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           )}
 
           {selectedDevice && (
-            <div className="flex items-center gap-3 mb-5 p-3 rounded-lg bg-surface/60 border border-border/60">
-              <button
-                onClick={handleSelectDestination}
-                disabled={phase === 'pulling'}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-surface-raised border border-border hover:border-accent/40 text-xs font-medium text-foreground hover:text-accent disabled:opacity-50 transition-all shadow-xs cursor-pointer"
-              >
-                <FolderOpen size="0.875rem" className="text-accent" />
-                {destDir ? 'Change destination' : 'Choose destination'}
-              </button>
-              {destDir ? (
-                <span className="text-xs font-mono text-foreground/80 truncate" title={destDir}>
-                  {destDir}
-                </span>
-              ) : (
-                <span className="text-xs text-muted-foreground italic">No destination chosen yet</span>
-              )}
+            <div className="flex flex-col gap-3 mb-5 p-4 rounded-lg bg-surface/60 border border-border/60">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleSelectDestination}
+                  disabled={phase === 'pulling'}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-surface-raised border border-border hover:border-accent/40 text-xs font-medium text-foreground hover:text-accent disabled:opacity-50 transition-all shadow-xs cursor-pointer"
+                >
+                  <FolderOpen size="0.875rem" className="text-accent" />
+                  {destDir ? 'Change destination' : 'Choose destination'}
+                </button>
+                {destDir ? (
+                  <span className="text-xs font-mono text-foreground/80 truncate" title={destDir}>
+                    {destDir}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic">No destination chosen yet</span>
+                )}
+              </div>
+
+              {/* Secure Backup Password Input */}
+              <div className="mt-2 pt-3 border-t border-border/60">
+                <label className="block text-xs font-medium text-foreground mb-1 flex items-center gap-1.5">
+                  <Lock size="0.875rem" className="text-accent" /> Backup Encryption Password (Required)
+                </label>
+                <p className="text-2xs text-muted-foreground mb-2">
+                  Unencrypted backups omit sensitive artifacts like Keychain and Health data. Epoch will enforce encryption during creation using this password.
+                </p>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (passwordError) setPasswordError(null);
+                  }}
+                  disabled={phase === 'pulling'}
+                  placeholder="Enter temporary backup password"
+                  autoComplete="new-password"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
+                />
+                {passwordError && <p className="text-2xs text-danger mt-1 font-medium">{passwordError}</p>}
+              </div>
             </div>
           )}
 
           {selectedDevice && destDir && phase !== 'pulled' && (
             <button
-              onClick={handlePull}
+              onClick={onPullClick}
               disabled={phase === 'pulling'}
               className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 active:scale-[0.99] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm shadow-accent/15 transition-all cursor-pointer"
             >
               {phase === 'pulling' ? <Loader2 size="1rem" className="animate-spin" /> : null}
-              {phase === 'pulling' ? 'Pulling backup...' : 'Pull backup'}
+              {phase === 'pulling' ? 'Pulling encrypted backup...' : 'Pull encrypted backup'}
             </button>
           )}
 
@@ -352,7 +395,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           {phase === 'pulled' && (
             <div className="text-sm text-accent bg-accent/10 border border-accent/30 rounded-lg p-3.5 mt-4 flex items-center gap-2 font-medium">
               <CheckCircle2 size="1.125rem" className="shrink-0" />
-              <span>Backup imported successfully and ready for analysis.</span>
+              <span>Encrypted backup imported successfully and ready for analysis.</span>
             </div>
           )}
         </div>

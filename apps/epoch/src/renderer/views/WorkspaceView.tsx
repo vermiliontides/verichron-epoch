@@ -520,7 +520,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                     View investigation
                     <ArrowRight size="1rem" />
                   </button>
-                </div>
+                </>
               ) : (
                 <div>
                   <p className="text-sm text-danger flex items-center gap-2">

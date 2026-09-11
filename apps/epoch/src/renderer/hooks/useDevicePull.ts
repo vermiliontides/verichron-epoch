@@ -122,6 +122,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
         if (destDir && onBackupPulled) onBackupPulled(destDir);
       } else if (progress.phase === 'error') {
         setPullError(progress.message);
+        setPhase('available');
       }
     });
 
@@ -162,9 +163,6 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
 
     try {
       await window.epoch.runHomebrewInstall(formulas);
-      // Success/failure UI state is driven by the onToolAcquisitionFinished
-      // listener above, same as runCompileFromSource -- this call just
-      // kicks the process off.
     } catch (error: unknown) {
       setPhase('unavailable');
       setAcquisitionStep(null);
@@ -177,13 +175,13 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     if (dir) setDestDir(dir);
   };
 
-  const handlePull = async () => {
+  const handlePull = async (password: string) => {
     if (!sourceId || !selectedDevice || !destDir) return;
     setPhase('pulling');
     setPullProgress([]);
     setPullError(null);
     try {
-      await window.epoch.pullDeviceBackup(sourceId, selectedDevice, destDir);
+      await window.epoch.pullDeviceBackup(sourceId, selectedDevice, destDir, password);
     } catch (err) {
       setPullError(err instanceof Error ? err.message : 'Unknown error');
       setPhase('available');

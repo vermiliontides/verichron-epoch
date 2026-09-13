@@ -1,6 +1,3 @@
-
-
-Devicepullpanel · TSX
 import React, { useRef, useEffect, useState } from 'react';
 import {
   Smartphone,
@@ -384,6 +381,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           )}
  
           {selectedDevice && destDir && phase !== 'pulled' && (
+<<<<<<< HEAD
             <button
               onClick={onPullClick}
               disabled={phase === 'pulling' || !passwordProvided}
@@ -395,6 +393,17 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               {phase === 'pulling' ? <Loader2 size="1rem" className="animate-spin" /> : null}
               {phase === 'pulling' ? 'Pulling encrypted backup...' : 'Pull encrypted backup'}
             </button>
+=======
+        <button
+          onClick={onPullClick}
+          disabled={phase === 'pulling' || !passwordProvided}
+          title={!passwordProvided ? 'Enter a backup password to continue' : undefined}
+          className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm shadow-accent/15 transition-all cursor-pointer"
+        >
+          {phase === 'pulling' ? <Loader2 size="1rem" className="animate-spin" /> : null}
+          {phase === 'pulling' ? 'Pulling encrypted backup...' : 'Pull encrypted backup'}
+        </button>
+>>>>>>> 24cd388 (refactor: fixed disabled button on devicepullpanel)
           )}
  
           {pullProgress.length > 0 && (

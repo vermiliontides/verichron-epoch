@@ -13,7 +13,7 @@ export interface DecryptionOptions {
 }
 
 /**
- * Securely handles iOS backup decryption parameters, ensuring keys are processed 
+ * Securely handles iOS backup decryption parameters, ensuring keys are processed
  * via mutable Buffers and explicitly scrubbed from memory immediately after execution.
  */
 export async function decryptAndValidateBackup(options: DecryptionOptions): Promise<boolean> {
@@ -58,7 +58,7 @@ async function verifyBackupCredentials(manifestPath: string, passwordBuffer: Buf
 
 function toolBinaryPath(): { available: boolean; idevicebackup2?: string; idevice_id?: string; ideviceinfo?: string } {
   const installPrefix = idevicebackup2InstallPrefix();
-  
+
   const backup2 = detectBinary('idevicebackup2', bundledToolPath(installPrefix, 'idevicebackup2'));
   const idTool = detectBinary('idevice_id', bundledToolPath(installPrefix, 'idevice_id'));
   const infoTool = detectBinary('ideviceinfo', bundledToolPath(installPrefix, 'ideviceinfo'));
@@ -119,13 +119,42 @@ export class IosBackupSource implements DeviceBackupSource {
     }));
   }
 
+  /**
+   * Pulls a full backup from the device and hands it to idevicebackup2 as an
+   * ENCRYPTED backup only. There is deliberately no code path here that
+   * produces an unencrypted backup and no code path that programmatically
+   * flips the device's backup-encryption toggle.
+   *
+   * Why the toggle is gone (EPOCH-101)
+   * -----------------------------------
+   * The previous implementation shelled out to
+   * `idevicebackup2 -u <udid> encryption on <password>` via `execFileSync`
+   * with `stdio: 'ignore'` when the device wasn't already set to encrypt
+   * backups, then reversed it with `encryption off` after the pull.
+   * `encryption on` triggers an on-device trust/pairing confirmation that
+   * `idevicebackup2` expects to negotiate interactively over the same
+   * connection -- `execFileSync` can neither see nor answer that prompt, so
+   * the handshake stalled and surfaced as `error code -1` / exit 255. That
+   * failure was not a bug in the retry logic; it was structural: a
+   * non-interactive spawn can never satisfy an interactive device prompt.
+   *
+   * Rather than build a second, interactive spawn path just to flip a
+   * device setting, this now refuses to proceed when encryption isn't
+   * already enabled (see the `isEncrypted` check below) and tells the
+   * person exactly what to do instead. `BACKUP_PASSWORD` is the only
+   * channel the password travels through, and it goes straight to the
+   * `backup` invocation itself -- idevicebackup2 reads it from the
+   * environment to unlock/encrypt non-interactively, and it never appears
+   * as a CLI argument (which would otherwise be visible in the process
+   * table via `ps`).
+   */
   async pullBackup(
     device: DeviceInfo,
     destDir: string,
     onProgress: (progress: BackupProgress) => void,
     password?: string
   ): Promise<string> {
-    if (!password) {
+    if (!password || password.trim() === '') {
       throw new Error('A backup decryption password is required to perform a secure extraction.');
     }
 
@@ -136,22 +165,28 @@ export class IosBackupSource implements DeviceBackupSource {
 
     onProgress({ phase: 'preparing', message: `Checking encryption status for ${device.name}...` });
 
-    const isEncrypted = readLockdownValue(tools.ideviceinfo, device.id, 'WillEncrypt', 'com.apple.mobile.backup') === 'true';
-    let encryptionToggledByUs = false;
+    const isEncrypted =
+      readLockdownValue(tools.ideviceinfo, device.id, 'WillEncrypt', 'com.apple.mobile.backup') === 'true';
 
     if (!isEncrypted) {
-      onProgress({ phase: 'preparing', message: 'Enforcing backup encryption on device...' });
-      try {
-        execFileSync(tools.idevicebackup2, ['-u', device.id, 'encryption', 'on', password], { encoding: 'utf-8', stdio: 'ignore' });
-        encryptionToggledByUs = true;
-      } catch (err) {
-        throw new Error('Failed to enable encryption on the device. Please set a backup password manually via Finder/iTunes.');
-      }
+      const message =
+        `${device.name} does not have encrypted backups enabled, and Epoch will not enable it on your behalf. ` +
+        `A previous version tried to flip this setting automatically via "idevicebackup2 encryption on", but ` +
+        `that command requires answering an on-device trust prompt interactively -- attempting it headlessly ` +
+        `caused a handshake failure (error code -1, exit 255), not a real backup. ` +
+        `Turn on "Encrypt Local Backup" for this device yourself (in Finder on macOS: select the device > ` +
+        `General > Encrypt local backup; in iTunes on Windows: the Backups section), set a backup password ` +
+        `there, then retry this pull using that same password.`;
+      onProgress({ phase: 'error', message });
+      throw new Error(message);
     }
 
     onProgress({ phase: 'preparing', message: `Starting secure backup of ${device.name}...` });
 
     return new Promise((resolve, reject) => {
+      // The one and only place `password` is used: as an environment
+      // variable for idevicebackup2's own process, never as a CLI arg and
+      // never used to toggle device state.
       const env: NodeJS.ProcessEnv = {
         ...process.env,
         BACKUP_PASSWORD: password,

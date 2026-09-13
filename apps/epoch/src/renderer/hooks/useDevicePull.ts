@@ -6,9 +6,9 @@ import type {
   ToolAcquisitionCommand,
   ToolAvailabilityStatus,
 } from '../../shared/types/tools';
-
+ 
 export type Phase = 'checking' | 'unavailable' | 'available' | 'acquiring' | 'pulling' | 'pulled';
-
+ 
 export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
   const [sources, setSources] = useState<Array<{ id: string; label: string }>>([]);
   const [sourceId, setSourceId] = useState<string | null>(null);
@@ -19,20 +19,20 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
   const [acquisitionStep, setAcquisitionStep] = useState<string | null>(null);
   const [acquisitionError, setAcquisitionError] = useState<string | null>(null);
   const [homebrewFallbackAvailable, setHomebrewFallbackAvailable] = useState(false);
-
+ 
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<DeviceInfo | null>(null);
   const [destDir, setDestDir] = useState<string | null>(null);
   const [pullProgress, setPullProgress] = useState<BackupProgress[]>([]);
   const [pullError, setPullError] = useState<string | null>(null);
-
+ 
   useEffect(() => {
     window.epoch.listDeviceBackupSources().then((found) => {
       setSources(found);
       if (found.length > 0) setSourceId(found[0].id);
     });
   }, []);
-
+ 
   const checkTool = useCallback(async (id: string) => {
     // Reset stale state before rechecking
     setPhase('checking');
@@ -42,7 +42,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     setDevices([]);
     setSelectedDevice(null);
     setActions([]);
-
+ 
     try {
       const status = await window.epoch.checkDeviceBackupToolAvailable(id);
       setToolStatus(status);
@@ -61,19 +61,19 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
       setAcquisitionError(error instanceof Error ? error.message : 'Failed to communicate with the device service.');
     }
   }, []);
-
+ 
   useEffect(() => {
     if (sourceId) checkTool(sourceId);
   }, [sourceId, checkTool]);
-
+ 
   const checkAvailability = useCallback(() => {
     if (sourceId) checkTool(sourceId);
   }, [sourceId, checkTool]);
-
+ 
   useEffect(() => {
     let outputBuffer: string[] = [];
     let outputRafId: number | null = null;
-
+ 
     const flushOutputBuffer = () => {
       if (outputBuffer.length > 0) {
         const batch = [...outputBuffer];
@@ -85,7 +85,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
       }
       outputRafId = null;
     };
-
+ 
     const unsubStep = window.epoch.onToolAcquisitionStepStarted((label) => {
       setAcquisitionStep(label);
       outputBuffer.push(`\n--- ${label} ---`);
@@ -125,7 +125,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
         setPhase('available');
       }
     });
-
+ 
     return () => {
       if (outputRafId !== null) {
         cancelAnimationFrame(outputRafId);
@@ -136,7 +136,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
       unsubProgress();
     };
   }, [sourceId, destDir, onBackupPulled, checkTool]);
-
+ 
   const runCompileFromSource = async (action: Extract<ToolAcquisitionAction, { kind: 'compile-from-source' }>) => {
     setPhase('acquiring');
     setAcquisitionOutput([]);
@@ -153,14 +153,14 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
       setAcquisitionError(error instanceof Error ? error.message : 'IPC rejection during tool acquisition.');
     }
   };
-
+ 
   const runHomebrewInstall = async (formulas: string[]) => {
     setPhase('acquiring');
     setAcquisitionOutput([]);
     setAcquisitionError(null);
     setAcquisitionStep(`Install via Homebrew (${formulas.join(', ')})`);
     setHomebrewFallbackAvailable(false);
-
+ 
     try {
       await window.epoch.runHomebrewInstall(formulas);
     } catch (error: unknown) {
@@ -169,14 +169,35 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
       setAcquisitionError(error instanceof Error ? error.message : 'Failed to run Homebrew installation.');
     }
   };
-
+ 
   const handleSelectDestination = async () => {
     const dir = await window.epoch.selectDeviceBackupDestination();
     if (dir) setDestDir(dir);
   };
-
+ 
+  /**
+   * EPOCH-102: password validation lives here too, not just in
+   * DevicePullPanel's onPullClick. This hook is the actual state owner and
+   * the actual caller of the IPC bridge -- if validation only existed in the
+   * panel component, any other caller (or a future panel rewrite that
+   * forgets the check) could dispatch pullDeviceBackup with an empty
+   * password and rely on main-process validation (deviceHandlers.ts) alone
+   * to catch it after a round trip. That backstop still exists and still
+   * matters, but a renderer-side guard that never fires an IPC call at all
+   * is strictly better: it fails before anything crosses the process
+   * boundary, and it surfaces the same message the person would get from
+   * the panel, through the same pullError channel, regardless of which path
+   * reached here.
+   *
+   * Trimmed the same way the panel's own check does, so " " doesn't slip
+   * through as "provided".
+   */
   const handlePull = async (password: string) => {
     if (!sourceId || !selectedDevice || !destDir) return;
+    if (!password || password.trim() === '') {
+      setPullError('A secure decryption password is required to create an encrypted backup.');
+      return;
+    }
     setPhase('pulling');
     setPullProgress([]);
     setPullError(null);
@@ -187,7 +208,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
       setPhase('available');
     }
   };
-
+ 
   return {
     sources,
     sourceId,
@@ -212,3 +233,4 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     checkAvailability,
   };
 }
+ 

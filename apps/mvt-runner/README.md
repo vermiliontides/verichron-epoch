@@ -58,6 +58,7 @@ npx tsx src/main.ts --source ./backups --workspace ./mvt-workspace
 * `--sqlite-bin <path>`: Path to the `sqlite3` binary used for repairing malformed databases.
 
 
-* `--force`: Re-run backup checks even if already completed.ß
+* `--force`: Re-run backup checks even if already completed..
+
 
 * `--force-decrypt`: Force re-decryption, cascading repairs and checks.

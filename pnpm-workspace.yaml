@@ -27,7 +27,7 @@ catalog:
   # itself to the 24.x line so there's one answer, not packages quietly
   # diverging from what every other consumer pins.
   '@types/node': ^24.13.3
-  '@types/pg': ^8.23.1
+  '@types/pg': ^8.23.0ss
   '@types/react': ^19.2.5
   '@types/react-dom': ^19.2.5
   '@typescript-eslint/eslint-plugin': ^8.68.0
@@ -45,6 +45,13 @@ catalog:
   tsx: ^4.23.12
   typescript: 6.0.3
   vite: ^5.4.0 # or ^6.x — plugin-vite@7.11.2 is built against vite@^5.0.12; check if a 6.x line is confirmed compatible before jumping there
+
+  # Virtualized data tables (RunsView, RecordsView) + virtualized lists
+  # (IocsView) -- one pin, one place, per this workspace's existing catalog
+  # convention (see the header comment above for why: no consumer should
+  # independently drift a version).
+  "@tanstack/react-table": "^9.2.4"
+  "@tanstack/react-virtual": "^3.14.12"
 
   # Shared schema layer (packages/contracts) — zod4, single source of truth
   # for every consumer (mvt-runner, orchestrator, db-writer, epoch).

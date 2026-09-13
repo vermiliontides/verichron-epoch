@@ -1,5 +1,5 @@
 @import "tailwindcss";
- 
+
 :root {
   --background: 217 17% 9%;
   --surface: 217 17% 14%;
@@ -10,8 +10,13 @@
   --danger: 6 78% 62%;
   --border: 217 16% 23%;
   --muted-foreground: 220 16% 65%;
+
+  /* EPOCH-201: hue-matched shadow tint, not flat black -- keeps shadows
+     feeling native to this palette instead of the generic
+     rgba(0,0,0,.1) the frontend-design skill flags as an AI-tell. */
+  --shadow-tint: 217 40% 3%;
 }
- 
+
 @theme {
   --color-background: hsl(var(--background));
   --color-surface: hsl(var(--surface));
@@ -22,7 +27,7 @@
   --color-danger: hsl(var(--danger));
   --color-border: hsl(var(--border));
   --color-muted-foreground: hsl(var(--muted-foreground));
- 
+
   --font-sans: 'Inter', sans-serif;
   --font-display: 'Space Grotesk', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -30,14 +35,37 @@
   /* Fixes missing text-2xs token mapping in Tailwind v4 */
   --text-2xs: 0.65rem;
   --text-2xs--line-height: 0.875rem;
+
+  /* EPOCH-201: named type scale. Sizes below are consumed as utility
+     classes (text-display / text-label / text-data) so every view pulls
+     from one scale instead of picking text-sm/text-xs ad hoc. */
+  --text-display: 1.25rem;
+  --text-display--line-height: 1.75rem;
+  --text-display--font-weight: 600;
+
+  --text-label: 0.75rem;
+  --text-label--line-height: 1rem;
+  --text-label--font-weight: 500;
+
+  --text-data: 0.8125rem;
+  --text-data--line-height: 1.25rem;
+
+  /* EPOCH-201: elevation scale. hue-tinted so shadows read as part of
+     this palette, not a bolted-on default. Three tiers only -- see
+     design plan: elevation tracks evidentiary weight, not decoration. */
+  --shadow-elevation-1: 0 1px 2px hsl(var(--shadow-tint) / 0.4);
+  --shadow-elevation-2: 0 4px 12px -2px hsl(var(--shadow-tint) / 0.5),
+                        0 1px 3px hsl(var(--shadow-tint) / 0.3);
+  --shadow-elevation-3: 0 12px 32px -6px hsl(var(--shadow-tint) / 0.6),
+                        0 2px 6px hsl(var(--shadow-tint) / 0.35);
 }
- 
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
- 
+
 body {
   font-family: var(--font-sans);
   background: var(--color-background);

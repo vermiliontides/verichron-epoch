@@ -14,6 +14,43 @@ import { repairDecrypted } from "./utils/repair.js";
 import { promptPassword } from "./utils/prompt.js";
 import { writeSummary } from "./utils/summary.js";
 
+// How many times we'll re-prompt for a password before giving up on a
+// backup. Only wrong-password failures consume an attempt -- any other
+// decrypt failure (disk full, mvt-ios crash, etc.) fails immediately on
+// the first try, since retrying those wouldn't help and would just mask
+// a different problem behind a password-retry loop.
+const MAX_PASSWORD_ATTEMPTS = 3;
+
+// mvt-ios/libimobiledevice's own wording for a bad decryption password,
+// observed across versions. Kept as patterns rather than one exact string
+// since this isn't a documented, stable interface -- if the underlying
+// tool changes its phrasing, worst case we fall through to "give up after
+// one attempt" rather than silently retrying on the wrong signal.
+const WRONG_PASSWORD_PATTERNS = [
+  /invalid.*password/i,
+  /wrong.*password/i,
+  /incorrect.*password/i,
+  /unable to decrypt/i,
+  /bad password/i,
+];
+
+/**
+ * Carries the captured stderr alongside the usual exit-code failure, so a
+ * caller can classify *why* decrypt-backup failed instead of only knowing
+ * that it did. The previous runInherited() piped stderr straight to the
+ * terminal and discarded it, which made a wrong password indistinguishable
+ * from any other failure mode and made a graceful retry impossible.
+ */
+class DecryptError extends Error {
+  constructor(message: string, public readonly stderr: string) {
+    super(message);
+  }
+}
+
+function isWrongPasswordError(err: unknown): boolean {
+  return err instanceof DecryptError && WRONG_PASSWORD_PATTERNS.some((re) => re.test(err.stderr));
+}
+
 async function main() {
   const cfg = parseFlags();
   try {
@@ -90,33 +127,67 @@ async function run(cfg: Config): Promise<void> {
     if (!cfg.forceDecrypt && (await pathExists(decMarker))) {
       console.log("  [decrypt] already done, skipping");
     } else {
-      let pw: string;
-      if (cfg.samePass && haveCached) {
-        pw = cachedPassword;
-      } else {
-        try {
-          pw = await promptPassword(`  password for ${name}: `);
-        } catch (err) {
-          console.error(`  [decrypt] error reading password: ${err instanceof Error ? err.message : err}`);
-          failedBackups.add(name);
-          continue;
+      // Bounded retry loop: a wrong password re-prompts up to
+      // MAX_PASSWORD_ATTEMPTS times before this backup is given up on and
+      // recorded as failed. Any non-password decrypt failure breaks out
+      // immediately -- see isWrongPasswordError's gate below.
+      let decrypted = false;
+
+      for (let attempt = 1; attempt <= MAX_PASSWORD_ATTEMPTS && !decrypted; attempt++) {
+        let pw: string;
+        if (cfg.samePass && haveCached && attempt === 1) {
+          pw = cachedPassword;
+        } else {
+          if (attempt > 1) {
+            console.error(
+              `  [decrypt] incorrect password for ${name} -- try again (${attempt}/${MAX_PASSWORD_ATTEMPTS})`
+            );
+          }
+          try {
+            // Prompt text left byte-for-byte identical to before this
+            // change -- apps/epoch's pipelineHandlers.ts matches this
+            // exact "password for <name>: " shape via PASSWORD_PROMPT_RE
+            // to relay the prompt to the renderer over IPC. The
+            // attempt-count message above is a separate console.error
+            // line, not part of the matched string, so it can't corrupt
+            // that relay.
+            pw = await promptPassword(`  password for ${name}: `);
+          } catch (err) {
+            console.error(`  [decrypt] error reading password: ${err instanceof Error ? err.message : err}`);
+            break;
+          }
+          if (cfg.samePass) {
+            cachedPassword = pw;
+            haveCached = true;
+          }
         }
-        if (cfg.samePass) {
-          cachedPassword = pw;
-          haveCached = true;
+
+        try {
+          await decryptBackup(cfg, src, decDir, pw);
+          decrypted = true;
+        } catch (err) {
+          // Never keep retrying every later backup with a password we
+          // just proved wrong for this one.
+          if (cfg.samePass) haveCached = false;
+
+          const wrongPassword = isWrongPasswordError(err);
+          const message = err instanceof Error ? err.message : String(err);
+
+          if (wrongPassword && attempt < MAX_PASSWORD_ATTEMPTS) {
+            continue; // loop re-prompts on the next iteration
+          }
+
+          console.error(
+            `  [decrypt] ${
+              wrongPassword ? `incorrect password after ${attempt} attempt(s), giving up` : "error"
+            }: ${message}`
+          );
+          failedBackups.add(name);
         }
       }
 
-      try {
-        await decryptBackup(cfg, src, decDir, pw);
-      } catch (err) {
-        console.error(`  [decrypt] error: ${err instanceof Error ? err.message : err}`);
-        if (cfg.samePass) {
-          haveCached = false;
-        }
-        failedBackups.add(name);
-        continue;
-      }
+      if (!decrypted) continue; // move to the next backup; this one is recorded in failedBackups
+
       await writeMarker(decMarker);
       decryptRan = true;
       console.log("  [decrypt] done");
@@ -259,9 +330,33 @@ function sha256File(p: string): Promise<string> {
   });
 }
 
+/**
+ * Same visible behavior as the old runInherited() call this replaces for
+ * decrypt-backup specifically: stdout/stderr still stream live to the
+ * console as they arrive. The difference is stderr is also buffered so a
+ * failure can be classified afterward (see DecryptError / isWrongPasswordError)
+ * instead of being discarded the moment it hit the terminal.
+ */
+function runCaptured(bin: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(bin, args, { stdio: ["inherit", "pipe", "pipe"] });
+    let stderr = "";
+    child.stdout.on("data", (chunk) => process.stdout.write(chunk));
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+      process.stderr.write(chunk);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new DecryptError(`${bin} exited with code ${code}`, stderr));
+    });
+  });
+}
+
 async function decryptBackup(cfg: Config, src: string, dest: string, password: string): Promise<void> {
   await fsp.mkdir(dest, { recursive: true });
-  await runInherited(cfg.mvtBin, ["decrypt-backup", "-p", password, "-d", dest, src]);
+  await runCaptured(cfg.mvtBin, ["decrypt-backup", "-p", password, "-d", dest, src]);
 }
 
 async function checkBackup(cfg: Config, decryptedDir: string, resultsDir: string, logPath: string): Promise<void> {

@@ -21,13 +21,10 @@
   "dependencies": {
     "@verichron/contracts": "workspace:*"
   },
-  "peerDependencies": {
-    "pg": "^8.23.0"
-  },
   "devDependencies": {
-    "@types/node": "^20.19.43",
-    "@types/pg": "^8.23.0",
-    "pg": "^8.23.0",
-    "typescript": "^6.0.3"
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "pg": "catalog:",
+    "typescript": "catalog:"
   }
 }

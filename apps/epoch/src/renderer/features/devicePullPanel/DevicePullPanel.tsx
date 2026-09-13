@@ -1,3 +1,6 @@
+
+
+Devicepullpanel · TSX
 import React, { useRef, useEffect, useState } from 'react';
 import {
   Smartphone,
@@ -16,11 +19,11 @@ import {
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { useDevicePull } from '../../hooks/useDevicePull';
-
+ 
 interface DevicePullPanelProps {
   onBackupPulled: (destDir: string) => void;
 }
-
+ 
 export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
   const {
     sources,
@@ -45,41 +48,51 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
     handlePull,
     checkAvailability,
   } = useDevicePull(onBackupPulled);
-
+ 
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const terminalRef = useRef<HTMLPreElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
-
+ 
+  // EPOCH-102: the button-level guard. A trimmed-empty password means the
+  // "Pull encrypted backup" button never becomes clickable in the first
+  // place -- this is stronger than only validating inside onPullClick,
+  // which still lets the click land and only then rejects it. Both checks
+  // stay in place (this one for the affordance, onPullClick's for anyone
+  // who reaches it some other way, e.g. a future keyboard-submit path),
+  // matching the same defense-in-depth reasoning as useDevicePull's own
+  // handlePull guard.
+  const passwordProvided = password.trim() !== '';
+ 
   const handleCopy = (text: string, index: number) => {
     navigator.clipboard.writeText(text);
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
   };
-
+ 
   useEffect(() => {
     if (stickToBottom && terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   }, [acquisitionOutput, stickToBottom]);
-
+ 
   const handleTerminalScroll = () => {
     const el = terminalRef.current;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     setStickToBottom(distanceFromBottom <= 64);
   };
-
+ 
   const jumpToLatest = () => {
     setStickToBottom(true);
     if (terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   };
-
+ 
   const onPullClick = async () => {
-    if (!password || password.trim() === '') {
+    if (!passwordProvided) {
       setPasswordError('A secure decryption password is required to create an encrypted backup.');
       return;
     }
@@ -92,9 +105,9 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
       setPassword('');
     }
   };
-
+ 
   if (!sourceId) return null;
-
+ 
   return (
     <div className="bg-surface border border-border rounded-xl p-6 mb-6 shadow-sm">
       <div className="flex items-center gap-2.5 mb-5">
@@ -116,20 +129,20 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           </select>
         )}
       </div>
-
+ 
       {phase === 'checking' && (
         <p className="text-sm text-muted-foreground flex items-center gap-2 py-2">
           <Loader2 size="1rem" className="animate-spin text-accent" /> Checking for the required tool...
         </p>
       )}
-
+ 
       {phase === 'unavailable' && toolStatus && !toolStatus.available && (
         <div>
           <div className="flex items-center gap-2.5 text-sm text-flag bg-flag/10 border border-flag/20 px-3.5 py-2.5 rounded-lg mb-5">
             <XCircle size="1.125rem" className="shrink-0" />
             <span>iPhone import is not set up on this computer yet.</span>
           </div>
-
+ 
           {acquisitionError && (
             <div className="bg-flag/10 border border-flag/30 rounded-xl p-4 text-sm text-flag mb-5 shadow-xs">
               <div className="flex items-start gap-3">
@@ -154,7 +167,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               </div>
             </div>
           )}
-
+ 
           {actions.map((action, i) => (
             <div key={i} className="border border-border/80 rounded-xl p-5 mb-4 bg-surface/40 hover:bg-surface/60 transition-all shadow-xs">
               <div className="flex items-start justify-between gap-4 mb-2">
@@ -223,7 +236,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                   </div>
                 </div>
               )}
-
+ 
               {action.kind === 'homebrew-install' && (
                 <div className="mt-4">
                   <button
@@ -234,7 +247,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                   </button>
                 </div>
               )}
-
+ 
               {action.kind === 'compile-from-source' && (
                 <div className="mt-4">
                   <button
@@ -245,7 +258,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                   </button>
                 </div>
               )}
-
+ 
               {action.kind === 'download-verified-release' && (
                 <p className="text-xs text-muted-foreground italic mt-3">
                   This option is not available yet. You can import an existing backup folder below instead.
@@ -264,7 +277,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           </div>
         </div>
       )}
-
+ 
       {phase === 'acquiring' && (
         <div>
           <p className="text-sm text-foreground font-medium flex items-center gap-2 mb-3">
@@ -290,13 +303,13 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           </div>
         </div>
       )}
-
+ 
       {(phase === 'available' || phase === 'pulling' || phase === 'pulled') && toolStatus?.available && (
         <div>
           <div className="flex items-center gap-1.5 text-xs text-accent uppercase tracking-wider font-semibold mb-4">
             <CheckCircle2 size="1rem" /> Device service ready
           </div>
-
+ 
           {devices.length === 0 ? (
             <div className="p-4 rounded-lg bg-surface/50 border border-border/60 text-sm text-muted-foreground">
               No devices connected. Plug your iPhone in via USB and unlock the screen.
@@ -324,7 +337,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               ))}
             </div>
           )}
-
+ 
           {selectedDevice && (
             <div className="flex flex-col gap-3 mb-5 p-4 rounded-lg bg-surface/60 border border-border/60">
               <div className="flex items-center gap-3">
@@ -344,7 +357,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                   <span className="text-xs text-muted-foreground italic">No destination chosen yet</span>
                 )}
               </div>
-
+ 
               {/* Secure Backup Password Input */}
               <div className="mt-2 pt-3 border-t border-border/60">
                 <label className="block text-xs font-medium text-foreground mb-1 flex items-center gap-1.5">
@@ -369,18 +382,19 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               </div>
             </div>
           )}
-
+ 
           {selectedDevice && destDir && phase !== 'pulled' && (
             <button
               onClick={onPullClick}
-              disabled={phase === 'pulling'}
-              className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 active:scale-[0.99] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm shadow-accent/15 transition-all cursor-pointer"
+              disabled={phase === 'pulling' || !passwordProvided}
+              title={!passwordProvided ? 'Enter a backup password to continue' : undefined}
+              className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm shadow-accent/15 transition-all cursor-pointer"
             >
               {phase === 'pulling' ? <Loader2 size="1rem" className="animate-spin" /> : null}
               {phase === 'pulling' ? 'Pulling encrypted backup...' : 'Pull encrypted backup'}
             </button>
           )}
-
+ 
           {pullProgress.length > 0 && (
             <pre className="bg-background/90 border border-border/80 rounded-xl p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-48 text-foreground/80 mt-5 shadow-inner leading-relaxed">
               {pullProgress.map((p) => p.message).join('\n')}
@@ -403,3 +417,4 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
     </div>
   );
 }
+ 

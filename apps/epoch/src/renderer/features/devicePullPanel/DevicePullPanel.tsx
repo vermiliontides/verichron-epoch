@@ -48,7 +48,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
     handlePull,
     checkAvailability,
   } = useDevicePull(onBackupPulled);
- 
+
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -90,9 +90,9 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   };
- 
+
   const onPullClick = async () => {
-    if (!passwordProvided) {
+    if (!password || password.trim() === '') {
       setPasswordError('A secure decryption password is required to create an encrypted backup.');
       return;
     }
@@ -105,7 +105,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
       setPassword('');
     }
   };
- 
+
   if (!sourceId) return null;
  
   return (
@@ -357,7 +357,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                   <span className="text-xs text-muted-foreground italic">No destination chosen yet</span>
                 )}
               </div>
- 
+
               {/* Secure Backup Password Input */}
               <div className="mt-2 pt-3 border-t border-border/60">
                 <label className="block text-xs font-medium text-foreground mb-1 flex items-center gap-1.5">
@@ -389,6 +389,8 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               disabled={phase === 'pulling' || !passwordProvided}
               title={!passwordProvided ? 'Enter a backup password to continue' : undefined}
               className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm shadow-accent/15 transition-all cursor-pointer"
+              disabled={phase === 'pulling'}
+              className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 active:scale-[0.99] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm shadow-accent/15 transition-all cursor-pointer"
             >
               {phase === 'pulling' ? <Loader2 size="1rem" className="animate-spin" /> : null}
               {phase === 'pulling' ? 'Pulling encrypted backup...' : 'Pull encrypted backup'}

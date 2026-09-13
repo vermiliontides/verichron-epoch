@@ -215,7 +215,16 @@ export class IosBackupSource implements DeviceBackupSource {
         reject(err);
       });
 
-      proc.once('close', (code: number | null) => {
+      proc.once('close', async (code: number | null) => {
+        if (encryptionToggledByUs) {
+          onProgress({ phase: 'preparing', message: 'Restoring original device encryption state...' });
+          try {
+            execFileSync(tools.idevicebackup2!, ['-u', device.id, 'encryption', 'off', password], { encoding: 'utf-8', stdio: 'ignore' });
+          } catch (err) {
+            console.error('Failed to disable device encryption post-backup', err);
+          }
+        }
+
         if (code === 0) {
           onProgress({ phase: 'done', message: 'Backup complete.' });
           resolve(destDir);

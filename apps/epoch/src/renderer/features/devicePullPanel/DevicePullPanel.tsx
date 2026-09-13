@@ -1,6 +1,3 @@
-
-
-Devicepullpanel · TSX
 import React, { useRef, useEffect, useState } from 'react';
 import {
   Smartphone,

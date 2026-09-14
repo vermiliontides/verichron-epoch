@@ -9,10 +9,6 @@ interface TerminalLogProps {
   label?: string;
 }
 
-// How close to the bottom (in px) counts as "still at the bottom" for the
-// purposes of deciding whether to auto-scroll. A user's trackpad/wheel
-// scroll rarely lands on exactly 0, so a reasonable tolerance avoids treating a
-// stable "I'm reading the end" position as "I scrolled away".
 const BOTTOM_THRESHOLD_PX = 64;
 
 export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technical log' }: TerminalLogProps) {
@@ -21,20 +17,8 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
   const scrollRef = useRef<HTMLDivElement>(null);
   const [unseenCount, setUnseenCount] = useState(0);
 
-  // Auto-scroll runs on every new line, but only while the panel is open
-  // and the user hasn't scrolled away from the bottom -- this is the
-  // behavior that was missing before: a naive "always scroll to bottom on
-  // update" fights the user the moment they try to scroll up to read
-  // something mid-run.
   useEffect(() => {
     if (!open) {
-      // Functional updater, not a ref: each effect firing needs the count
-      // from the PREVIOUS firing, not whatever `unseenCount` closed over
-      // when this effect was created -- the updater form gets that
-      // without needing a ref to smuggle the current value across
-      // renders (which is itself a rule-of-hooks violation: refs can't
-      // be mutated during render, and this component's `open`-transition
-      // reset below runs during render).
       setUnseenCount((prev) => prev + 1);
       return;
     }
@@ -44,19 +28,9 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
         if (el) el.scrollTop = el.scrollHeight;
       });
     }
-    // Deliberately omits stickToBottom/scrollRef from deps -- this should
-    // only re-run when new lines arrive or the panel opens, not whenever
-    // stickToBottom changes (that's handled by the scroll handler itself).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines.length, open]);
 
-  // Reset the unseen-count badge the moment the panel opens -- adjusted
-  // during render (comparing against the previous `open` value) rather
-  // than in an effect, since this is exactly the "resetting state when a
-  // prop changes" case React's own docs recommend against an effect for:
-  // no DOM/external system involved, just synchronizing state to a prop
-  // transition. React bails out of the extra render pass for this pattern,
-  // so it doesn't cause the cascading-render problem the effect version did.
   const [prevOpenForReset, setPrevOpenForReset] = useState(open);
   if (open !== prevOpenForReset) {
     setPrevOpenForReset(open);
@@ -65,9 +39,6 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
     }
   }
 
-  // Scroll-to-bottom on open stays in an effect -- this part genuinely is a
-  // DOM mutation (an external system from React's point of view), which is
-  // exactly what effects are for.
   useEffect(() => {
     if (open && scrollRef.current) {
       const el = scrollRef.current;
@@ -90,7 +61,7 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
   };
 
   return (
-    <div className="border border-border rounded-md overflow-hidden bg-background">
+    <div className="shadow-elevation-1 rounded-md overflow-hidden bg-background">
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface/80 transition-colors"
@@ -136,7 +107,7 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
           {!stickToBottom && lines.length > 0 && (
             <button
               onClick={jumpToBottom}
-              className="absolute bottom-2 right-2 flex items-center gap-1 bg-accent text-background text-2xs font-medium rounded-full px-2.5 py-1 shadow-lg hover:bg-accent/90 transition-colors"
+              className="absolute bottom-2 right-2 flex items-center gap-1 bg-accent text-background text-2xs font-medium rounded-full px-2.5 py-1 shadow-elevation-2 hover:bg-accent/90 transition-colors"
             >
               <ArrowDown size="0.7rem" />
               Jump to latest

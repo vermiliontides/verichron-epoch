@@ -3,14 +3,6 @@ import type { PipelineRunRow } from '@verichron/db-reader';
 import { Badge } from './Badge';
 import { Tooltip, TooltipTrigger, TooltipContent } from './Tooltip';
 
-/**
- * Shows only what pipeline_runs actually has. No integrity/verification
- * claim is made here -- the schema's only real hash (ingested_files.file_hash,
- * SHA-256) is per-file, not per-run, and isn't exposed by any IPC channel
- * today. run_id is a UUID (gen_random_uuid), not a content hash; it's
- * labeled "Run" below, not "hash", so this doesn't imply a check that
- * isn't happening.
- */
 interface EvidenceTagProps {
   run: PipelineRunRow;
   phase: 'in_progress' | 'finished';
@@ -18,7 +10,7 @@ interface EvidenceTagProps {
 
 export function EvidenceTag({ run, phase }: EvidenceTagProps) {
   return (
-    <div className="flex items-center gap-4 px-6 py-3 border-b border-border text-xs">
+    <div className="flex items-center gap-4 px-6 py-3 shadow-elevation-1 text-xs">
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="font-mono text-accent cursor-default">

@@ -52,14 +52,6 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
   const terminalRef = useRef<HTMLPreElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
  
-  // EPOCH-102: the button-level guard. A trimmed-empty password means the
-  // "Pull encrypted backup" button never becomes clickable in the first
-  // place -- this is stronger than only validating inside onPullClick,
-  // which still lets the click land and only then rejects it. Both checks
-  // stay in place (this one for the affordance, onPullClick's for anyone
-  // who reaches it some other way, e.g. a future keyboard-submit path),
-  // matching the same defense-in-depth reasoning as useDevicePull's own
-  // handlePull guard.
   const passwordProvided = password.trim() !== '';
  
   const handleCopy = (text: string, index: number) => {
@@ -95,10 +87,8 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
     }
     setPasswordError(null);
     try {
-      // Pass the password to the hook's pull handler
       await handlePull(password);
     } finally {
-      // Immediately flush the password from renderer memory
       setPassword('');
     }
   };
@@ -106,7 +96,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
   if (!sourceId) return null;
  
   return (
-    <div className="bg-surface border border-border rounded-xl p-6 mb-6 shadow-sm">
+    <div className="bg-surface shadow-elevation-2 rounded-xl p-6 mb-6">
       <div className="flex items-center gap-2.5 mb-5">
         <div className="p-1.5 rounded-lg bg-accent/10 text-accent">
           <Smartphone size="1.25rem" />
@@ -141,20 +131,20 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           </div>
  
           {acquisitionError && (
-            <div className="bg-flag/10 border border-flag/30 rounded-xl p-4 text-sm text-flag mb-5 shadow-xs">
+            <div className="bg-flag/10 border border-flag/30 rounded-xl p-4 text-sm text-flag mb-5 shadow-elevation-1">
               <div className="flex items-start gap-3">
                 <AlertTriangle size="1.125rem" className="shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="font-semibold text-flag">Setup Error</p>
                   <p className="text-xs text-foreground/90 mt-1 font-mono">{acquisitionError}</p>
                   {homebrewFallbackAvailable && (
-                    <div className="mt-3.5 pt-3.5 border-t border-flag/20">
+                    <div className="mt-3.5 pt-3.5 shadow-elevation-1">
                       <p className="text-xs text-foreground/80 mb-2.5">
                         Homebrew is available on this Mac and can install the required libraries directly instead.
                       </p>
                       <button
                         onClick={() => runHomebrewInstall(['libplist', 'libimobiledevice'])}
-                        className="inline-flex items-center gap-2 bg-surface-raised border border-flag/40 hover:bg-surface-raised/80 hover:border-flag text-foreground px-3.5 py-2 rounded-lg text-xs font-medium shadow-xs transition-all cursor-pointer"
+                        className="inline-flex items-center gap-2 bg-surface-raised border border-flag/40 hover:bg-surface-raised/80 hover:border-flag text-foreground px-3.5 py-2 rounded-lg text-xs font-medium shadow-elevation-1 transition-all cursor-pointer"
                       >
                         <Wrench size="0.875rem" className="text-flag" /> Try Homebrew instead
                       </button>
@@ -166,7 +156,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           )}
  
           {actions.map((action, i) => (
-            <div key={i} className="border border-border/80 rounded-xl p-5 mb-4 bg-surface/40 hover:bg-surface/60 transition-all shadow-xs">
+            <div key={i} className="rounded-xl p-5 mb-4 bg-surface/40 shadow-elevation-1 hover:shadow-elevation-2 hover:bg-surface/60 transition-all">
               <div className="flex items-start justify-between gap-4 mb-2">
                 <div>
                   <p className="text-sm font-semibold text-foreground">
@@ -196,7 +186,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               </div>
               
               {action.kind === 'install-instructions' && (
-                <div className="mt-4 pt-3 border-t border-border/60">
+                <div className="mt-4 pt-3 shadow-elevation-1">
                   <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                     <Terminal size="0.875rem" /> Terminal command (one-time setup):
                   </div>
@@ -204,7 +194,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                     {action.commands.map((c: string, j: number) => (
                       <div
                         key={j}
-                        className="flex items-center justify-between gap-3 bg-background/90 border border-border/80 rounded-lg px-3.5 py-2.5 font-mono text-xs text-foreground/90 group"
+                        className="flex items-center justify-between gap-3 bg-background/90 shadow-elevation-1 rounded-lg px-3.5 py-2.5 font-mono text-xs text-foreground/90 group"
                       >
                         <span className="truncate select-all">
                           <span className="text-accent select-none mr-2">$</span>
@@ -213,7 +203,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                         <button
                           type="button"
                           onClick={() => handleCopy(c, j)}
-                          className="flex items-center gap-1 text-2xs font-sans text-muted-foreground hover:text-foreground bg-surface-raised border border-border px-2.5 py-1 rounded-md transition-colors shrink-0 cursor-pointer shadow-2xs"
+                          className="flex items-center gap-1 text-2xs font-sans text-muted-foreground hover:text-foreground bg-surface-raised shadow-elevation-1 px-2.5 py-1 rounded-md transition-colors shrink-0 cursor-pointer"
                           title="Copy command"
                         >
                           {copiedIndex === j ? (
@@ -238,7 +228,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                 <div className="mt-4">
                   <button
                     onClick={() => runHomebrewInstall(action.formulas)}
-                    className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 active:scale-[0.99] px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm shadow-accent/15 transition-all cursor-pointer"
+                    className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 active:scale-[0.99] px-4 py-2.5 rounded-lg text-sm font-semibold shadow-elevation-2 transition-all cursor-pointer"
                   >
                     <Wrench size="1rem" /> Install with Homebrew
                   </button>
@@ -249,7 +239,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                 <div className="mt-4">
                   <button
                     onClick={() => runCompileFromSource(action)}
-                    className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 active:scale-[0.99] px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm shadow-accent/15 transition-all cursor-pointer"
+                    className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 active:scale-[0.99] px-4 py-2.5 rounded-lg text-sm font-semibold shadow-elevation-2 transition-all cursor-pointer"
                   >
                     <Wrench size="1rem" /> {acquisitionError ? 'Retry setup' : 'Build automatically'}
                   </button>
@@ -267,7 +257,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           <div className="mt-5">
             <button
               onClick={checkAvailability}
-              className="inline-flex items-center gap-2 bg-surface-raised border border-border hover:border-accent/40 text-foreground px-4 py-2 rounded-lg text-xs font-medium transition-all shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-2 bg-surface-raised shadow-elevation-1 hover:shadow-elevation-2 text-foreground px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer"
             >
               <RefreshCw size="0.875rem" className="text-muted-foreground" /> Check again
             </button>
@@ -284,14 +274,14 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
             <pre
               ref={terminalRef}
               onScroll={handleTerminalScroll}
-              className="bg-background/90 border border-border/80 rounded-xl p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-72 text-foreground/80 leading-relaxed shadow-inner"
+              className="bg-background/90 shadow-elevation-1 rounded-xl p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-72 text-foreground/80 leading-relaxed"
             >
               {acquisitionOutput.join('\n')}
             </pre>
             {!stickToBottom && acquisitionOutput.length > 0 && (
               <button
                 onClick={jumpToLatest}
-                className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-accent text-background text-xs font-semibold rounded-full px-3 py-1.5 shadow-lg hover:bg-accent/90 transition-all cursor-pointer"
+                className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-accent text-background text-xs font-semibold rounded-full px-3 py-1.5 shadow-elevation-2 hover:bg-accent/90 transition-all cursor-pointer"
               >
                 <ArrowDown size="0.75rem" />
                 Jump to latest
@@ -308,11 +298,11 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           </div>
  
           {devices.length === 0 ? (
-            <div className="p-4 rounded-lg bg-surface/50 border border-border/60 text-sm text-muted-foreground">
+            <div className="p-4 rounded-lg bg-surface/50 shadow-elevation-1 text-sm text-muted-foreground">
               No devices connected. Plug your iPhone in via USB and unlock the screen.
             </div>
           ) : (
-            <div className="border border-border/80 rounded-xl divide-y divide-border/60 mb-5 bg-surface/40 overflow-hidden shadow-xs">
+            <div className="rounded-xl divide-y divide-border/60 mb-5 bg-surface/40 shadow-elevation-1 overflow-hidden">
               {devices.map((d) => (
                 <label
                   key={d.id}
@@ -336,12 +326,12 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           )}
  
           {selectedDevice && (
-            <div className="flex flex-col gap-3 mb-5 p-4 rounded-lg bg-surface/60 border border-border/60">
+            <div className="flex flex-col gap-3 mb-5 p-4 rounded-lg bg-surface/60 shadow-elevation-1">
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleSelectDestination}
                   disabled={phase === 'pulling'}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-surface-raised border border-border hover:border-accent/40 text-xs font-medium text-foreground hover:text-accent disabled:opacity-50 transition-all shadow-xs cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-surface-raised shadow-elevation-1 hover:shadow-elevation-2 text-xs font-medium text-foreground hover:text-accent disabled:opacity-50 transition-all cursor-pointer"
                 >
                   <FolderOpen size="0.875rem" className="text-accent" />
                   {destDir ? 'Change destination' : 'Choose destination'}
@@ -356,7 +346,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               </div>
 
               {/* Secure Backup Password Input */}
-              <div className="mt-2 pt-3 border-t border-border/60">
+              <div className="mt-2 pt-3 shadow-elevation-1">
                 <label className="block text-xs font-medium text-foreground mb-1 flex items-center gap-1.5">
                   <Lock size="0.875rem" className="text-accent" /> Backup Encryption Password (Required)
                 </label>
@@ -381,33 +371,19 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           )}
  
           {selectedDevice && destDir && phase !== 'pulled' && (
-<<<<<<< HEAD
             <button
               onClick={onPullClick}
               disabled={phase === 'pulling' || !passwordProvided}
               title={!passwordProvided ? 'Enter a backup password to continue' : undefined}
-              className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm shadow-accent/15 transition-all cursor-pointer"
-              disabled={phase === 'pulling'}
-              className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 active:scale-[0.99] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm shadow-accent/15 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-elevation-2 transition-all cursor-pointer"
             >
               {phase === 'pulling' ? <Loader2 size="1rem" className="animate-spin" /> : null}
               {phase === 'pulling' ? 'Pulling encrypted backup...' : 'Pull encrypted backup'}
             </button>
-=======
-        <button
-          onClick={onPullClick}
-          disabled={phase === 'pulling' || !passwordProvided}
-          title={!passwordProvided ? 'Enter a backup password to continue' : undefined}
-          className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm shadow-accent/15 transition-all cursor-pointer"
-        >
-          {phase === 'pulling' ? <Loader2 size="1rem" className="animate-spin" /> : null}
-          {phase === 'pulling' ? 'Pulling encrypted backup...' : 'Pull encrypted backup'}
-        </button>
->>>>>>> 24cd388 (refactor: fixed disabled button on devicepullpanel)
           )}
  
           {pullProgress.length > 0 && (
-            <pre className="bg-background/90 border border-border/80 rounded-xl p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-48 text-foreground/80 mt-5 shadow-inner leading-relaxed">
+            <pre className="bg-background/90 shadow-elevation-1 rounded-xl p-4 text-xs font-mono whitespace-pre-wrap overflow-auto max-h-48 text-foreground/80 mt-5 leading-relaxed">
               {pullProgress.map((p) => p.message).join('\n')}
             </pre>
           )}
@@ -428,4 +404,3 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
     </div>
   );
 }
- 

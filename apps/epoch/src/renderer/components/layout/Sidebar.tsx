@@ -19,13 +19,13 @@ export function Sidebar({ active, onSelect, dbStatus }: SidebarProps) {
   ] as const;
 
   return (
-    <div className="w-64 bg-surface border-r border-border flex flex-col h-full">
-      <div className="p-6 border-b border-border">
+    <div className="w-64 bg-surface shadow-elevation-2 flex flex-col h-full">
+      <div className="p-6 shadow-elevation-1">
         <div className="flex items-center justify-between">
-          <h1 className="font-display text-xl font-bold text-foreground tracking-tight">Epoch</h1>
-          <span className="text-2xs font-mono text-muted-foreground uppercase tracking-widest px-1.5 py-0.5 rounded bg-surface-raised border border-border/60">v0.1</span>
+          <h1 className="font-display text-display text-foreground tracking-tight">Epoch</h1>
+          <span className="text-2xs font-mono text-muted-foreground uppercase tracking-widest px-1.5 py-0.5 rounded bg-surface-raised shadow-elevation-1">v0.1</span>
         </div>
-        <div className="flex items-center gap-2 mt-3 px-2.5 py-1 rounded-md bg-surface-raised/60 border border-border/50 w-fit">
+        <div className="flex items-center gap-2 mt-3 px-2.5 py-1 rounded-md bg-surface-raised/60 shadow-elevation-1 w-fit">
           <div className={`w-2 h-2 rounded-full shrink-0 ${
             dbStatus === 'connected'
               ? 'bg-accent shadow-xs shadow-accent/50'
@@ -46,7 +46,7 @@ export function Sidebar({ active, onSelect, dbStatus }: SidebarProps) {
             onClick={() => onSelect(id as Section)}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer select-none ${
               active === id
-                ? 'bg-accent/15 text-accent font-semibold shadow-xs border border-accent/25'
+                ? 'bg-accent/15 text-accent font-semibold shadow-elevation-1'
                 : 'text-foreground/70 hover:bg-surface-raised hover:text-foreground'
             }`}
           >

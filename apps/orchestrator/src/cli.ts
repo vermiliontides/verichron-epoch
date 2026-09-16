@@ -21,17 +21,18 @@ export async function resolvePythonBin(): Promise<string> {
 }
 
 export async function parseCliConfig(): Promise<CliConfig> {
-  // PR 3 Diagnostic: Log exact argv received before parser touches it
-  console.error('[orchestrator] raw argv:', process.argv);
+  // Filter out standalone '--' tokens injected by pnpm script forwarding
+  const cleanArgs = process.argv.slice(2).filter(arg => arg !== '--');
+  
+  console.error('[orchestrator] cleaned argv:', cleanArgs);
 
   const { values, positionals } = parseArgs({
-    args: process.argv.slice(2),
+    args: cleanArgs,
     options: {
       workspace: { type: "string" },
     },
     allowPositionals: true,
   });
- 
   const dbUrl = process.env.DATABASE_URL ?? "postgresql://forensics:forensics_dev_only@localhost:5432/forensics";
  
   if (values.workspace) {

@@ -3,56 +3,12 @@
     {
       "backupPath": "--workspace",
       "status": "failed",
-      "runId": "54af8a23-46a0-4571-94fd-73f17345b014",
-      "stages": [
-        {
-          "stage": "crash",
-          "success": false
-        },
-        {
-          "stage": "ileapp_bridge",
-          "success": false
-        },
-        {
-          "stage": "mvt_iocs",
-          "success": false
-        },
-        {
-          "stage": "analysis",
-          "success": false
-        },
-        {
-          "stage": "reporting",
-          "success": false
-        }
-      ]
+      "error": "not a valid path (looks like a CLI flag): \"--workspace\""
     },
     {
       "backupPath": "/Users/sleepycat/mvt-workspace",
       "status": "failed",
-      "runId": "4a06cae6-bcaf-47ad-ad26-a5049e09044c",
-      "stages": [
-        {
-          "stage": "crash",
-          "success": true
-        },
-        {
-          "stage": "ileapp_bridge",
-          "success": false
-        },
-        {
-          "stage": "mvt_iocs",
-          "success": false
-        },
-        {
-          "stage": "analysis",
-          "success": false
-        },
-        {
-          "stage": "reporting",
-          "success": true
-        }
-      ]
+      "error": "missing Manifest.db/Info.plist — not a decrypted backup root"
     }
   ]
 }

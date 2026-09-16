@@ -59,7 +59,7 @@ importers:
         version: link:../../packages/contracts
       '@verichron/db-reader':
         specifier: workspace:*
-        version: link:../../packages/db-reader
+        version: link:../../packages/etl-db-reader
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -201,7 +201,7 @@ importers:
         version: link:../../packages/contracts
       '@verichron/db-reader':
         specifier: workspace:*
-        version: link:../../packages/db-reader
+        version: link:../../packages/etl-db-reader
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -248,11 +248,7 @@ importers:
         specifier: 'catalog:'
         version: 6.0.3
 
-  packages/db:
-    dependencies:
-      '@verichron/contracts':
-        specifier: workspace:*
-        version: link:../contracts
+  packages/etl-db-reader:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -267,7 +263,11 @@ importers:
         specifier: 'catalog:'
         version: 6.0.3
 
-  packages/db-reader:
+  packages/etl-db-writer:
+    dependencies:
+      '@verichron/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

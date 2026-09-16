@@ -1,11 +1,11 @@
 /**
  * Public entry point for `@verichron/db-reader`.
  *
- * Query-side counterpart to `@verichron/db-writer` -- see dbReader.ts for
- * why this is a separate package rather than more exports on db-writer.
+ * Query-side counterpart to `@verichron/etl-db-writer` -- see dbReader.ts for
+ * why this is a separate package rather than more exports on etl-db-writer.
  *
  * Every table/column name here was verified against
- * packages/db/migrations/0001_init.sql and 0002_ingest_completion.sql. The
+ * packages/etl-db-writer/migrations/0001_init.sql and 0002_ingest_completion.sql. The
  * initial version of this package (before this revision) carried over
  * apps/epoch's original inline queries unchanged and flagged two of their
  * identifiers as unconfirmed; checking against the migrations found those

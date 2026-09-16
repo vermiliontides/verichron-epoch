@@ -4,7 +4,7 @@ import type {
   ForensicRecordRow,
   CorrelationPivotRow,
   CorrelatedContextRow,
-} from '@verichron/db-reader';
+} from '../../../../../packages/etl-db-reader/dist';
 import type { Backup } from '@verichron/contracts';
 import type {
   BackupProgress,

@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import { Inbox, MousePointerClick, Layers } from 'lucide-react';
-import type { PipelineRunRow, StageStatusRow } from '@verichron/db-reader';
+import type { PipelineRunRow, StageStatusRow } from '../../../../../packages/etl-db-reader/dist';
 import { Badge } from '../components/ui/Badge';
  
 /**
  * Field names here are pulled directly from PipelineRunRow/StageStatusRow
- * (packages/db-reader), checked against packages/db/migrations/0001_init.sql.
+ * (packages/etl-db-writer), checked against packages/etl-db-writer/migrations/0001_init.sql.
  *
  * pipeline_runs has no `status` column at all -- run-level "did it happen"
  * and stage-level "what succeeded" are deliberately separate per the

@@ -1,6 +1,6 @@
 """Shared Python runtime guard for repo-local virtualenv usage.
  
-Lives under libs/ rather than inside any single application (packages/db,
+Lives under libs/ rather than inside any single application (packages/etl-db-writer,
 an extractor, etc.) because it doesn't parse forensic artifacts or execute a
 workflow -- it enforces a system-level guardrail (.venv existence) that
 applies to any Python process in the monorepo, migrate.py and extractors
@@ -37,7 +37,7 @@ def ensure_repo_venv() -> Path:
             f"{root / '.venv'}. Create it before running any Python tooling: "
             "uv sync (from the repo root), which builds .venv and installs "
             "every workspace member (libs/runtime-env, libs/etl-run, "
-            "packages/db, packages/contracts, apps/extractors/*) in one step."
+            "packages/etl-db-writer, packages/contracts, apps/extractors/*) in one step."
         )
     return venv_python
  

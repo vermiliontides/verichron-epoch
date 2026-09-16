@@ -1,0 +1,62 @@
+import { parseArgs } from "node:util";
+import * as fsp from "node:fs/promises";
+import * as path from "node:path";
+import { CliConfig } from "./types.js";
+import { REPO_ROOT } from "./discovery.js";
+
+export function printUsage() {
+  console.error(`Usage:\n  pnpm --filter @verichron/orchestrator investigate -- --workspace <mvt-runner-workspace-dir>`);
+}
+
+export async function resolvePythonBin(): Promise<string> {
+  const venvPython = path.join(REPO_ROOT, ".venv", "bin", "python");
+  try {
+    await fsp.access(venvPython);
+    console.log(`[orchestrator] using venv interpreter: ${venvPython}`);
+    return venvPython;
+  } catch {
+    console.warn(`[orchestrator] no virtualenv found at ${venvPython} — falling back to "python3" on PATH.`);
+    return "python3";
+  }
+}
+
+export async function parseCliConfig(): Promise<CliConfig> {
+  // PR 3 Diagnostic: Log exact argv received before parser touches it
+  console.error('[orchestrator] raw argv:', process.argv);
+
+  const { values, positionals } = parseArgs({
+    args: process.argv.slice(2),
+    options: {
+      workspace: { type: "string" },
+    },
+    allowPositionals: true,
+  });
+ 
+  const dbUrl = process.env.DATABASE_URL ?? "postgresql://forensics:forensics_dev_only@localhost:5432/forensics";
+ 
+  if (values.workspace) {
+    const decryptedDir = path.join(values.workspace, "decrypted");
+    let entries;
+    try {
+      entries = await fsp.readdir(decryptedDir, { withFileTypes: true });
+    } catch (err) {
+      console.error(`[orchestrator] could not read ${decryptedDir}`);
+      process.exit(1);
+    }
+    const candidates = entries.filter((e) => e.isDirectory());
+    const backupPaths: string[] = [];
+    for (const entry of candidates) {
+      const dir = path.join(decryptedDir, entry.name);
+      const markerExists = await fsp.access(path.join(dir, ".mvt_decrypted_ok")).then(() => true).catch(() => false);
+      if (markerExists) backupPaths.push(dir);
+    }
+    backupPaths.sort();
+    return { backupPaths, dbUrl };
+  }
+ 
+  if (positionals.length === 0) {
+    printUsage();
+    process.exit(1);
+  }
+  return { backupPaths: positionals, dbUrl };
+}

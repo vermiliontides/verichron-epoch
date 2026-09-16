@@ -1,5 +1,5 @@
 import React from 'react';
-import type { PipelineRunRow } from '@verichron/db-reader';
+import type { PipelineRunRow } from '../../../../../../packages/etl-db-reader/dist';
 import { Badge } from './Badge';
 import { Tooltip, TooltipTrigger, TooltipContent } from './Tooltip';
 

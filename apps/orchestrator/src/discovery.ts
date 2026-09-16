@@ -1,0 +1,95 @@
+import * as fsp from "node:fs/promises";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { StageDefinition, StageManifest } from "./types.js"
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export const REPO_ROOT = path.resolve(__dirname, "../../..");
+const EXTRACTORS_DIR = path.join(REPO_ROOT, "apps", "extractors");
+const REPORTING_DIR = path.join(REPO_ROOT, "apps", "reporting");
+const ANALYSIS_DIR = path.join(REPO_ROOT, "apps", "analysis");
+
+export function isStageManifest(value: unknown): value is StageManifest {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.entrypoint === "string" &&
+    (v.runtime === "python" || v.runtime === "node") &&
+    typeof v.order === "number" &&
+    typeof v.requiresResultsPath === "boolean" &&
+    typeof v.enabled === "boolean"
+  );
+}
+
+async function loadStageFromDir(dir: string, name: string): Promise<StageDefinition | null> {
+  const manifestPath = path.join(dir, "stage.json");
+  let raw: string;
+  try {
+    raw = await fsp.readFile(manifestPath, "utf-8");
+  } catch {
+    console.warn(`[orchestrator] ${dir} has no stage.json — skipping, not treated as a stage.`);
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`[orchestrator] ${manifestPath} is not valid JSON: ${(err as Error).message}`);
+  }
+  if (!isStageManifest(parsed)) {
+    throw new Error(
+      `[orchestrator] ${manifestPath} does not match stage-manifest.schema.json ` +
+        `(need entrypoint: string, runtime: "python"|"node", order: number, ` +
+        `requiresResultsPath: boolean, enabled: boolean).`
+    );
+  }
+
+  const entrypointPath = path.join(dir, parsed.entrypoint);
+  const entrypointExists = await fsp.access(entrypointPath).then(() => true).catch(() => false);
+  if (!entrypointExists) {
+    throw new Error(`[orchestrator] ${manifestPath} declares entrypoint "${parsed.entrypoint}" but ${entrypointPath} does not exist.`);
+  }
+
+  return { name, dir, manifest: parsed };
+}
+
+export async function discoverStages(): Promise<StageDefinition[]> {
+  const extractorEntries = await fsp.readdir(EXTRACTORS_DIR, { withFileTypes: true });
+  const candidateDirs = extractorEntries
+    .filter((e) => e.isDirectory())
+    .map((e) => ({ dir: path.join(EXTRACTORS_DIR, e.name), name: e.name }));
+  candidateDirs.push({ dir: ANALYSIS_DIR, name: path.basename(ANALYSIS_DIR) });
+  candidateDirs.push({ dir: REPORTING_DIR, name: path.basename(REPORTING_DIR) });
+
+  const loaded = await Promise.all(candidateDirs.map((c) => loadStageFromDir(c.dir, c.name)));
+  const stages = loaded.filter((s): s is StageDefinition => s !== null && s.manifest.enabled);
+
+  const orderCounts = new Map<number, string[]>();
+  for (const s of stages) {
+    orderCounts.set(s.manifest.order, [...(orderCounts.get(s.manifest.order) ?? []), s.name]);
+  }
+  for (const [order, names] of orderCounts) {
+    if (names.length > 1) {
+      throw new Error(`[orchestrator] stages ${names.join(", ")} all declare order ${order} — orders must be unique among enabled stages.`);
+    }
+  }
+
+  const reportStage = stages.find((s) => s.dir === REPORTING_DIR);
+  const maxExtractorOrder = Math.max(
+    0,
+    ...stages.filter((s) => s.dir !== REPORTING_DIR).map((s) => s.manifest.order)
+  );
+  if (reportStage && reportStage.manifest.order <= maxExtractorOrder) {
+    throw new Error(
+      `[orchestrator] apps/reporting/stage.json declares order ${reportStage.manifest.order}, ` +
+        `which is not after every extractor stage (max ${maxExtractorOrder}). Reporting must run last.`
+    );
+  }
+
+  stages.sort((a, b) => a.manifest.order - b.manifest.order);
+  console.log(`[orchestrator] discovered ${stages.length} enabled stage(s): ${stages.map((s) => `${s.name}(${s.manifest.order})`).join(", ")}`);
+  return stages;
+}

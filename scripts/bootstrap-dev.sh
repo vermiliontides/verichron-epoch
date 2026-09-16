@@ -68,7 +68,7 @@ else
 fi
 
 echo "[bootstrap] Bootstrap complete. Next steps:"
-echo "  - Start Postgres (infra/docker-compose.yml) and run migrations: python3 packages/db/migrate.py --db-url <DB_URL>"
+echo "  - Start Postgres (infra/docker-compose.yml) and run migrations: python3 packages/etl-db-writer/migrate.py --db-url <DB_URL>"
 echo "  - Optionally build TypeScript packages: pnpm --recursive build"
 echo "  - Run smoke checks or orchestrator as needed."
 

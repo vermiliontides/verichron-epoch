@@ -11,14 +11,14 @@ dependencies = [
     "psycopg2-binary>=2.9",
     "verichron-runtime-env",
     "verichron-etl-run",
-    "verichron-db",
+    "verichron-etl-db-writer",
     "verichron-contracts",
 ]
 
 [tool.uv.sources]
 verichron-runtime-env = { workspace = true }
 verichron-etl-run = { workspace = true }
-verichron-db = { workspace = true }
+verichron-etl-db-writer = { workspace = true }
 verichron-contracts = { workspace = true }
 
 [tool.setuptools]

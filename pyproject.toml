@@ -9,7 +9,7 @@ description = "Privacy-first local desktop forensic client and incident response
 requires-python = ">=3.10"
 dependencies = [
     "verichron-contracts",
-    "verichron-db",
+    "verichron-etl-db-writer",
     "verichron-runtime-env",
     "verichron-etl-run",
     "verichron-testing",
@@ -32,22 +32,22 @@ py-modules = []
 [tool.uv.workspace]
 members = [
     "packages/contracts",
-    "packages/db",
+    "packages/etl-db-writer",
     "libs/*",
     "apps/extractors/*",
     "apps/analysis",
     "apps/reporting"
 ]
-# db-reader is a pure TypeScript/Node package (@verichron/db-reader) with no
+# etl-db-reader is a pure TypeScript/Node package (@verichron/db-reader) with no
 # Python source at all -- it belongs to the pnpm workspace, not this one.
 # The packages/* glob above would otherwise sweep it in.
 exclude = [
-    "packages/db-reader",
+    "packages/etl-db-reader",
 ]
 
 [tool.uv.sources]
 verichron-contracts = { workspace = true }
-verichron-db = { workspace = true }
+verichron-etl-db-writer = { workspace = true }
 verichron-runtime-env = { workspace = true }
 verichron-etl-run = { workspace = true }
 verichron-testing = { workspace = true }

@@ -52,7 +52,7 @@ sequence by accident. `write_record`/`write_records` no longer commit at all
 change asks for and incidentally stops `write_record` from paying a commit per
 row.
  
-A future TypeScript extractor uses packages-ts/db-writer/dbWriter.ts, which
+A future TypeScript extractor uses packages-ts/etl-db-writer/dbWriter.ts, which
 mirrors this file's semantics with a callback in place of the context
 manager. It used to live under packages-ts/orchestrator/src/ alongside a
 now-deleted, never-imported IngestionOrchestrator class; moving it kept the

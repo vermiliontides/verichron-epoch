@@ -6,7 +6,7 @@ if none is given. Meant for smoketesting: confirms what actually landed in
 Postgres after an orchestrator or single-extractor invocation, without
 hand-writing SQL each time.
 
-Uses psycopg2, same as packages/db/db_writer.py, for consistency.
+Uses psycopg2, same as packages/etl-db-writer/db_writer.py, for consistency.
 
 Usage:
     python3 scripts/db_peek.py --db-url "$DATABASE_URL"

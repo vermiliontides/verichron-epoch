@@ -22,8 +22,8 @@ members = [
     "verichron-analysis",
     "verichron-contracts",
     "verichron-crash",
-    "verichron-db",
     "verichron-epoch",
+    "verichron-etl-db-writer",
     "verichron-etl-run",
     "verichron-ileapp-bridge",
     "verichron-mvt-iocs",
@@ -2490,7 +2490,7 @@ source = { editable = "apps/extractors/crash" }
 dependencies = [
     { name = "psycopg2-binary" },
     { name = "verichron-contracts" },
-    { name = "verichron-db" },
+    { name = "verichron-etl-db-writer" },
     { name = "verichron-etl-run" },
     { name = "verichron-runtime-env" },
 ]
@@ -2499,24 +2499,9 @@ dependencies = [
 requires-dist = [
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "verichron-contracts", editable = "packages/contracts" },
-    { name = "verichron-db", editable = "packages/db" },
+    { name = "verichron-etl-db-writer", editable = "packages/etl-db-writer" },
     { name = "verichron-etl-run", editable = "libs/etl-run" },
     { name = "verichron-runtime-env", editable = "libs/verichron-runtime-env" },
-]
-
-[[package]]
-name = "verichron-db"
-version = "0.1.0"
-source = { editable = "packages/db" }
-dependencies = [
-    { name = "psycopg2-binary" },
-    { name = "verichron-contracts" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "psycopg2-binary", specifier = ">=2.9" },
-    { name = "verichron-contracts", editable = "packages/contracts" },
 ]
 
 [[package]]
@@ -2533,7 +2518,7 @@ dependencies = [
     { name = "verichron-analysis" },
     { name = "verichron-contracts" },
     { name = "verichron-crash" },
-    { name = "verichron-db" },
+    { name = "verichron-etl-db-writer" },
     { name = "verichron-etl-run" },
     { name = "verichron-ileapp-bridge" },
     { name = "verichron-mvt-iocs" },
@@ -2553,13 +2538,28 @@ requires-dist = [
     { name = "verichron-analysis", editable = "apps/analysis" },
     { name = "verichron-contracts", editable = "packages/contracts" },
     { name = "verichron-crash", editable = "apps/extractors/crash" },
-    { name = "verichron-db", editable = "packages/db" },
+    { name = "verichron-etl-db-writer", editable = "packages/etl-db-writer" },
     { name = "verichron-etl-run", editable = "libs/etl-run" },
     { name = "verichron-ileapp-bridge", editable = "apps/extractors/ileapp_bridge" },
     { name = "verichron-mvt-iocs", editable = "apps/extractors/mvt_iocs" },
     { name = "verichron-reporting", editable = "apps/reporting" },
     { name = "verichron-runtime-env", editable = "libs/verichron-runtime-env" },
     { name = "verichron-testing", editable = "libs/testing" },
+]
+
+[[package]]
+name = "verichron-etl-db-writer"
+version = "0.1.0"
+source = { editable = "packages/etl-db-writer" }
+dependencies = [
+    { name = "psycopg2-binary" },
+    { name = "verichron-contracts" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "psycopg2-binary", specifier = ">=2.9" },
+    { name = "verichron-contracts", editable = "packages/contracts" },
 ]
 
 [[package]]
@@ -2600,7 +2600,7 @@ dependencies = [
     { name = "simplekml" },
     { name = "standard-imghdr", marker = "python_full_version >= '3.13'" },
     { name = "verichron-contracts" },
-    { name = "verichron-db" },
+    { name = "verichron-etl-db-writer" },
     { name = "verichron-etl-run" },
     { name = "verichron-runtime-env" },
 ]
@@ -2634,7 +2634,7 @@ requires-dist = [
     { name = "simplekml" },
     { name = "standard-imghdr", marker = "python_full_version >= '3.13'" },
     { name = "verichron-contracts", editable = "packages/contracts" },
-    { name = "verichron-db", editable = "packages/db" },
+    { name = "verichron-etl-db-writer", editable = "packages/etl-db-writer" },
     { name = "verichron-etl-run", editable = "libs/etl-run" },
     { name = "verichron-runtime-env", editable = "libs/verichron-runtime-env" },
 ]
@@ -2646,7 +2646,7 @@ source = { editable = "apps/extractors/mvt_iocs" }
 dependencies = [
     { name = "psycopg2-binary" },
     { name = "verichron-contracts" },
-    { name = "verichron-db" },
+    { name = "verichron-etl-db-writer" },
     { name = "verichron-etl-run" },
     { name = "verichron-runtime-env" },
 ]
@@ -2655,7 +2655,7 @@ dependencies = [
 requires-dist = [
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "verichron-contracts", editable = "packages/contracts" },
-    { name = "verichron-db", editable = "packages/db" },
+    { name = "verichron-etl-db-writer", editable = "packages/etl-db-writer" },
     { name = "verichron-etl-run", editable = "libs/etl-run" },
     { name = "verichron-runtime-env", editable = "libs/verichron-runtime-env" },
 ]

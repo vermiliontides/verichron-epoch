@@ -12,7 +12,7 @@ dependencies = [
     "pydantic>=2.0",
 ]
  
-# Same flat-layout ambiguity as packages/db: four top-level .py files here
+# Same flat-layout ambiguity as packages/etl-dbwriter: four top-level .py files here
 # (adapter.py, conftest.py, normalized_record.py, test_contract_sync.py)
 # means setuptools' auto-discovery can't pick one and silently falls back to
 # node_modules/ as a bogus namespace package instead. normalized_record is

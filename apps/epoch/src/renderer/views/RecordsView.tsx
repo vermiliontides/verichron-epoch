@@ -1,5 +1,5 @@
 import { useState, Fragment } from 'react';
-import type { ForensicRecordRow } from '@verichron/db-reader';
+import type { ForensicRecordRow } from '../../../../../packages/etl-db-reader/dist';
 import { Badge } from '../components/ui/Badge';
 
 const thClass = 'text-left font-medium text-muted-foreground bg-surface px-4 py-3 border-b border-border text-2xs uppercase tracking-wide';

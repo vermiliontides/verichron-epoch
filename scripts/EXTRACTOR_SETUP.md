@@ -39,7 +39,7 @@ Default local connection string:
     postgresql://forensics:forensics_dev_only@localhost:5432/forensics
 
 Apply migrations manually if you're not using compose's auto-init:
-`packages/db/migrations`, applied via `python3 packages/db/migrate.py --db-url <DB_URL>`.
+`packages/etl-db-reader/migrations`, applied via `python3 packages/etl-db-reader/migrate.py --db-url <DB_URL>`.
 
 ## 3) Ensure the iLEAPP submodule is populated
 
@@ -50,7 +50,7 @@ Apply migrations manually if you're not using compose's auto-init:
     uv sync
 
 This resolves and installs every workspace member (packages/contracts,
-packages/db, all apps/extractors/*, apps/analysis, apps/reporting,
+packages/etl-db-reader, all apps/extractors/*, apps/analysis, apps/reporting,
 libs/*) plus third-party dependencies from the single pyproject.toml /
 uv.lock at the repo root. Do not use `pip install` here — there is no
 separate requirements.txt; uv.lock is the one source of truth.

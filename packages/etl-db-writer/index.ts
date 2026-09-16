@@ -1,5 +1,5 @@
 /**
- * Public entry point for `@verichron/db-writer`.
+ * Public entry point for `@verichron/etl-db-writer`.
  *
  * Not currently imported anywhere in this repo: apps/orchestrator writes
  * pipeline_runs/pipeline_stage_status directly with parameterized `pg`

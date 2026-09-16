@@ -2,9 +2,9 @@ import { spawn } from "node:child_process";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { Client } from "pg";
-import { deriveResultsPath } from "@verichron/contracts";
 import { StageDefinition, RunConfig } from "./types.js";
 import { createRun, markStage, markRunFailed } from "./db.js";
+import { deriveResultsPath } from "@verichron/contracts";
 
 async function validateBackupPath(backupPath: string): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (!backupPath || backupPath.startsWith('-')) {

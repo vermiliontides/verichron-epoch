@@ -11,7 +11,7 @@ dependencies = [
     "psycopg2-binary>=2.9",
     "verichron-runtime-env",
     "verichron-etl-run",
-    "verichron-db",
+    "verichron-etl-db-writer",
     "verichron-contracts",
     # Everything below is apps/extractors/ileapp_bridge/iLEAPP's own
     # requirements.txt (git submodule, pinned to v2026.3.1). bridge.py invokes
@@ -63,7 +63,7 @@ dependencies = [
 [tool.uv.sources]
 verichron-runtime-env = { workspace = true }
 verichron-etl-run = { workspace = true }
-verichron-db = { workspace = true }
+verichron-etl-db-writer = { workspace = true }
 verichron-contracts = { workspace = true }
 
 [tool.setuptools]

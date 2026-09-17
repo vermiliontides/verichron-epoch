@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type {
   BackupProgress,
   DeviceInfo,
@@ -25,6 +25,17 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
   const [destDir, setDestDir] = useState<string | null>(null);
   const [pullProgress, setPullProgress] = useState<BackupProgress[]>([]);
   const [pullError, setPullError] = useState<string | null>(null);
+
+  // Maintain refs to prevent effect re-registrations on transient prop/state changes
+  const onBackupPulledRef = useRef(onBackupPulled);
+  useEffect(() => {
+    onBackupPulledRef.current = onBackupPulled;
+  }, [onBackupPulled]);
+
+  const destDirRef = useRef(destDir);
+  useEffect(() => {
+    destDirRef.current = destDir;
+  }, [destDir]);
  
   useEffect(() => {
     window.epoch.listDeviceBackupSources().then((found) => {
@@ -34,7 +45,6 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
   }, []);
  
   const checkTool = useCallback(async (id: string) => {
-    // Reset stale state before rechecking
     setPhase('checking');
     setAcquisitionStep(null);
     setAcquisitionError(null);
@@ -119,7 +129,9 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
       setPullProgress((prev) => [...prev, progress]);
       if (progress.phase === 'done') {
         setPhase('pulled');
-        if (destDir && onBackupPulled) onBackupPulled(destDir);
+        if (destDirRef.current && onBackupPulledRef.current) {
+          onBackupPulledRef.current(destDirRef.current);
+        }
       } else if (progress.phase === 'error') {
         setPullError(progress.message);
         setPhase('available');
@@ -135,7 +147,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
       unsubFinished();
       unsubProgress();
     };
-  }, [sourceId, destDir, onBackupPulled, checkTool]);
+  }, [sourceId, checkTool]);
  
   const runCompileFromSource = async (action: Extract<ToolAcquisitionAction, { kind: 'compile-from-source' }>) => {
     setPhase('acquiring');
@@ -175,23 +187,6 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     if (dir) setDestDir(dir);
   };
  
-  /**
-   * EPOCH-102: password validation lives here too, not just in
-   * DevicePullPanel's onPullClick. This hook is the actual state owner and
-   * the actual caller of the IPC bridge -- if validation only existed in the
-   * panel component, any other caller (or a future panel rewrite that
-   * forgets the check) could dispatch pullDeviceBackup with an empty
-   * password and rely on main-process validation (deviceHandlers.ts) alone
-   * to catch it after a round trip. That backstop still exists and still
-   * matters, but a renderer-side guard that never fires an IPC call at all
-   * is strictly better: it fails before anything crosses the process
-   * boundary, and it surfaces the same message the person would get from
-   * the panel, through the same pullError channel, regardless of which path
-   * reached here.
-   *
-   * Trimmed the same way the panel's own check does, so " " doesn't slip
-   * through as "provided".
-   */
   const handlePull = async (password: string) => {
     if (!sourceId || !selectedDevice || !destDir) return;
     if (!password || password.trim() === '') {

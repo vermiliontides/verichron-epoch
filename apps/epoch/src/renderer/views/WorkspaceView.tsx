@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { FolderOpen, HardDrive, Play, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, XCircle, Pencil, Microscope, ArrowRight } from 'lucide-react';
 import { BackupRow } from '../features/devicePullPanel/BackupRow';
 import { TerminalLog } from '../components/layout/TerminalLog';
@@ -11,7 +11,13 @@ export interface WorkspaceViewProps {
   onAnalysisComplete: () => void;
 }
 
+
 export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
+
+  const handleBackupPulled = useCallback((destDir: string) => {
+    setSelectedPath(destDir);
+  }, []);
+
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   const [backups, setBackups] = useState<Backup[]>([]);
@@ -237,6 +243,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       <div>
         <h1 className="font-display text-display font-bold text-foreground tracking-tight mb-2">Start an investigation</h1>
         <p className="text-sm text-muted-foreground leading-relaxed">
+          <DevicePullPanel onBackupPulled={handleBackupPulled} />
           Import an iPhone backup or connect a device to examine evidence for suspicious activity.
         </p>
       </div>

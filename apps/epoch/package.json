@@ -68,7 +68,7 @@
   "dependencies": {
     "@radix-ui/react-tooltip": "^1.2.16",
     "@verichron/contracts": "workspace:*",
-    "@verichron/db-reader": "workspace:*",
+    "@verichron/etl-db-reader": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",

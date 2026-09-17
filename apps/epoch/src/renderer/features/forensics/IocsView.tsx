@@ -76,8 +76,16 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
             return (
               <div
                 key={rec.id}
-                className={`rounded-lg border ${
-                  matched ? 'bg-flag/10 border-flag/30' : 'bg-surface border-border'
+                // EPOCH-201: the matched/flagged state is a semantic signal, not
+                // decoration -- its colored border stays. An unmatched card is a
+                // plain structural container, so it gets the layered elevation
+                // treatment (shadow-elevation-1, raised further on hover since
+                // the whole card is clickable when expandable) instead of a flat
+                // neutral border.
+                className={`rounded-lg transition-all ${
+                  matched
+                    ? 'bg-flag/10 border border-flag/30 shadow-elevation-1'
+                    : `bg-surface shadow-elevation-1 ${expandable ? 'hover:shadow-elevation-2' : ''}`
                 }`}
               >
                 <div
@@ -119,7 +127,10 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
                   )}
                 </div>
                 {expanded && (
-                  <div className="border-t border-border p-4">
+                  // Internal divider within an already-elevated card, not a
+                  // second container -- stays a plain border-t rather than
+                  // its own shadow layer.
+                  <div className="border-t border-border/60 p-4">
                     <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-3">
                       Nearby events (±{CORRELATION_WINDOW_MINUTES}m)
                     </p>

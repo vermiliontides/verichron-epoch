@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Backup } from '@verichron/contracts';
-import type { ReportResult } from '../shared/types/window';
+import type { AnalysisRunStatus, ReportResult } from '../shared/types/window';
 import type {
   BackupProgress,
   DeviceInfo,
@@ -69,6 +69,19 @@ const dbApi = {
   // backups succeeded -- orchestrator discovers that itself.
   startAnalysis: (workspace: string): Promise<{ started: boolean }> =>
     ipcRenderer.invoke('epoch:startAnalysis', workspace),
+  // EPOCH-305: lets the renderer break out of a stalled/deadlocked run
+  // without restarting the app. Resolves { cancelled: false } (rather than
+  // rejecting) when nothing was actually running, since "there was nothing
+  // to cancel" isn't an error condition for a Cancel button that may be
+  // clicked in a race with the run finishing on its own.
+  cancelAnalysis: (): Promise<{ cancelled: boolean }> => ipcRenderer.invoke('epoch:cancelAnalysis'),
+  // EPOCH-305: cross-references a workspace against both the in-memory
+  // "is anything actually running right now" state and the Postgres
+  // pipeline_runs table, so a remounted WorkspaceView can tell "fresh",
+  // "still running", and "interrupted by a past crash" apart instead of
+  // guessing from nothing.
+  getAnalysisRunStatus: (workspace: string): Promise<AnalysisRunStatus> =>
+    ipcRenderer.invoke('epoch:getAnalysisRunStatus', workspace),
   onOrchestratorLog: (callback: (entry: { stream: 'stdout' | 'stderr'; line: string }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, entry: { stream: 'stdout' | 'stderr'; line: string }) =>
       callback(entry);

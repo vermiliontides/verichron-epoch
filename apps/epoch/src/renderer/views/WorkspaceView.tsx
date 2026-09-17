@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { FolderOpen, HardDrive, Play, AlertCircle, ChevronDown, ChevronRight, CheckCircle2, XCircle, Pencil, Microscope, ArrowRight } from 'lucide-react';
 import { BackupRow } from '../features/devicePullPanel/BackupRow';
 import { TerminalLog } from '../components/layout/TerminalLog';
@@ -41,6 +41,13 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
   const [analysisLog, setAnalysisLog] = useState<MvtLogEntry[]>([]);
   const [analysisResult, setAnalysisResult] = useState<MvtFinishedResult | null>(null);
   const [analysisStartError, setAnalysisStartError] = useState<string | null>(null);
+  // EPOCH-305: true while a cancel request is in flight -- distinct from
+  // analysisRunning flipping false, which only happens once the main
+  // process actually confirms the subprocess is gone (via
+  // onOrchestratorFinished). Prevents double-clicking Cancel from firing a
+  // second IPC call while the first kill is still working its way through
+  // the SIGTERM -> grace period -> SIGKILL escalation.
+  const [analysisCancelling, setAnalysisCancelling] = useState(false);
 
   useEffect(() => {
     let mvtBuffer: MvtLogEntry[] = [];
@@ -105,6 +112,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
         flushOrchBuffer();
       }
       setAnalysisRunning(false);
+      setAnalysisCancelling(false);
       setAnalysisResult(result);
     });
     return () => {
@@ -122,6 +130,16 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
     const dir = await window.epoch.selectBackupDirectory();
     if (dir) setSelectedPath(dir);
   };
+
+  // EPOCH-302: stable identity so it never forces useDevicePull's internal
+  // listener effect to tear down/re-register mid-pull. useDevicePull now
+  // reads this through a ref internally, so this alone wouldn't have fixed
+  // the stuck-'pulling' bug -- but passing a fresh arrow here was the
+  // trigger for it, so it's fixed at the source too rather than relying on
+  // the hook's defense alone.
+  const handleBackupPulled = useCallback((dir: string) => {
+    setSelectedPath(dir);
+  }, []);
 
   useEffect(() => {
     if (!selectedPath) {
@@ -210,7 +228,13 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
   const handleStartAnalysis = async () => {
     if (!lastRunWorkspace) return;
+    // EPOCH-305 retry actionability: clear every piece of state a stale
+    // run could have left behind before dispatching a new one, so "Try
+    // again" after a crash/cancel/timeout starts from the same clean slate
+    // as a first run rather than carrying forward old logs or a stuck
+    // cancelling flag.
     setAnalysisRunning(true);
+    setAnalysisCancelling(false);
     setAnalysisStartError(null);
     setAnalysisLog([]);
     setAnalysisResult(null);
@@ -221,6 +245,62 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       setAnalysisRunning(false);
     }
   };
+
+  const handleCancelAnalysis = async () => {
+    if (analysisCancelling) return;
+    setAnalysisCancelling(true);
+    try {
+      await window.epoch.cancelAnalysis();
+      // Deliberately not setting analysisRunning(false) here -- the actual
+      // transition out of 'running' happens when onOrchestratorFinished
+      // fires for the kill, same as any other termination path. Flipping
+      // it here too would let the UI show "done" a moment before the
+      // subprocess is actually confirmed gone.
+    } catch (err) {
+      setAnalysisCancelling(false);
+      setAnalysisStartError(err instanceof Error ? err.message : 'Failed to cancel the running analysis.');
+    }
+  };
+
+  // EPOCH-305 persistence criterion: as soon as a workspace becomes known
+  // (a fresh mvt-runner pass just finished, or -- if this view is ever
+  // remounted while lastRunWorkspace is already set -- on that remount),
+  // check whether a *previous* analysis for it is still marked running in
+  // Postgres with nothing in this process actually running it. That state
+  // only exists if a prior run crashed, was killed, or the app itself was
+  // restarted mid-run without a clean shutdown. Surfacing it as a failed
+  // run (with a Try again path) is what keeps a re-entered view honest
+  // instead of either looking falsely fresh or spinning on nothing.
+  useEffect(() => {
+    if (!lastRunWorkspace) return;
+    let cancelled = false;
+
+    window.epoch
+      .getAnalysisRunStatus(lastRunWorkspace)
+      .then((status) => {
+        if (cancelled) return;
+        if (status.status === 'interrupted') {
+          setAnalysisRunning(false);
+          setAnalysisResult({
+            success: false,
+            error: 'A previous analysis run for this workspace was interrupted and never finished.',
+          });
+        } else if (status.status === 'running') {
+          // The view (re)mounted while the main process still has this
+          // workspace's orchestrator tracked as in flight -- reflect that
+          // rather than showing the "start analysis" button over a run
+          // that's genuinely still going.
+          setAnalysisRunning(true);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to check analysis run status:', err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lastRunWorkspace]);
 
   const busy = isStarting || isRunning;
 
@@ -243,7 +323,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
       {!selectedPath ? (
         <>
-          <DevicePullPanel onBackupPulled={(destDir) => setSelectedPath(destDir)} />
+          <DevicePullPanel onBackupPulled={handleBackupPulled} />
           <div
             onClick={handleSelectDirectory}
             className="group relative flex flex-col items-center justify-center p-12 border-2 border-dashed border-border/90 rounded-2xl bg-surface/30 hover:bg-surface/60 hover:border-accent/60 cursor-pointer transition-all shadow-elevation-1"
@@ -489,9 +569,23 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           )}
 
           {analysisRunning && (
-            <div className="flex items-center gap-3 text-sm text-flag py-3">
-              <div className="w-4 h-4 border-2 border-flag/30 border-t-flag rounded-full animate-spin shrink-0" />
-              <span>Examining the imported evidence...</span>
+            <div className="flex items-center justify-between gap-3 py-3">
+              <div className="flex items-center gap-3 text-sm text-flag">
+                <div className="w-4 h-4 border-2 border-flag/30 border-t-flag rounded-full animate-spin shrink-0" />
+                <span>{analysisCancelling ? 'Stopping analysis...' : 'Examining the imported evidence...'}</span>
+              </div>
+              {/* EPOCH-305: always available while running, so a stalled or
+               * abnormally long run can be broken out of without restarting
+               * the app. Disabled (not hidden) once a cancel is already in
+               * flight so a second click can't fire a second IPC call. */}
+              <button
+                onClick={handleCancelAnalysis}
+                disabled={analysisCancelling}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-danger hover:border-danger/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shrink-0"
+              >
+                <XCircle size="0.875rem" />
+                {analysisCancelling ? 'Stopping...' : 'Cancel'}
+              </button>
             </div>
           )}
 
@@ -525,9 +619,16 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                 <div>
                   <p className="text-sm text-danger flex items-center gap-2">
                     <XCircle size="1rem" />
-                    {analysisFailedCount > 0
-                      ? `Analysis completed with ${analysisFailedCount} investigation${analysisFailedCount === 1 ? '' : 's'} needing attention.`
-                      : `Analysis failed${analysisResult.error ? `: ${analysisResult.error}` : '.'}`}
+                    {/* EPOCH-305: cancelled/timedOut/interrupted all reach
+                     * this same branch (success: false) -- distinguish them
+                     * so "I clicked Cancel" doesn't read as "something broke". */}
+                    {analysisResult.cancelled
+                      ? 'Analysis was cancelled.'
+                      : analysisResult.timedOut
+                        ? analysisResult.error ?? 'Analysis timed out and was stopped.'
+                        : analysisFailedCount > 0
+                          ? `Analysis completed with ${analysisFailedCount} investigation${analysisFailedCount === 1 ? '' : 's'} needing attention.`
+                          : `Analysis failed${analysisResult.error ? `: ${analysisResult.error}` : '.'}`}
                   </p>
                   {analysisResult.analysis && (
                     <p className="text-xs text-muted-foreground mt-1">

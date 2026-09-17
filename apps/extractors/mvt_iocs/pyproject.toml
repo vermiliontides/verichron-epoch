@@ -26,6 +26,3 @@ packages = ["mvt_iocs"]
 
 [tool.setuptools.package-dir]
 mvt_iocs = "."
-
-[tool.pyright]
-{ "extraPaths": ["apps/extractors/ileapp_bridge/iLEAPP"] }

@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
 :root {
+  /* current dark values -- this is the DEFAULT, not a "dark" override.
+     See DESIGN.md §3 -- do not restructure this when light theme lands. */
   --background: 217 17% 9%;
   --surface: 217 17% 14%;
   --surface-raised: 217 17% 19%;
@@ -15,6 +17,12 @@
      feeling native to this palette instead of the generic
      rgba(0,0,0,.1) the frontend-design skill flags as an AI-tell. */
   --shadow-tint: 217 40% 3%;
+}
+
+/* Placeholder for the future light/dark toggle (see DESIGN.md §3).
+   Filling this in is a same-file, CSS-only change -- no component
+   should ever reference a raw HSL value directly. */
+:root[data-theme="light"] {
 }
 
 @theme {

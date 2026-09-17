@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import { Inbox, MousePointerClick, Layers } from 'lucide-react';
-import type { PipelineRunRow, StageStatusRow } from '../../../../../packages/etl-db-reader/dist';
+import type { PipelineRunRow, StageStatusRow } from '@verichron/db-reader';
 import { Badge } from '../components/ui/Badge';
  
 /**
  * Field names here are pulled directly from PipelineRunRow/StageStatusRow
- * (packages/etl-db-writer), checked against packages/etl-db-writer/migrations/0001_init.sql.
+ * (packages/db-reader), checked against packages/db/migrations/0001_init.sql.
  *
  * pipeline_runs has no `status` column at all -- run-level "did it happen"
  * and stage-level "what succeeded" are deliberately separate per the
@@ -117,7 +117,7 @@ export function RunsView({
   return (
     <div className="flex flex-1 min-h-0 divide-x divide-border h-full overflow-hidden">
       <div className="flex-1 overflow-auto p-8 relative">
-        <h2 className="font-display text-base font-medium text-accent mb-6 flex items-baseline gap-2">
+        <h2 className="font-display text-display text-accent mb-6 flex items-baseline gap-2">
           Investigations
           {!loading && !error && runs.length > 0 && (
             <span className="font-mono text-2xs text-muted-foreground">{runs.length}</span>
@@ -183,7 +183,7 @@ export function RunsView({
       </div>
  
       <div className="flex-1 overflow-auto p-8">
-        <h2 className="font-display text-base font-medium text-accent mb-6">Analysis progress</h2>
+        <h2 className="font-display text-display text-accent mb-6">Analysis progress</h2>
         {selectedRun ? (
           stages.length === 0 ? (
             <EmptyState icon={Layers} title="No stages found for this run" />
@@ -201,7 +201,7 @@ export function RunsView({
                 return (
                   <div
                     key={`${stage.run_id}-${stage.stage_name}`}
-                    className="group relative overflow-hidden bg-surface/50 backdrop-blur-sm rounded-lg p-5 border border-border border-l-2 shadow-md transition-all hover:shadow-lg hover:bg-surface/80"
+                    className="group relative overflow-hidden bg-surface/50 backdrop-blur-sm rounded-lg p-5 border-l-2 shadow-elevation-1 transition-all hover:shadow-elevation-2 hover:bg-surface/80"
                     style={{
                       borderLeftColor: `hsl(${statusColor} / ${stage.status === 'pending' || stage.status === 'skipped' ? '0.5' : '1'})`,
                     }}

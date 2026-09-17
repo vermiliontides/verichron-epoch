@@ -6,7 +6,7 @@ import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowTyp
 import { config as loadEnv } from 'dotenv';
 import { registerDbHandlers } from './ipc/dbHandlers';
 import { registerReportHandlers } from './ipc/reportHandlers';
-import { registerPipelineHandlers } from './ipc/pipelineHandlers';
+import { registerPipelineHandlers, reconcileStaleRunsOnStartup } from './ipc/pipelineHandlers';
 import { registerDeviceHandlers } from './ipc/deviceHandlers';
 
 const { app, BrowserWindow } = electron;
@@ -83,7 +83,13 @@ const createWindow = (): void => {
   });
 };
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  // EPOCH-305 app-restart reconciliation: must complete before the window
+  // opens and IPC becomes reachable, so a fresh launch never shows a run
+  // left dangling by the previous session as "in progress" even briefly.
+  await reconcileStaleRunsOnStartup(dbPool);
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

@@ -1,0 +1,59 @@
+name: Python Tests
+
+# VER-18: no Python CI existed before this. .github/workflows/release-tools.yml
+# only builds libimobiledevice binaries on release -- it never runs pytest.
+# This workflow gates on the test suite that already exists and already
+# catches real incidents (enum/schema drift, ingest-transaction atomicity,
+# extractor contract violations) but previously only ran when a developer
+# remembered to run it locally.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Kept recursive for parity with scripts/bootstrap-dev.sh's dev
+          # setup. Not currently required by any test file (nothing in the
+          # suite imports the vendored iLEAPP submodule's contents at
+          # collection time) -- if this step becomes a meaningful chunk of
+          # CI time, it's safe to drop to `submodules: false` and revisit
+          # only if a future test actually needs it populated.
+          submodules: recursive
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      # uv resolves its own interpreter per pyproject's requires-python
+      # (>=3.10); no separate actions/setup-python step needed.
+      - name: Sync workspace
+        run: uv sync --all-extras
+        # NOTE (VER-18 open risk): root pyproject.toml depends on `mvt`,
+        # which can pull in binary/system deps (libusb-adjacent tooling)
+        # not present on a bare ubuntu-latest runner. If this step fails
+        # while a local `uv sync` succeeds, start here -- it's a system
+        # package gap, not a Python/test problem. apt-get steps to add
+        # missing system libs go directly above this step once identified.
+
+      - name: Run pytest
+        run: uv run pytest -q
+        # testpaths / norecursedirs already scoped correctly in root
+        # pyproject.toml ([tool.pytest.ini_options]): packages, scripts,
+        # apps; iLEAPP/node_modules/.venv/dist/.git/infra excluded.
+        # No DATABASE_URL / Postgres service container needed for the
+        # current suite -- the transaction-boundary tests
+        # (test_db_writer.py, test_extractor_ingest_atomicity.py) run
+        # against libs/testing/testing/pg_double.py's SQLite-backed
+        # double, gated by sqlite_supports_upsert_returning() (needs
+        # SQLite >= 3.35, which ubuntu-latest's Python ships with).
+        # Revisit this if a future test calls psycopg2.connect() against
+        # a real DATABASE_URL -- add a `services: postgres:` block then,
+        # not preemptively.

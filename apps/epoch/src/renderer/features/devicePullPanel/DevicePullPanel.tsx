@@ -101,7 +101,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
         <div className="p-1.5 rounded-lg bg-accent/10 text-accent">
           <Smartphone size="1.25rem" />
         </div>
-        <h3 className="font-display text-base font-semibold text-foreground">Import from iPhone</h3>
+        <h3 className="font-display text-label text-foreground">Import from iPhone</h3>
         {sources.length > 1 && (
           <select
             value={sourceId}
@@ -159,7 +159,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
             <div key={i} className="rounded-xl p-5 mb-4 bg-surface/40 shadow-elevation-1 hover:shadow-elevation-2 hover:bg-surface/60 transition-all">
               <div className="flex items-start justify-between gap-4 mb-2">
                 <div>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-label text-foreground">
                     {action.kind === 'install-instructions'
                       ? 'Install the required system tools'
                       : action.kind === 'compile-from-source'

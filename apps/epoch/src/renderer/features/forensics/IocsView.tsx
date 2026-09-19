@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
-import type { PipelineRunRow, ForensicRecordRow, CorrelatedContextRow, CORRELATION_WINDOW_MINUTES } from '@verichron/db-reader';
+import type { PipelineRunRow, ForensicRecordRow, CorrelatedContextRow } from '@verichron/db-reader';
+import { CORRELATION_WINDOW_MINUTES } from '@verichron/db-reader';
 import { Badge } from '../../components/ui/Badge';
 
 const IOC_SOURCE_TYPES = ['mvt_ioc_detection', 'timestamp_anomaly'] as const;
@@ -56,7 +57,7 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
 
   return (
     <div>
-      <h2 className="font-display text-base font-medium text-accent mb-6">Indicator Matches</h2>
+      <h2 className="font-display text-display text-accent mb-6">Indicator Matches</h2>
       {!selectedRun ? (
         <p className="text-muted-foreground text-sm">Select an investigation first.</p>
       ) : iocRecords.length === 0 ? (
@@ -76,16 +77,8 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
             return (
               <div
                 key={rec.id}
-                // EPOCH-201: the matched/flagged state is a semantic signal, not
-                // decoration -- its colored border stays. An unmatched card is a
-                // plain structural container, so it gets the layered elevation
-                // treatment (shadow-elevation-1, raised further on hover since
-                // the whole card is clickable when expandable) instead of a flat
-                // neutral border.
-                className={`rounded-lg transition-all ${
-                  matched
-                    ? 'bg-flag/10 border border-flag/30 shadow-elevation-1'
-                    : `bg-surface shadow-elevation-1 ${expandable ? 'hover:shadow-elevation-2' : ''}`
+                className={`rounded-lg ${
+                  matched ? 'bg-flag/10 shadow-elevation-1' : 'bg-surface shadow-elevation-1'
                 }`}
               >
                 <div
@@ -127,9 +120,6 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
                   )}
                 </div>
                 {expanded && (
-                  // Internal divider within an already-elevated card, not a
-                  // second container -- stays a plain border-t rather than
-                  // its own shadow layer.
                   <div className="border-t border-border/60 p-4">
                     <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-3">
                       Nearby events (±{CORRELATION_WINDOW_MINUTES}m)

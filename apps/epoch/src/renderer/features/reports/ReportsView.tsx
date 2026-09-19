@@ -41,24 +41,24 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
 
   return (
     <div>
-      <h2 className="font-display text-base font-medium text-accent mb-6">Reports</h2>
+      <h2 className="font-display text-display text-accent mb-6">Reports</h2>
       {!selectedRun ? (
         <p className="text-muted-foreground text-sm">Select an investigation first.</p>
       ) : reportLoadError ? (
-        <div className="text-flag bg-flag/10 border border-flag/30 rounded-lg p-4 text-sm">
+        <div className="text-flag bg-flag/10 shadow-elevation-1 rounded-lg p-4 text-data">
           Error: {reportLoadError}
         </div>
       ) : reportLoading || !report ? (
         <p className="text-muted-foreground text-sm">Loading...</p>
       ) : report.status === 'no-results-path' ? (
-        <div className="bg-surface border border-border rounded-lg p-5 text-sm text-muted-foreground">
+        <div className="bg-surface shadow-elevation-1 rounded-lg p-5 text-data text-muted-foreground">
           Can't derive a results path for this run's backup source (
           <span className="font-mono text-xs">{selectedRun.backup_source}</span>) -- it has no{' '}
           <span className="font-mono text-xs">decrypted</span> path segment to swap for{' '}
           <span className="font-mono text-xs">results</span>.
         </div>
       ) : report.status === 'not-found' ? (
-        <div className="bg-surface border border-border rounded-lg p-5 text-sm text-muted-foreground">
+        <div className="bg-surface shadow-elevation-1 rounded-lg p-5 text-data text-muted-foreground">
           No report generated yet. Expected at:
           <br />
           <span className="font-mono text-xs">{report.path}</span>

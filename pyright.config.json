@@ -1,0 +1,18 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": [
+    "packages",
+    "apps/extractors",
+    "apps/analysis",
+    "apps/reporting",
+    "libs",
+    "scripts"
+  ],
+  "exclude": [
+    "apps/extractors/ileapp_bridge/iLEAPP",
+    "**/node_modules",
+    "**/.venv",
+    "**/dist"
+  ]
+}

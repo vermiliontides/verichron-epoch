@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, ArrowDown, TerminalSquare } from 'lucide-react';
 import type { MvtLogEntry } from '../../../shared/types/window';
+import { Loader } from '../ui/Loader';
 
 interface TerminalLogProps {
   lines: MvtLogEntry[];
@@ -66,13 +67,13 @@ export function TerminalLog({ lines, live, defaultOpen = false, label = 'Technic
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between px-4 py-3 bg-surface hover:bg-surface/80 transition-colors"
       >
-        <span className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="flex items-center gap-2 text-label text-muted-foreground">
           {open ? <ChevronDown size="0.9rem" /> : <ChevronRight size="0.9rem" />}
           <TerminalSquare size="0.9rem" />
           {label}
           {live && (
-            <span className="flex items-center gap-1.5 ml-1 text-2xs uppercase tracking-wide text-flag">
-              <span className="w-1.5 h-1.5 rounded-full bg-flag animate-pulse" />
+            <span className="flex items-center gap-1.5 ml-1 text-label uppercase tracking-wide text-flag">
+              <Loader variant="pulse-dot" />
               live
             </span>
           )}

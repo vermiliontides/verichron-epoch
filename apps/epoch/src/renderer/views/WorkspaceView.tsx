@@ -193,6 +193,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
     setAnalysisResult(null);
     setAnalysisLog([]);
     setAnalysisStartError(null);
+    setAnalysisCancelling(false);
     const selected = Array.from(selectedLabels);
     setRunProgress(initMvtRunProgress(selected));
     try {

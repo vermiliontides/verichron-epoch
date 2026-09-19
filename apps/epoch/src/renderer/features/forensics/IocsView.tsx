@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
-import type { PipelineRunRow, ForensicRecordRow, CorrelatedContextRow, CORRELATION_WINDOW_MINUTES } from '@verichron/db-reader';
+import type { PipelineRunRow, ForensicRecordRow, CorrelatedContextRow } from '@verichron/db-reader';
+import { CORRELATION_WINDOW_MINUTES } from '@verichron/db-reader';
 import { Badge } from '../../components/ui/Badge';
 
 const IOC_SOURCE_TYPES = ['mvt_ioc_detection', 'timestamp_anomaly'] as const;
@@ -56,7 +57,7 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
 
   return (
     <div>
-      <h2 className="font-display text-base font-medium text-accent mb-6">Indicator Matches</h2>
+      <h2 className="font-display text-display text-accent mb-6">Indicator Matches</h2>
       {!selectedRun ? (
         <p className="text-muted-foreground text-sm">Select an investigation first.</p>
       ) : iocRecords.length === 0 ? (
@@ -76,8 +77,8 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
             return (
               <div
                 key={rec.id}
-                className={`rounded-lg border ${
-                  matched ? 'bg-flag/10 border-flag/30' : 'bg-surface border-border'
+                className={`rounded-lg ${
+                  matched ? 'bg-flag/10 shadow-elevation-1' : 'bg-surface shadow-elevation-1'
                 }`}
               >
                 <div
@@ -119,7 +120,7 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
                   )}
                 </div>
                 {expanded && (
-                  <div className="border-t border-border p-4">
+                  <div className="border-t border-border/60 p-4">
                     <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-3">
                       Nearby events (±{CORRELATION_WINDOW_MINUTES}m)
                     </p>

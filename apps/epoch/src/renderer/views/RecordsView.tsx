@@ -1,5 +1,5 @@
 import { useState, Fragment } from 'react';
-import type { ForensicRecordRow } from '../../../../../packages/etl-db-reader/dist';
+import type { ForensicRecordRow } from '@verichron/db-reader';
 import { Badge } from '../components/ui/Badge';
 
 const thClass = 'text-left font-medium text-muted-foreground bg-surface px-4 py-3 border-b border-border text-2xs uppercase tracking-wide';
@@ -24,7 +24,7 @@ export function RecordsView({
 
   return (
     <div className="flex-1 overflow-auto p-8">
-      <h2 className="font-display text-base font-medium text-accent mb-6">Forensic Records</h2>
+      <h2 className="font-display text-display text-accent mb-6">Forensic Records</h2>
 
       {!selectedRun ? (
         <p className="text-muted-foreground text-sm">Select an investigation first.</p>

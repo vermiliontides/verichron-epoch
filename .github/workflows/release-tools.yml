@@ -80,3 +80,4 @@ jobs:
             idevicebackup2-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

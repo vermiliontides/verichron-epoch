@@ -7,5 +7,5 @@
   },
   "include": [
     "./*.ts"
-  ]
+, "ts/sourceType.ts"  ]
 }

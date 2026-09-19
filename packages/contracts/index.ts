@@ -13,7 +13,9 @@
  * directory.
  */
 
-export { NormalizedRecord, SourceType } from "./normalizedRecord.js";
+export { NormalizedRecord } from "./normalizedRecord.js";
 export { discoverBackups, BACKUP_SEARCH_MAX_DEPTH } from "./discoverBackups.js";
 export type { Backup } from "./discoverBackups.js";
 export { deriveResultsPath } from './deriveResultsPath.js';
+export { SourceType, isSourceType } from './ts/sourceType'
+export type { SourceType as SourceTypeValue } from './ts/sourceType'

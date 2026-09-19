@@ -16,7 +16,10 @@ jobs:
             arch: x64
           - os: macos-latest
             platform: darwin
-            arch: universal
+            # macos-latest runs on Apple Silicon (arm64). Producing a true
+            # universal binary requires a separate x86_64 matrix entry plus a
+            # lipo step — out of scope here. Label reflects what is actually built.
+            arch: arm64
 
     steps:
       - name: Checkout Code
@@ -26,20 +29,38 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config checkinstall git autoconf automake libtool-bin libssl-dev usbmuxd
+          sudo apt-get install -y \
+            build-essential pkg-config checkinstall git \
+            autoconf automake libtool-bin \
+            libssl-dev libusb-1.0-0-dev
 
       - name: Set up Environment (macOS)
         if: matrix.platform == 'darwin'
         run: |
-          brew install autoconf automake libtool pkg-config openssl
+          brew install autoconf automake libtool pkg-config openssl libusb
 
-      - name: Build and Package binaries
+      - name: Build and Package Binaries
         shell: bash
         run: |
-          INSTALL_PREFIX="./dist-tools/bin"
-          BUILD_DIR="./build-scratch"
+          # Absolute paths are required — relative paths resolve against the
+          # current working directory, which changes with every cd in the loop.
+          INSTALL_PREFIX="${GITHUB_WORKSPACE}/dist-tools"
+          BUILD_DIR="${GITHUB_WORKSPACE}/build-scratch"
           mkdir -p "$INSTALL_PREFIX"
           mkdir -p "$BUILD_DIR"
+
+          # Homebrew OpenSSL is keg-only and not on any default search path.
+          # Without these exports, autogen.sh fails to locate SSL headers on macOS.
+          if [[ "${{ matrix.platform }}" == "darwin" ]]; then
+            OPENSSL_PREFIX="$(brew --prefix openssl)"
+            export LDFLAGS="-L${OPENSSL_PREFIX}/lib"
+            export CPPFLAGS="-I${OPENSSL_PREFIX}/include"
+            export PKG_CONFIG_PATH="${OPENSSL_PREFIX}/lib/pkgconfig:${INSTALL_PREFIX}/lib/pkgconfig"
+          else
+            export PKG_CONFIG_PATH="${INSTALL_PREFIX}/lib/pkgconfig"
+          fi
+
+          export PATH="${INSTALL_PREFIX}/bin:$PATH"
 
           REPOS=(
             "https://github.com/libimobiledevice/libplist.git"
@@ -49,31 +70,46 @@ jobs:
             "https://github.com/libimobiledevice/libimobiledevice.git"
           )
 
-          export PKG_CONFIG_PATH="$INSTALL_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
-          export PATH="$INSTALL_PREFIX/bin:$PATH"
-
           for repo_url in "${REPOS[@]}"; do
             repo_name=$(basename "$repo_url" .git)
-            echo "Building $repo_name..."
+            echo "--- Building $repo_name ---"
             git clone --depth 1 "$repo_url" "$BUILD_DIR/$repo_name"
-            cd "$BUILD_DIR/$repo_name"
-            ./autogen.sh --prefix="$(pwd)/../../dist-tools"
-            make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
-            make install
-            cd -
+            # Subshell: the cd is scoped here and the parent shell's working
+            # directory is unchanged when this block exits, even on failure.
+            (
+              cd "$BUILD_DIR/$repo_name"
+              # --enable-static --disable-shared: intermediate libraries are
+              # statically linked into the final binary so dist-tools/bin is
+              # self-contained against our own libs. System libs (openssl,
+              # libusb) remain dynamic and are expected on the target machine.
+              ./autogen.sh \
+                --prefix="$INSTALL_PREFIX" \
+                --enable-static \
+                --disable-shared
+              make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
+              make install
+            )
           done
 
-          # Archive the built binaries
-          tar -czf "idevicebackup2-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" -C dist-tools bin
+          tar -czf \
+            "${GITHUB_WORKSPACE}/idevicebackup2-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" \
+            -C "${INSTALL_PREFIX}" bin
 
       - name: Generate Checksums
         shell: bash
         run: |
           FILENAME="idevicebackup2-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz"
-          sha256sum "$FILENAME" > "${FILENAME}.sha256"
+          cd "${GITHUB_WORKSPACE}"
+          # sha256sum is GNU coreutils and does not exist on macOS.
+          # shasum ships with macOS and accepts a -a flag for the algorithm.
+          if command -v sha256sum &>/dev/null; then
+            sha256sum "$FILENAME" > "${FILENAME}.sha256"
+          else
+            shasum -a 256 "$FILENAME" > "${FILENAME}.sha256"
+          fi
 
       - name: Upload Release Assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             idevicebackup2-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz

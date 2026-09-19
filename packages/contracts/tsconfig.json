@@ -7,5 +7,5 @@
   },
   "include": [
     "./*.ts"
-  ]
+, "ts/sourceType.ts", "ts/deriveResultsPath.ts", "ts/discoverBackups.ts", "ts/normalizedRecord.ts", "ts/normalizedRecord.d.ts"  ]
 }

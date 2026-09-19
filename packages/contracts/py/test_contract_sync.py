@@ -24,8 +24,8 @@ from pathlib import Path
 
 import pytest
 
-from adapter import SCHEMA_PATH, load_schema, source_types, validate
-from normalized_record import NormalizedRecord, SourceType
+from packages.contracts.py.adapter import SCHEMA_PATH, load_schema, source_types, validate
+from packages.contracts.py.normalized_record import NormalizedRecord, SourceType
 
 CONTRACTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = CONTRACTS_DIR.parent.parent

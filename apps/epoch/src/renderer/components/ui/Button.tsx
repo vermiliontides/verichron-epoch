@@ -66,8 +66,15 @@ const buttonVariants = cva(
       },
     },
     compoundVariants: [
-      { variant: ['accent', 'outline', 'danger'], size: 'default', class: 'px-4 py-2.5' },
-      { variant: ['accent', 'outline', 'danger'], size: 'sm', class: 'px-3 py-1.5' },
+      // DESIGN.md §3: padding uses only 4px-grid values. px-4 py-3 matches
+      // DevicePullPanel.tsx's "Install with Homebrew"/"Pull encrypted
+      // backup" (already normalized); px-3 py-2 matches its "Check
+      // again"/"Choose destination". The previous px-4 py-2.5 / px-3
+      // py-1.5 were half-steps -- not covered by §3's icon-label gap
+      // exception, since that exception is scoped to `gap-*` between an
+      // icon and its label, not to a control's own padding.
+      { variant: ['accent', 'outline', 'danger'], size: 'default', class: 'px-4 py-3' },
+      { variant: ['accent', 'outline', 'danger'], size: 'sm', class: 'px-3 py-2' },
     ],
     defaultVariants: {
       variant: 'accent',

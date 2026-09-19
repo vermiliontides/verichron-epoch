@@ -29,7 +29,7 @@ from normalized_record import NormalizedRecord, SourceType
 from testing.pg_double import PgDouble, sqlite_supports_upsert_returning
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MIGRATION = REPO_ROOT / "packages" / "db" / "migrations" / "0002_ingest_completion.sql"
+MIGRATION = REPO_ROOT / "packages" / "etl-db-writer" / "migrations" / "0002_ingest_completion.sql"
 
 pytestmark = pytest.mark.skipif(
     not sqlite_supports_upsert_returning(),
@@ -378,7 +378,7 @@ def test_migration_declares_every_column_the_writer_uses():
     """
     sql = MIGRATION.read_text()
     for column in ("ingest_complete", "record_count", "completed_at"):
-        assert re.search(rf"ADD COLUMN\s+{column}\b", sql), (
+        assert re.search(rf"ADD COLUMN\s+(IF NOT EXISTS\s+)?{column}\b", sql), (
             f"0002 migration does not add {column}, but db_writer.py writes it"
         )
 
@@ -404,7 +404,7 @@ def test_migration_backfill_leaves_recordless_rows_incomplete():
 # The two writers must not drift apart
 # ==========================================================================
 
-TS_WRITER = REPO_ROOT / "packages" / "db" / "dbWriter.ts"
+TS_WRITER = REPO_ROOT / "packages" / "etl-db-writer" / "dbWriter.ts"
 
 #: Statements that carry the atomicity guarantee. If either writer stops
 #: emitting one of these, the guarantee is gone in that language.
@@ -431,7 +431,7 @@ def test_both_writers_emit_the_same_load_bearing_sql(statement):
     considers essential. When the TS writer gains a consumer it should get its
     own transactional tests and this can shrink.
     """
-    py = (REPO_ROOT / "packages" / "db" / "db_writer.py").read_text()
+    py = (REPO_ROOT / "packages" / "etl-db-writer" / "db_writer.py").read_text()
     ts = TS_WRITER.read_text()
 
     assert statement in py, f"Python writer no longer emits: {statement}"
@@ -454,7 +454,7 @@ def test_neither_writer_exposes_a_standalone_ledger_write():
     the structural half of the fix -- callers can no longer build the broken
     sequence, only the correct one.
     """
-    py = (REPO_ROOT / "packages" / "db" / "db_writer.py").read_text()
+    py = (REPO_ROOT / "packages" / "etl-db-writer" / "db_writer.py").read_text()
     ts = TS_WRITER.read_text()
 
     assert "def ingest_file(" not in py

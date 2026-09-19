@@ -20,17 +20,22 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
-from adapter import SCHEMA_PATH, load_schema, source_types, validate
-from normalized_record import NormalizedRecord, SourceType
+from packages.contracts.py.adapter import SCHEMA_PATH, load_schema, source_types, validate
+from packages.contracts.py.normalized_record import NormalizedRecord, SourceType
 
 CONTRACTS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = CONTRACTS_DIR.parent.parent
 SYNC_SCRIPT = REPO_ROOT / "scripts" / "sync_contracts.py"
 ZOD_MIRROR = CONTRACTS_DIR / "normalizedRecord.ts"
+
+# Reusable fixture timestamp — avoids repeating raw ISO strings in test bodies
+# and prevents Pylance/mypy from rejecting str where datetime is expected.
+FIXTURE_TIMESTAMP = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
 
 
 # --------------------------------------------------------------------------
@@ -183,7 +188,7 @@ def test_every_source_type_validates_against_the_canonical_schema(source_type):
 
     record = NormalizedRecord(
         source_type=source_type,
-        event_time="2024-01-15T10:30:00+00:00",
+        event_time=FIXTURE_TIMESTAMP,
         fields={"engine": "test"},
     )
 
@@ -200,7 +205,7 @@ def test_ileapp_record_validates_against_the_canonical_schema():
 
     record = NormalizedRecord(
         source_type=SourceType.ILEAPP_RECORD,
-        event_time="2024-01-15T10:30:00+00:00",
+        event_time=FIXTURE_TIMESTAMP,
         fields={"engine": "iLEAPP", "source_artifact": "history"},
     )
 

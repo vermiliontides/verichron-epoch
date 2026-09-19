@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "verichron-etl-run"
 version = "0.1.0"
 description = "Shared per-file/per-record success-and-failure accounting for the extractor pipeline"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = []
 
 [tool.setuptools]

@@ -7,8 +7,6 @@ stage list, and this file's own imports)
 
 Consumes mvt-ios's OWN analysis output as primary evidence:
 
-Consumes mvt-ios's OWN analysis output as primary evidence:
-
   - results/<name>/alerts.json   -> source_type: mvt_ioc_detection
   - results/<name>/timeline.csv  -> source_type: timestamp_anomaly
 
@@ -360,7 +358,6 @@ def main():
         timeline_result = process_timeline(conn, args.run_id, results_dir)
     except Exception as e:
         print(f"[mvt_iocs] unhandled error: {e}", file=sys.stderr)
-        conn.close()
         sys.exit(1)
     finally:
         conn.close()
@@ -371,5 +368,4 @@ def main():
 
 
 if __name__ == "__main__":
-    fatal_if_missing_venv()
     main()

@@ -76,7 +76,7 @@ import psycopg2.extras
 # Resolve packages-py directory
 _EXTRACTORS_DIR = Path(__file__).resolve().parent
 _PACKAGES_PY = _EXTRACTORS_DIR.parent
-sys.path.insert(0, str(_PACKAGES_PY / "contracts" / "py"))
+sys.path.insert(0, str(_PACKAGES_PY / "contracts"))
 from normalized_record import NormalizedRecord  # noqa: E402
  
  

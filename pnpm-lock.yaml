@@ -57,7 +57,7 @@ importers:
       '@verichron/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@verichron/db-reader':
+      '@verichron/etl-db-reader':
         specifier: workspace:*
         version: link:../../packages/etl-db-reader
       class-variance-authority:
@@ -199,7 +199,7 @@ importers:
       '@verichron/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@verichron/db-reader':
+      '@verichron/etl-db-reader':
         specifier: workspace:*
         version: link:../../packages/etl-db-reader
     devDependencies:

@@ -21,18 +21,22 @@ The model fields are still hand-written, because their type expressions are
 genuinely language-specific and read better than codegen would make them. The
 sync script asserts the field *names* match the schema even though it does not
 generate them.
+
+Requires Python 3.12+. StrEnum (stdlib, 3.11+) replaces the (str, Enum) mixin
+pattern; the two are wire-compatible but StrEnum members compare directly as
+strings without .value, which removes a class of subtle bugs in dispatch code.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 
-class SourceType(str, Enum):
+class SourceType(StrEnum):
     """Registration point for extractors.
 
     Notes on individual values that need them, kept here rather than inline in

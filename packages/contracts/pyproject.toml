@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 name = "verichron-contracts"
 version = "0.1.0"
 description = "Shared NormalizedRecord schema (Python + TypeScript twins) for forensic_records ingestion."
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0",
 ]
@@ -21,5 +21,5 @@ dependencies = [
 # same reason. conftest.py and test_contract_sync.py are pytest's concern,
 # not something other packages import, so they're left out.
 [tool.setuptools]
-py-modules = ["normalized_record", "adapter"]
+py-modules = ["normalized_record", "adapter", "source_type"]
  

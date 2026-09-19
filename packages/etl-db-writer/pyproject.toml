@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "verichron-etl-db-writer"
 version = "0.1.0"
 description = "Schema-bound, transaction-safe Postgres write helpers (atomic ingest) for ingested_files/forensic_records, alongside the migrations that define them."
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "psycopg2-binary>=2.9",
     "verichron-contracts",

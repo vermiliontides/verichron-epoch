@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@verichron/contracts": "workspace:*",
-    "@verichron/db-reader": "workspace:*"
+    "@verichron/etl-db-reader": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -1,5 +1,5 @@
 # Add alongside existing exports:
-from .py.source_type import SourceType, is_source_type
+from .source_type import SourceType, is_source_type
 
 __all__ = [
     # ... existing exports ...

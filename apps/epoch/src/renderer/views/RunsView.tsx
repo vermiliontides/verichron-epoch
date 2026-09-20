@@ -45,22 +45,22 @@ interface RunsViewProps {
 }
  
 const thClass =
-  'sticky top-0 bg-surface/90 backdrop-blur-md z-10 text-left font-medium text-muted-foreground px-4 py-3 border-b border-border text-2xs uppercase tracking-wide';
-const tdClass = 'px-4 py-3 border-b border-border';
+  'sticky top-0 bg-surface/90 backdrop-blur-md z-10 text-left text-muted-foreground px-4 py-3 border-b border-border text-label uppercase tracking-wider';
+const tdClass = 'px-4 py-3 border-b border-border text-data';
  
 function EmptyState({ icon: Icon, title, detail }: { icon: typeof Inbox; title: string; detail?: string }) {
   return (
     <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground py-16">
       <Icon size="1.5rem" strokeWidth={1.5} />
-      <p className="text-sm">{title}</p>
-      {detail && <p className="text-xs font-mono">{detail}</p>}
+      <p className="text-data">{title}</p>
+      {detail && <p className="text-data font-mono opacity-80">{detail}</p>}
     </div>
   );
 }
  
 function RunsTableSkeleton() {
   return (
-    <table className="w-full text-sm border-collapse relative">
+    <table className="w-full border-collapse relative">
       <thead>
         <tr>
           <th className={thClass}>Evidence source</th>
@@ -113,18 +113,18 @@ export function RunsView({
     return () => clearInterval(interval);
   }, [runs, selectedRun, onRefreshRun, onRefreshStages]);
 
-
   return (
     <div className="flex flex-1 min-h-0 divide-x divide-border h-full overflow-hidden">
       <div className="flex-1 overflow-auto p-8 relative">
-        <h2 className="font-display text-display text-accent mb-6 flex items-baseline gap-2">
+        {/* DESIGN_2.md: text-display is strictly one per view. This is the page title. */}
+        <h1 className="font-display text-display text-accent mb-6 flex items-baseline gap-2">
           Investigations
           {!loading && !error && runs.length > 0 && (
-            <span className="font-mono text-2xs text-muted-foreground">{runs.length}</span>
+            <span className="font-mono text-label text-muted-foreground">{runs.length}</span>
           )}
-        </h2>
+        </h1>
         {error ? (
-          <div className="text-flag bg-flag/10 border border-flag/30 rounded-md px-4 py-3 text-sm">{error}</div>
+          <div className="text-flag bg-flag/10 border border-flag/30 rounded-md px-4 py-3 text-data">{error}</div>
         ) : loading ? (
           <RunsTableSkeleton />
         ) : runs.length === 0 ? (
@@ -134,7 +134,7 @@ export function RunsView({
             detail="Import an iPhone backup or connect a device from New Run to begin."
           />
         ) : (
-          <table className="w-full text-sm border-collapse relative">
+          <table className="w-full border-collapse relative">
             <thead>
               <tr>
                 <th className={thClass}>Evidence source</th>
@@ -155,13 +155,14 @@ export function RunsView({
                       selected ? 'bg-surface shadow-[inset_0.125rem_0_0_hsl(var(--accent))]' : ''
                     }`}
                   >
-                    <td className={`${tdClass} font-mono text-xs`}>
+                    <td className={`${tdClass} font-mono`}>
                       <span className="block max-w-[55] truncate" title={run.backup_source}>
                         {backupName}
                       </span>
                     </td>
                     <td className={tdClass}>
-                      <div className="flex items-center gap-2">
+                      {/* DESIGN_2.md: gap-1.5 exception applied for inline icon/indicator + text label */}
+                      <div className="flex items-center gap-1.5">
                         {phase === 'in_progress' && (
                           <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
@@ -171,7 +172,7 @@ export function RunsView({
                         <Badge variant={phase}>{phase === 'finished' ? 'finished' : 'in progress'}</Badge>
                       </div>
                     </td>
-                    <td className={`${tdClass} font-mono text-xs tabular-nums tracking-tight`} title={new Date(run.started_at).toISOString()}>
+                    <td className={`${tdClass} font-mono tabular-nums tracking-tight`} title={new Date(run.started_at).toISOString()}>
                       {new Date(run.started_at).toLocaleString()}
                     </td>
                   </tr>
@@ -183,7 +184,8 @@ export function RunsView({
       </div>
  
       <div className="flex-1 overflow-auto p-8">
-        <h2 className="font-display text-display text-accent mb-6">Analysis progress</h2>
+        {/* DESIGN_2.md: Demoted from text-display to text-label to preserve structural UI chrome hierarchy */}
+        <h2 className="text-label uppercase tracking-wider text-muted-foreground mb-6">Analysis progress</h2>
         {selectedRun ? (
           stages.length === 0 ? (
             <EmptyState icon={Layers} title="No stages found for this run" />
@@ -206,21 +208,25 @@ export function RunsView({
                       borderLeftColor: `hsl(${statusColor} / ${stage.status === 'pending' || stage.status === 'skipped' ? '0.5' : '1'})`,
                     }}
                   >
-                    {/* Hover Glow Effect based on status */}
                     <div 
                       className="absolute -inset-1 opacity-0 group-hover:opacity-10 blur-xl transition-opacity pointer-events-none"
                       style={{ backgroundColor: `hsl(${statusColor})` }}
                     />
                     
                     <div className="relative z-10">
-                      <h3 className="font-display text-sm font-medium mb-3">{stage.stage_name}</h3>
-                      <div className="text-xs text-muted-foreground font-mono mb-2 flex items-center gap-2">
+                      {/* DESIGN_2.md: Internal card sub-headings must use composite text-label token */}
+                      <h3 className="font-display text-label mb-3">{stage.stage_name}</h3>
+                      
+                      {/* DESIGN_2.md: Badge-adjacent text labels use text-data instead of text-xs */}
+                      <div className="text-data text-muted-foreground font-mono mb-2 flex items-center gap-1.5">
                         Status: <Badge variant={stage.status}>{stage.status}</Badge>
                       </div>
+                      
                       {stage.error_message && (
-                        <p className="text-xs text-flag font-mono mb-2 wrap-break-words">Error: {stage.error_message}</p>
+                        <p className="text-data text-flag font-mono mb-2 wrap-break-words">Error: {stage.error_message}</p>
                       )}
-                      <p className="text-xs text-muted-foreground font-mono">
+                      
+                      <p className="text-data text-muted-foreground font-mono">
                         Duration: <strong className="text-foreground">{durationMs !== null ? formatDuration(durationMs) : '—'}</strong>
                       </p>
                     </div>

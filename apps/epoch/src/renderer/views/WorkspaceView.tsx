@@ -590,7 +590,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           {analysisResult && (
             <div>
               {analysisResult.success && analysisFailedCount === 0 ? (
-                <>
+                <div>
                   <p className="text-sm text-accent flex items-center gap-1.5 mb-3">
                     <CheckCircle2 size="1rem" /> Analysis complete.
                   </p>

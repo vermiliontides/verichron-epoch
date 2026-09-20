@@ -54,7 +54,7 @@ from pathlib import Path
 from runtime_env import fatal_if_missing_venv
 from typing import Any
 from etl_run import ETLRunResult
-from db_writer import ingest
+from etl_db_writer import ingest
 from normalized_record import NormalizedRecord, SourceType
 
 import psycopg2

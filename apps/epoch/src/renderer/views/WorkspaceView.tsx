@@ -3,6 +3,8 @@ import { FolderOpen, HardDrive, Play, AlertCircle, ChevronDown, ChevronRight, Ch
 import { BackupRow } from '../features/devicePullPanel/BackupRow';
 import { TerminalLog } from '../components/layout/TerminalLog';
 import { DevicePullPanel } from '../features/devicePullPanel/DevicePullPanel';
+import { Button } from '../components/ui/Button';
+import { Loader } from '../components/ui/Loader';
 import type { MvtLogEntry, MvtFinishedResult, StartPipelineOptions } from '../../shared/types/window';
 import type { Backup } from '@verichron/contracts';
 import { applyMvtLogLine, initMvtRunProgress, type MvtRunProgress } from '../../shared/lib/mvtLogParser';
@@ -336,6 +338,8 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
             <p className="text-sm text-muted-foreground mb-5 text-center max-w-md leading-relaxed">
               Choose the folder containing your iPhone backups. Epoch will identify compatible backups automatically.
             </p>
+            {/* Decorative -- the parent div (not this element) owns the click handler and
+                group-hover state, so this stays a plain styled button rather than <Button>. */}
             <button
               type="button"
               className="inline-flex items-center gap-2 bg-surface-raised shadow-elevation-1 group-hover:shadow-elevation-2 group-hover:bg-accent group-hover:text-background text-foreground font-semibold px-4 py-2 rounded-lg text-sm transition-all pointer-events-none"
@@ -347,7 +351,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       ) : (
         <>
           <div className="flex items-center gap-3 bg-surface shadow-elevation-1 rounded-xl px-4 py-3">
-            <div className="p-2 rounded-lg bg-accent/10 text-accent shrink-0">
+            <div className="p-1.5 rounded-lg bg-accent/10 text-accent shrink-0">
               <HardDrive size="1.125rem" />
             </div>
             <div className="min-w-0 flex-1">
@@ -357,13 +361,10 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
               </p>
             </div>
             {!busy && (
-              <button
-                onClick={handleSelectDirectory}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-raised shadow-elevation-1 hover:shadow-elevation-2 text-xs font-medium text-foreground hover:text-accent transition-all shrink-0 cursor-pointer"
-              >
+              <Button variant="outline" size="sm" onClick={handleSelectDirectory} className="shrink-0">
                 <Pencil size="0.75rem" />
                 Change
-              </button>
+              </Button>
             )}
           </div>
 
@@ -374,39 +375,34 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
               </p>
               <div className="flex items-center gap-3">
                 {backups.length > 1 && !busy && (
-                  <div className="flex items-center gap-2 text-xs bg-surface-raised shadow-elevation-1 rounded-lg p-1">
+                  <div className="flex items-center gap-1.5 text-xs bg-surface-raised shadow-elevation-1 rounded-lg p-1">
+                    {/* Segmented pill toggle -- a compound control, not a plain button;
+                        left on Button.tsx's deferred list rather than forced into `ghost`. */}
                     <button
                       onClick={selectAllBackups}
-                      className="px-3 py-1 rounded-md text-foreground/80 hover:text-foreground hover:bg-surface transition-colors cursor-pointer font-medium"
+                      className="px-2.5 py-1 rounded-md text-foreground/80 hover:text-foreground hover:bg-surface transition-colors cursor-pointer font-medium"
                     >
                       Select all
                     </button>
                     <span className="text-border">|</span>
                     <button
                       onClick={selectNoBackups}
-                      className="px-3 py-1 rounded-md text-foreground/80 hover:text-foreground hover:bg-surface transition-colors cursor-pointer font-medium"
+                      className="px-2.5 py-1 rounded-md text-foreground/80 hover:text-foreground hover:bg-surface transition-colors cursor-pointer font-medium"
                     >
                       Select none
                     </button>
                   </div>
                 )}
-                <button
+                <Button
                   onClick={handleStartPipeline}
-                  disabled={busy || discoveringBackups || selectedLabels.size === 0}
-                  className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] px-5 py-3 rounded-lg font-semibold text-sm shadow-elevation-2 transition-all shrink-0 cursor-pointer"
+                  disabled={discoveringBackups || selectedLabels.size === 0}
+                  loading={busy}
+                  loadingText={isStarting ? 'Starting...' : 'Running...'}
+                  className="shrink-0"
                 >
-                  {busy ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
-                      <span>{isStarting ? 'Starting...' : 'Running...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play size="1rem" fill="currentColor" />
-                      <span>Prepare evidence{selectedLabels.size > 0 ? ` (${selectedLabels.size})` : ''}</span>
-                    </>
-                  )}
-                </button>
+                  <Play size="1rem" fill="currentColor" />
+                  Prepare evidence{selectedLabels.size > 0 ? ` (${selectedLabels.size})` : ''}
+                </Button>
               </div>
             </div>
 
@@ -447,17 +443,19 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
             )}
 
             <div className="mt-6 pt-5 shadow-elevation-1">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowOptions((v) => !v)}
                 disabled={busy}
-                className="inline-flex items-center gap-2 text-xs uppercase tracking-wider font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 cursor-pointer"
+                className="uppercase tracking-wider font-semibold"
               >
                 {showOptions ? <ChevronDown size="0.9rem" /> : <ChevronRight size="0.9rem" />}
                 Advanced settings
-              </button>
+              </Button>
               {showOptions && (
                 <div className="mt-4 flex flex-col gap-4 p-4 rounded-xl bg-surface/30 shadow-elevation-1">
-                  <label className="flex flex-col gap-2">
+                  <label className="flex flex-col gap-1.5">
                     <span className="text-2xs uppercase tracking-wider font-semibold text-muted-foreground">
                       Analysis workspace (optional)
                     </span>
@@ -467,7 +465,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                       onChange={(e) => setWorkspace(e.target.value)}
                       disabled={busy}
                       placeholder="Use the default workspace"
-                      className="bg-background/90 border border-border/80 focus:border-accent focus:outline-none rounded-lg px-4 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/60 disabled:opacity-50 transition-colors"
+                      className="bg-background/90 border border-border/80 focus:border-accent focus:outline-none rounded-lg px-3.5 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/60 disabled:opacity-50 transition-colors"
                     />
                   </label>
                   <label className="flex items-center gap-3 text-sm cursor-pointer select-none">
@@ -509,7 +507,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
       {finishResult && runProgress && (
         <div
-          className={`flex items-start gap-4 rounded-xl p-5 shadow-elevation-1 ${
+          className={`flex items-start gap-3.5 rounded-xl p-5 shadow-elevation-1 ${
             failedCount === 0 ? 'bg-accent/10 border border-accent/30' : 'bg-danger/10 border border-danger/30'
           }`}
         >
@@ -537,8 +535,8 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
       {finishResult && runProgress && doneCount > 0 && lastRunWorkspace && (
         <div className="bg-surface shadow-elevation-2 rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 rounded-md bg-accent/10 text-accent">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="p-1.5 rounded-md bg-accent/10 text-accent">
               <Microscope size="1.25rem" />
             </div>
             <div>
@@ -553,13 +551,10 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                 Run forensic analysis on the {doneCount} prepared backup{doneCount === 1 ? '' : 's'} to find indicators,
                 and timeline anomalies.
               </p>
-              <button
-                onClick={handleStartAnalysis}
-                className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 active:scale-[0.99] px-5 py-3 rounded-lg font-semibold text-sm shadow-elevation-2 cursor-pointer transition-all"
-              >
+              <Button onClick={handleStartAnalysis}>
                 <Microscope size="1rem" />
                 Run forensic analysis on {doneCount} backup{doneCount === 1 ? '' : 's'}
-              </button>
+              </Button>
               {analysisStartError && (
                 <div className="flex items-center gap-2 text-sm text-danger mt-3">
                   <AlertCircle size="1rem" />
@@ -572,21 +567,23 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           {analysisRunning && (
             <div className="flex items-center justify-between gap-3 py-3">
               <div className="flex items-center gap-3 text-sm text-flag">
-                <div className="w-4 h-4 border-2 border-flag/30 border-t-flag rounded-full animate-spin shrink-0" />
+                <Loader className="text-flag" />
                 <span>{analysisCancelling ? 'Stopping analysis...' : 'Examining the imported evidence...'}</span>
               </div>
               {/* EPOCH-305: always available while running, so a stalled or
                * abnormally long run can be broken out of without restarting
                * the app. Disabled (not hidden) once a cancel is already in
                * flight so a second click can't fire a second IPC call. */}
-              <button
+              <Button
+                variant="outline"
+                tone="danger"
+                size="sm"
                 onClick={handleCancelAnalysis}
                 disabled={analysisCancelling}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-danger hover:border-danger/40 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shrink-0"
               >
                 <XCircle size="0.875rem" />
                 {analysisCancelling ? 'Stopping...' : 'Cancel'}
-              </button>
+              </Button>
             </div>
           )}
 
@@ -608,13 +605,10 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                       .
                     </p>
                   )}
-                  <button
-                    onClick={onAnalysisComplete}
-                    className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 active:scale-[0.99] px-5 py-3 rounded-lg font-semibold text-sm shadow-elevation-2 cursor-pointer transition-all"
-                  >
+                  <Button onClick={onAnalysisComplete}>
                     View investigation
                     <ArrowRight size="1rem" />
-                  </button>
+                  </Button>
                 </>
               ) : (
                 <div>
@@ -638,6 +632,8 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                       need attention.
                     </p>
                   )}
+                  {/* "Try again" reads as an inline link (accent color, underline-on-hover),
+                      not a restatement of `ghost` -- deferred per Button.tsx's header note. */}
                   <button onClick={handleStartAnalysis} className="text-xs text-accent hover:underline mt-2">
                     Try again
                   </button>
@@ -655,7 +651,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       )}
 
       {!selectedPath && (
-        <div className="flex items-start gap-4 bg-surface-raised/40 shadow-elevation-1 rounded-xl p-4 sm:p-5">
+        <div className="flex items-start gap-3.5 bg-surface-raised/40 shadow-elevation-1 rounded-xl p-4 sm:p-5">
           <AlertCircle className="text-accent shrink-0 mt-0.5" size="1.125rem" />
           <p className="text-xs text-muted-foreground leading-relaxed">
             <strong className="text-foreground font-semibold">Tip:</strong> Connect an iPhone by USB to import a fresh backup,
@@ -679,15 +675,16 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
               onKeyDown={(e) => e.key === 'Enter' && !submittingPassword && handleSubmitPassword()}
               autoFocus
               disabled={submittingPassword}
-              className="w-full bg-surface-raised border border-border focus:border-accent focus:outline-hidden rounded-lg px-4 py-3 text-sm font-mono text-foreground mb-4 disabled:opacity-50 transition-colors"
+              className="w-full bg-surface-raised border border-border focus:border-accent focus:outline-hidden rounded-lg px-3.5 py-2.5 text-sm font-mono text-foreground mb-4 disabled:opacity-50 transition-colors"
             />
-            <button
+            <Button
               onClick={handleSubmitPassword}
-              disabled={submittingPassword}
-              className="w-full bg-accent text-background hover:bg-accent/90 active:scale-[0.99] disabled:opacity-50 px-4 py-3 rounded-lg font-semibold text-sm shadow-elevation-2 cursor-pointer transition-all"
+              loading={submittingPassword}
+              loadingText="Submitting..."
+              className="w-full"
             >
-              {submittingPassword ? 'Submitting...' : 'Continue'}
-            </button>
+              Continue
+            </Button>
           </div>
         </div>
       )}

@@ -3,7 +3,6 @@ import {
   Smartphone,
   CheckCircle2,
   XCircle,
-  Loader2,
   Wrench,
   ArrowDown,
   Copy,
@@ -15,6 +14,8 @@ import {
   Lock,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Loader } from '../../components/ui/Loader';
 import { useDevicePull } from '../../hooks/useDevicePull';
  
 interface DevicePullPanelProps {
@@ -101,7 +102,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
         <div className="p-2 rounded-lg bg-accent/10 text-accent">
           <Smartphone size="1.25rem" />
         </div>
-        <h3 className="font-display text-label text-semibold text-foreground">Import from iPhone</h3>
+        <h3 className="font-display text-base font-semibold text-foreground">Import from iPhone</h3>
         {sources.length > 1 && (
           <select
             value={sourceId}
@@ -119,19 +120,27 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
  
       {phase === 'checking' && (
         <p className="text-sm text-muted-foreground flex items-center gap-2 py-2">
-          <Loader2 size="1rem" className="animate-spin text-accent" /> Checking for the required tool...
+          <Loader className="text-accent" /> Checking for the required tool...
         </p>
       )}
  
       {phase === 'unavailable' && toolStatus && !toolStatus.available && (
         <div>
-          <div className="flex items-center gap-3 text-sm text-flag bg-flag/10 border border-flag/20 px-4 py-3 rounded-lg mb-5">
+          {/* Flag banner, standard 1 of 2 in this file -- see the Setup
+           * Error card below. Both now share the same treatment
+           * (rounded-xl, p-4, border-flag/30, shadow-elevation-1) per the
+           * "all flag banners should be the same standard" directive on
+           * VER-10. Previously this one was rounded-lg/px-4 py-3/
+           * border-flag/20 with no elevation -- a different, weaker
+           * treatment than its sibling three lines down for no reason
+           * other than having been written at a different time. */}
+          <div className="flex items-center gap-3 text-sm text-flag bg-flag/10 border border-flag/30 shadow-elevation-1 p-4 rounded-xl mb-5">
             <XCircle size="1.125rem" className="shrink-0" />
             <span>iPhone import is not set up on this computer yet.</span>
           </div>
  
           {acquisitionError && (
-            <div className="bg-flag/10 border border-flag/30 rounded-xl p-4 text-sm text-flag mb-5 shadow-elevation-1">
+            <div className="bg-flag/10 border border-flag/30 shadow-elevation-1 p-4 rounded-xl text-sm text-flag mb-5">
               <div className="flex items-start gap-3">
                 <AlertTriangle size="1.125rem" className="shrink-0 mt-0.5" />
                 <div className="flex-1">
@@ -142,12 +151,14 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                       <p className="text-xs text-foreground/80 mb-3">
                         Homebrew is available on this Mac and can install the required libraries directly instead.
                       </p>
-                      <button
+                      <Button
+                        variant="outline"
+                        tone="danger"
+                        size="sm"
                         onClick={() => runHomebrewInstall(['libplist', 'libimobiledevice'])}
-                        className="inline-flex items-center gap-2 bg-surface-raised border border-flag/40 hover:bg-surface-raised/80 hover:border-flag text-foreground px-4 py-2 rounded-lg text-xs font-medium shadow-elevation-1 transition-all cursor-pointer"
                       >
-                        <Wrench size="0.875rem" className="text-flag" /> Try Homebrew instead
-                      </button>
+                        <Wrench size="0.875rem" /> Try Homebrew instead
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -159,7 +170,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
             <div key={i} className="rounded-xl p-5 mb-4 bg-surface/40 shadow-elevation-1 hover:shadow-elevation-2 hover:bg-surface/60 transition-all">
               <div className="flex items-start justify-between gap-4 mb-2">
                 <div>
-                  <p className="text-label text-foreground">
+                  <p className="text-sm font-semibold text-foreground">
                     {action.kind === 'install-instructions'
                       ? 'Install the required system tools'
                       : action.kind === 'compile-from-source'
@@ -187,7 +198,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               
               {action.kind === 'install-instructions' && (
                 <div className="mt-4 pt-3 shadow-elevation-1">
-                  <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-2">
+                  <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                     <Terminal size="0.875rem" /> Terminal command (one-time setup):
                   </div>
                   <div className="flex flex-col gap-2">
@@ -200,6 +211,9 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                           <span className="text-accent select-none mr-2">$</span>
                           {c}
                         </span>
+                        {/* Icon + copied-state swap micro-interaction -- distinct enough
+                            from a plain Button call site that it's deferred rather than
+                            forced through the shared component this pass. */}
                         <button
                           type="button"
                           onClick={() => handleCopy(c, j)}
@@ -226,23 +240,17 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
  
               {action.kind === 'homebrew-install' && (
                 <div className="mt-4">
-                  <button
-                    onClick={() => runHomebrewInstall(action.formulas)}
-                    className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 active:scale-[0.99] px-4 py-3 rounded-lg text-sm font-semibold shadow-elevation-2 transition-all cursor-pointer"
-                  >
+                  <Button onClick={() => runHomebrewInstall(action.formulas)}>
                     <Wrench size="1rem" /> Install with Homebrew
-                  </button>
+                  </Button>
                 </div>
               )}
  
               {action.kind === 'compile-from-source' && (
                 <div className="mt-4">
-                  <button
-                    onClick={() => runCompileFromSource(action)}
-                    className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 active:scale-[0.99] px-4 py-3 rounded-lg text-sm font-semibold shadow-elevation-2 transition-all cursor-pointer"
-                  >
+                  <Button onClick={() => runCompileFromSource(action)}>
                     <Wrench size="1rem" /> {acquisitionError ? 'Retry setup' : 'Build automatically'}
-                  </button>
+                  </Button>
                 </div>
               )}
  
@@ -255,12 +263,9 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           ))}
           
           <div className="mt-5">
-            <button
-              onClick={checkAvailability}
-              className="inline-flex items-center gap-2 bg-surface-raised shadow-elevation-1 hover:shadow-elevation-2 text-foreground px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer"
-            >
-              <RefreshCw size="0.875rem" className="text-muted-foreground" /> Check again
-            </button>
+            <Button variant="outline" size="sm" onClick={checkAvailability}>
+              <RefreshCw size="0.875rem" /> Check again
+            </Button>
           </div>
         </div>
       )}
@@ -268,7 +273,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
       {phase === 'acquiring' && (
         <div>
           <p className="text-sm text-foreground font-medium flex items-center gap-2 mb-3">
-            <Loader2 size="1rem" className="animate-spin text-accent" /> {acquisitionStep ?? 'Working...'}
+            <Loader className="text-accent" /> {acquisitionStep ?? 'Working...'}
           </p>
           <div className="relative">
             <pre
@@ -281,7 +286,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
             {!stickToBottom && acquisitionOutput.length > 0 && (
               <button
                 onClick={jumpToLatest}
-                className="absolute bottom-3 right-3 flex items-center gap-2 bg-accent text-background text-xs font-semibold rounded-full px-3 py-2 shadow-elevation-2 hover:bg-accent/90 transition-all cursor-pointer"
+                className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-accent text-background text-xs font-semibold rounded-full px-3 py-1.5 shadow-elevation-2 hover:bg-accent/90 transition-all cursor-pointer"
               >
                 <ArrowDown size="0.75rem" />
                 Jump to latest
@@ -319,7 +324,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                   />
                   <span className="text-foreground font-medium">{d.name}</span>
                   {d.model && <Badge variant="neutral">{d.model}</Badge>}
-                  {d.osVersion && <span className="text-label text-muted-foreground font-mono">iOS {d.osVersion}</span>}
+                  {d.osVersion && <span className="text-2xs text-muted-foreground font-mono">iOS {d.osVersion}</span>}
                 </label>
               ))}
             </div>
@@ -328,14 +333,15 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           {selectedDevice && (
             <div className="flex flex-col gap-3 mb-5 p-4 rounded-lg bg-surface/60 shadow-elevation-1">
               <div className="flex items-center gap-3">
-                <button
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleSelectDestination}
                   disabled={phase === 'pulling'}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-surface-raised shadow-elevation-1 hover:shadow-elevation-2 text-xs font-medium text-foreground hover:text-accent disabled:opacity-50 transition-all cursor-pointer"
                 >
-                  <FolderOpen size="0.875rem" className="text-accent" />
+                  <FolderOpen size="0.875rem" />
                   {destDir ? 'Change destination' : 'Choose destination'}
-                </button>
+                </Button>
                 {destDir ? (
                   <span className="text-xs font-mono text-foreground/80 truncate" title={destDir}>
                     {destDir}
@@ -371,15 +377,15 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
           )}
  
           {selectedDevice && destDir && phase !== 'pulled' && (
-            <button
+            <Button
               onClick={onPullClick}
-              disabled={phase === 'pulling' || !passwordProvided}
+              disabled={!passwordProvided}
+              loading={phase === 'pulling'}
+              loadingText="Pulling encrypted backup..."
               title={!passwordProvided ? 'Enter a backup password to continue' : undefined}
-              className="inline-flex items-center gap-2 bg-accent text-background hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] px-5 py-3 rounded-lg text-sm font-semibold shadow-elevation-2 transition-all cursor-pointer"
             >
-              {phase === 'pulling' ? <Loader2 size="1rem" className="animate-spin" /> : null}
-              {phase === 'pulling' ? 'Pulling encrypted backup...' : 'Pull encrypted backup'}
-            </button>
+              Pull encrypted backup
+            </Button>
           )}
  
           {pullProgress.length > 0 && (
@@ -388,13 +394,13 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
             </pre>
           )}
           {pullError && (
-            <div className="text-sm text-danger bg-danger/10 border border-danger/30 rounded-lg p-4 mt-4 flex items-center gap-2">
+            <div className="text-sm text-danger bg-danger/10 border border-danger/30 shadow-elevation-1 rounded-lg p-4 mt-4 flex items-center gap-2">
               <XCircle size="1rem" className="shrink-0" />
               <span>{pullError}</span>
             </div>
           )}
           {phase === 'pulled' && (
-            <div className="text-sm text-accent bg-accent/10 border border-accent/30 rounded-lg p-4 mt-4 flex items-center gap-2 font-medium">
+            <div className="text-sm text-accent bg-accent/10 border border-accent/30 shadow-elevation-1 rounded-lg p-4 mt-4 flex items-center gap-2 font-medium">
               <CheckCircle2 size="1.125rem" className="shrink-0" />
               <span>Encrypted backup imported successfully and ready for analysis.</span>
             </div>

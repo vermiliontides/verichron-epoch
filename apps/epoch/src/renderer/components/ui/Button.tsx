@@ -25,6 +25,16 @@
  *                 at a similar mid-high HSL lightness and need the same
  *                 dark-text contrast fix).
  *
+ * `tone="danger"` (only meaningful on `variant="outline"`) resolves what
+ * were two independent flat-border, hover-reveals-danger patterns in the
+ * app (DevicePullPanel.tsx's "Try Homebrew instead" fallback, and
+ * WorkspaceView.tsx's EPOCH-305 Cancel button) into one elevation-based
+ * treatment, per DESIGN.md §1: a border on a button-shaped control is "the
+ * wrong tool -- use elevation." Both call sites are migrated onto this
+ * rather than kept as their own one-off border styling. Not a 5th variant
+ * enum value -- it only changes `outline`'s hover color, same elevation
+ * shape either way.
+ *
  * Deliberately NOT built on Radix `Slot`/`asChild` composition -- `Badge.tsx`
  * already established a plain `cva`-only variant pattern for this app, and
  * EPOCH-201's ordering note (VER-8) asks this ticket to reuse whatever
@@ -56,13 +66,17 @@ const buttonVariants = cva(
       variant: {
         accent: 'bg-accent text-background shadow-elevation-2 hover:bg-accent/90 active:scale-[0.99]',
         outline:
-          'bg-surface-raised shadow-elevation-1 hover:shadow-elevation-2 text-foreground hover:text-accent active:scale-[0.99]',
+          'bg-surface-raised shadow-elevation-1 hover:shadow-elevation-2 text-foreground active:scale-[0.99]',
         ghost: 'text-muted-foreground hover:text-foreground',
         danger: 'bg-danger text-background shadow-elevation-2 hover:bg-danger/90 active:scale-[0.99]',
       },
       size: {
         default: '',
         sm: '',
+      },
+      tone: {
+        default: '',
+        danger: '',
       },
     },
     compoundVariants: [
@@ -75,10 +89,16 @@ const buttonVariants = cva(
       // icon and its label, not to a control's own padding.
       { variant: ['accent', 'outline', 'danger'], size: 'default', class: 'px-4 py-3' },
       { variant: ['accent', 'outline', 'danger'], size: 'sm', class: 'px-3 py-2' },
+      // `tone` only applies to `outline` -- `accent`/`danger` already carry
+      // their own fixed hover color, and `ghost` has no danger call site
+      // yet. `outline` itself defaults to an accent-tinted hover.
+      { variant: 'outline', tone: 'default', class: 'hover:text-accent' },
+      { variant: 'outline', tone: 'danger', class: 'hover:text-danger' },
     ],
     defaultVariants: {
       variant: 'accent',
       size: 'default',
+      tone: 'default',
     },
   }
 );
@@ -95,11 +115,11 @@ export interface ButtonProps
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, loading = false, loadingText, disabled, children, ...props }, ref) => {
+  ({ className, variant, size, tone, loading = false, loadingText, disabled, children, ...props }, ref) => {
     return (
       <button
         ref={ref}
-        className={cn(buttonVariants({ variant, size }), className)}
+        className={cn(buttonVariants({ variant, size, tone }), className)}
         disabled={disabled || loading}
         aria-busy={loading || undefined}
         {...props}

@@ -1,9 +1,7 @@
-import { useState, Fragment } from 'react';
+import { useMemo, useState } from 'react';
 import type { ForensicRecordRow } from '@verichron/db-reader';
 import { Badge } from '../components/ui/Badge';
-
-const thClass = 'text-left font-medium text-muted-foreground bg-surface px-4 py-3 border-b border-border text-2xs uppercase tracking-wide';
-const tdClass = 'px-4 py-3 border-b border-border';
+import { DataTable, type DataTableColumn } from '../components/ui/DataTable';
 
 interface RecordsViewProps {
   selectedRun: boolean;
@@ -13,6 +11,62 @@ interface RecordsViewProps {
   onFilterChange: (sourceType: string | null) => void;
 }
 
+const cellMono = 'font-mono text-data';
+
+function buildColumns(): DataTableColumn<ForensicRecordRow>[] {
+  return [
+    {
+      id: 'event_time',
+      header: 'Event Time',
+      accessorFn: (row) => row.event_time,
+      cell: ({ row }) => (
+        <span className={cellMono}>
+          {row.original.event_time ? new Date(row.original.event_time).toLocaleString() : '—'}
+        </span>
+      ),
+      meta: { width: 'minmax(11rem, 1.2fr)' },
+    },
+    {
+      id: 'source_type',
+      header: 'Source Type',
+      accessorFn: (row) => row.source_type,
+      cell: ({ row }) => <Badge variant="neutral">{row.original.source_type}</Badge>,
+      meta: { width: 'minmax(9rem, 1fr)' },
+    },
+    {
+      id: 'bug_type',
+      header: 'Bug Type',
+      accessorFn: (row) => row.bug_type,
+      cell: ({ row }) => <span className={cellMono}>{row.original.bug_type ?? '—'}</span>,
+    },
+    {
+      id: 'process_name',
+      header: 'Process',
+      accessorFn: (row) => row.process_name,
+      cell: ({ row }) => <span className={cellMono}>{row.original.process_name ?? '—'}</span>,
+    },
+    {
+      id: 'pid',
+      header: 'PID',
+      accessorFn: (row) => row.pid,
+      cell: ({ row }) => <span className={cellMono}>{row.original.pid ?? '—'}</span>,
+      meta: { width: 'minmax(5rem, 0.5fr)' },
+    },
+    {
+      id: 'bundle_id',
+      header: 'Bundle ID',
+      accessorFn: (row) => row.bundle_id,
+      cell: ({ row }) => <span className={cellMono}>{row.original.bundle_id ?? '—'}</span>,
+    },
+    {
+      id: 'incident_id',
+      header: 'Incident',
+      accessorFn: (row) => row.incident_id,
+      cell: ({ row }) => <span className={cellMono}>{row.original.incident_id ?? '—'}</span>,
+    },
+  ];
+}
+
 export function RecordsView({
   selectedRun,
   records,
@@ -20,7 +74,8 @@ export function RecordsView({
   sourceTypeFilter,
   onFilterChange,
 }: RecordsViewProps) {
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const columns = useMemo(buildColumns, []);
 
   return (
     <div className="flex-1 overflow-auto p-8">
@@ -35,8 +90,10 @@ export function RecordsView({
           <div className="flex gap-2 mb-5">
             <button
               onClick={() => onFilterChange(null)}
-              className={`px-4 py-2 rounded-md text-xs font-mono border ${
-                sourceTypeFilter === null ? 'border-accent text-accent' : 'border-border text-muted-foreground'
+              className={`px-4 py-2 rounded-md text-label font-mono transition-all ${
+                sourceTypeFilter === null
+                  ? 'bg-accent/15 text-accent shadow-elevation-1'
+                  : 'bg-surface-raised text-muted-foreground shadow-elevation-1 hover:shadow-elevation-2 hover:text-foreground'
               }`}
             >
               all
@@ -45,56 +102,32 @@ export function RecordsView({
               <button
                 key={st}
                 onClick={() => onFilterChange(st)}
-                className={`px-4 py-2 rounded-md text-xs font-mono border ${
-                  sourceTypeFilter === st ? 'border-accent text-accent' : 'border-border text-muted-foreground'
+                className={`px-4 py-2 rounded-md text-label font-mono transition-all ${
+                  sourceTypeFilter === st
+                    ? 'bg-accent/15 text-accent shadow-elevation-1'
+                    : 'bg-surface-raised text-muted-foreground shadow-elevation-1 hover:shadow-elevation-2 hover:text-foreground'
                 }`}
               >
                 {st}
               </button>
             ))}
           </div>
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr>
-                {['Event Time', 'Source Type', 'Bug Type', 'Process', 'PID', 'Bundle ID', 'Incident'].map((h) => (
-                  <th key={h} className={thClass}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((record) => (
-                <Fragment key={record.id}>
-                  <tr
-                    onClick={() => setExpandedId(expandedId === record.id ? null : record.id)}
-                    className="cursor-pointer transition-colors hover:bg-surface"
-                  >
-                    <td className={`${tdClass} font-mono text-xs`}>
-                      {record.event_time ? new Date(record.event_time).toLocaleString() : '—'}
-                    </td>
-                    <td className={tdClass}>
-                      <Badge variant="neutral">{record.source_type}</Badge>
-                    </td>
-                    <td className={`${tdClass} font-mono text-xs`}>{record.bug_type ?? '—'}</td>
-                    <td className={`${tdClass} font-mono text-xs`}>{record.process_name ?? '—'}</td>
-                    <td className={`${tdClass} font-mono text-xs`}>{record.pid ?? '—'}</td>
-                    <td className={`${tdClass} font-mono text-xs`}>{record.bundle_id ?? '—'}</td>
-                    <td className={`${tdClass} font-mono text-xs`}>{record.incident_id ?? '—'}</td>
-                  </tr>
-                  {expandedId === record.id && (
-                    <tr>
-                      <td colSpan={7} className="px-4 py-4 border-b border-border bg-surface">
-                        <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap break-all">
-                          {JSON.stringify(record.fields, null, 2)}
-                        </pre>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+
+          <DataTable<ForensicRecordRow>
+            data={records}
+            columns={columns}
+            getRowId={(row) => String(row.id)}
+            expandedId={expandedId}
+            onRowClick={(row) => setExpandedId(expandedId === String(row.id) ? null : String(row.id))}
+            estimateRowHeight={44}
+            className="h-[calc(100vh-20rem)] rounded-lg shadow-elevation-1"
+            emptyState={<p className="text-muted-foreground text-sm">No records match this filter.</p>}
+            renderExpanded={(row) => (
+              <pre className="text-data font-mono text-muted-foreground whitespace-pre-wrap break-all">
+                {JSON.stringify(row.fields, null, 2)}
+              </pre>
+            )}
+          />
         </>
       )}
     </div>

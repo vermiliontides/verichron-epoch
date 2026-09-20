@@ -59,9 +59,9 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
     <div>
       <h2 className="font-display text-display text-accent mb-6">Indicator Matches</h2>
       {!selectedRun ? (
-        <p className="text-muted-foreground text-sm">Select an investigation first.</p>
+        <p className="text-muted-foreground text-data">Select an investigation first.</p>
       ) : iocRecords.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-data">
           No indicator matches or timing anomalies were found for this investigation.
         </p>
       ) : (
@@ -94,46 +94,46 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
                       ))}
                     <Badge variant={matched ? 'flag' : 'neutral'}>{rec.source_type}</Badge>
                     {rec.event_time && (
-                      <span className="font-mono text-xs text-muted-foreground">
+                      <span className="font-mono text-data text-muted-foreground">
                         {new Date(rec.event_time).toLocaleString()}
                       </span>
                     )}
                   </div>
                   {isDetection ? (
                     <>
-                      <p className="text-sm">{String(rec.fields.message ?? '—')}</p>
+                      <p className="text-data">{String(rec.fields.message ?? '—')}</p>
                       {matched && (
-                        <p className="text-xs font-mono text-flag mt-2">
+                        <p className="text-data font-mono text-flag mt-2">
                           matched: {String(rec.fields.matched_indicator)}
                         </p>
                       )}
                     </>
                   ) : (
                     <>
-                      <p className="text-sm">
+                      <p className="text-data">
                         {String(rec.fields.plugin ?? '—')} — {String(rec.fields.description ?? rec.fields.event ?? '—')}
                       </p>
-                      <p className="text-xs font-mono text-muted-foreground mt-2">
+                      <p className="text-data font-mono text-muted-foreground mt-2">
                         {formatDelta(rec.fields.delta_from_backup_seconds)} from backup date
                       </p>
                     </>
                   )}
                 </div>
                 {expanded && (
-                  <div className="border-t border-border/60 p-4">
+                  <div className="shadow-elevation-1/60 p-4">
                     <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-3">
                       Nearby events (±{CORRELATION_WINDOW_MINUTES}m)
                     </p>
                     {contextError ? (
-                      <p className="text-xs text-flag font-mono">Error: {contextError}</p>
+                      <p className="text-data text-flag font-mono">Error: {contextError}</p>
                     ) : correlatedLoading === rec.id ? (
-                      <p className="text-xs text-muted-foreground">Loading...</p>
+                      <p className="text-data text-muted-foreground">Loading...</p>
                     ) : !contextRows || contextRows.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No other events in this window.</p>
+                      <p className="text-data text-muted-foreground">No other events in this window.</p>
                     ) : (
-                      <div className="flex flex-col gap-2.5">
+                      <div className="flex flex-col gap-2">
                         {contextRows.map((ctx) => (
-                          <div key={ctx.id} className="flex items-center gap-3 text-xs">
+                          <div key={ctx.id} className="flex items-center gap-3 text-data">
                             <Badge variant="neutral">{ctx.source_type}</Badge>
                             <span className="font-mono text-muted-foreground">
                               {ctx.event_time ? new Date(ctx.event_time).toLocaleString() : '—'}

@@ -13,10 +13,16 @@ export interface DataTableColumnMeta {
   width?: string;
 }
 
-const features = tableFeatures({
+export const features = tableFeatures({
   ...stockFeatures,
   columnMeta: metaHelper<DataTableColumnMeta>(),
 });
+
+/** The column-def type every caller of DataTable's `columns` prop should
+ * use. Exported so callers can type their column arrays against the same
+ * `features` this table actually renders with, instead of reconstructing
+ * (or casting around) the generic by hand. */
+export type DataTableColumn<TData extends Record<string, any>> = ColumnDef<typeof features, TData, any>;
 
 const DEFAULT_COLUMN_TRACK = 'minmax(7.5rem, 1fr)';
 
@@ -25,7 +31,7 @@ const headerCellClass =
 
 export interface DataTableProps<TData extends Record<string, any>> {
   data: TData[];
-  columns: ColumnDef<typeof features, TData, any>[];
+  columns: DataTableColumn<TData>[];
   /** Stable row id -- required for measurement/expansion to survive
    * re-sorts or filters without remeasuring the wrong row. Defaults to
    * react-table's own index-based id if omitted. */

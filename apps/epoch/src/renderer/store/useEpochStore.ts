@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { PipelineRunRow, StageStatusRow, ForensicRecordRow } from '../../../../../packages/etl-db-reader/dist';
+import type { PipelineRunRow, StageStatusRow, ForensicRecordRow } from '@verichron/etl-db-reader';
 import type { Section } from '../components/layout/Sidebar';
 import type { ReportResult } from '../../shared/types/window';
 

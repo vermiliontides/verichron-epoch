@@ -7,7 +7,9 @@ import { Button } from '../components/ui/Button';
 import { Loader } from '../components/ui/Loader';
 import type { MvtLogEntry, MvtFinishedResult, StartPipelineOptions } from '../../shared/types/window';
 import type { Backup } from '@verichron/contracts';
-import { applyMvtLogLine, initMvtRunProgress, type MvtRunProgress } from '../../shared/lib/mvtLogParser';
+import { applyMvtLogLine, initMvtRunProgress, type MvtRunProgress } from '../libs/mvtLogParser';
+import { pipelineApi } from '../api/pipeline';
+
 
 export interface WorkspaceViewProps {
   onAnalysisComplete: () => void;
@@ -84,17 +86,17 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       orchRafId = null;
     };
 
-    const unsubLog = window.epoch.onMvtLog((entry) => {
+    const unsubLog = pipelineApi.onMvtLog((entry) => {
       mvtBuffer.push(entry);
       if (mvtRafId === null) {
         mvtRafId = requestAnimationFrame(flushMvtBuffer);
       }
     });
-    const unsubPassword = window.epoch.onMvtPasswordRequired((backupName) => {
+    const unsubPassword = pipelineApi.onMvtPasswordRequired((backupName) => {
       setPendingPasswordFor(backupName);
       setPasswordInput('');
     });
-    const unsubFinished = window.epoch.onMvtFinished((result) => {
+    const unsubFinished = pipelineApi.onMvtFinished((result) => {
       if (mvtRafId !== null) {
         cancelAnimationFrame(mvtRafId);
         flushMvtBuffer();
@@ -102,13 +104,13 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       setIsRunning(false);
       setFinishResult(result);
     });
-    const unsubOrchestratorLog = window.epoch.onOrchestratorLog((entry) => {
+    const unsubOrchestratorLog = pipelineApi.onOrchestratorLog((entry) => {
       orchBuffer.push(entry);
       if (orchRafId === null) {
         orchRafId = requestAnimationFrame(flushOrchBuffer);
       }
     });
-    const unsubOrchestratorFinished = window.epoch.onOrchestratorFinished((result) => {
+    const unsubOrchestratorFinished = pipelineApi.onOrchestratorFinished((result) => {
       if (orchRafId !== null) {
         cancelAnimationFrame(orchRafId);
         flushOrchBuffer();
@@ -129,7 +131,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
   }, []);
 
   const handleSelectDirectory = async () => {
-    const dir = await window.epoch.selectBackupDirectory();
+    const dir = await pipelineApi.selectBackupDirectory();
     if (dir) setSelectedPath(dir);
   };
 
@@ -153,7 +155,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
     let cancelled = false;
     setDiscoveringBackups(true);
     setDiscoverError(null);
-    window.epoch
+    pipelineApi
       .discoverBackups(selectedPath)
       .then((found) => {
         if (cancelled) return;
@@ -205,7 +207,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
         refreshIOCs,
         only: selected,
       };
-      const result = await window.epoch.startPipeline(selectedPath, options);
+      const result = await pipelineApi.startPipeline(selectedPath, options);
       setLastRunWorkspace(result.workspace);
       setIsRunning(true);
     } catch (err) {
@@ -219,7 +221,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
   const handleSubmitPassword = async () => {
     setSubmittingPassword(true);
     try {
-      await window.epoch.submitMvtPassword(passwordInput);
+      await pipelineApi.submitMvtPassword(passwordInput);
       setPendingPasswordFor(null);
       setPasswordInput('');
     } catch (err) {
@@ -242,7 +244,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
     setAnalysisLog([]);
     setAnalysisResult(null);
     try {
-      await window.epoch.startAnalysis(lastRunWorkspace);
+      await pipelineApi.startAnalysis(lastRunWorkspace);
     } catch (err) {
       setAnalysisStartError(err instanceof Error ? err.message : 'Unknown error');
       setAnalysisRunning(false);
@@ -253,7 +255,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
     if (analysisCancelling) return;
     setAnalysisCancelling(true);
     try {
-      await window.epoch.cancelAnalysis();
+      await pipelineApi.cancelAnalysis();
       // Deliberately not setting analysisRunning(false) here -- the actual
       // transition out of 'running' happens when onOrchestratorFinished
       // fires for the kill, same as any other termination path. Flipping
@@ -278,7 +280,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
     if (!lastRunWorkspace) return;
     let cancelled = false;
 
-    window.epoch
+    pipelineApi
       .getAnalysisRunStatus(lastRunWorkspace)
       .then((status) => {
         if (cancelled) return;

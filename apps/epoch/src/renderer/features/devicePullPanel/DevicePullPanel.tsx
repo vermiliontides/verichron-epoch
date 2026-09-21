@@ -17,6 +17,8 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Loader } from '../../components/ui/Loader';
 import { useDevicePull } from '../../hooks/useDevicePull';
+import { PasswordField } from '../../components/ui/PasswordField';
+import { FieldError } from '../../components/ui/FieldError';
  
 interface DevicePullPanelProps {
   onBackupPulled: (destDir: string) => void;
@@ -359,19 +361,14 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                 <p className="text-2xs text-muted-foreground mb-2">
                   Unencrypted backups omit sensitive artifacts like Keychain and Health data. Epoch will enforce encryption during creation using this password.
                 </p>
-                <input
-                  type="password"
+                <PasswordField
                   value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    if (passwordError) setPasswordError(null);
-                  }}
+                  onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(null); }}
                   disabled={phase === 'pulling'}
                   placeholder="Enter temporary backup password"
-                  autoComplete="new-password"
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
+                  invalid={!!passwordError}
                 />
-                {passwordError && <p className="text-2xs text-danger mt-1 font-medium">{passwordError}</p>}
+                <FieldError>{passwordError}</FieldError>
               </div>
             </div>
           )}

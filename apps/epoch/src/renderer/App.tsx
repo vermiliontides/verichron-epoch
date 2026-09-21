@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect } from 'react';
-import type { PipelineRunRow } from '../../../../packages/etl-db-reader/dist';
+import type { PipelineRunRow } from '@verichron/etl-db-reader';
 import { Sidebar, type Section } from './components/layout/Sidebar';
 import { WorkspaceView } from './views/WorkspaceView';
 import { RunsView } from './views/RunsView';
 import { RecordsView } from './views/RecordsView';
-import { IocsView } from './features/forensics/IocsView';
-import { ReportsView } from './features/reports/ReportsView';
+import { IocsView } from './views/IocsView';
+import { ReportsView } from './views/ReportsView';
 import { EvidenceTag } from './components/ui/EvidenceTag';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { useEpochStore } from './store/useEpochStore';
+import { runsApi } from './api/runs';
 
 function runPhase(run: PipelineRunRow): 'in_progress' | 'finished' {
   return run.finished_at ? 'finished' : 'in_progress';
@@ -45,7 +46,7 @@ export const App: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await window.epoch.getPipelineRuns();
+      const data = await runsApi.getPipelineRuns();
       setRuns(data);
       setDbStatus('connected');
     } catch (err) {
@@ -65,7 +66,7 @@ export const App: React.FC = () => {
     setSelectedRun(run);
     resetRunState();
     try {
-      const data = await window.epoch.getStageStatus(run.run_id);
+      const data = await runsApi.getStageStatus(run.run_id);
       setStages(data);
       setDbStatus('connected');
     } catch (err) {
@@ -76,7 +77,7 @@ export const App: React.FC = () => {
 
   const refreshStages = async (runId: string) => {
     try {
-      const data = await window.epoch.getStageStatus(runId);
+      const data = await runsApi.getStageStatus(runId);
       setStages(data);
       setDbStatus('connected');
     } catch (err) {
@@ -87,7 +88,7 @@ export const App: React.FC = () => {
 
   const refreshRun = useCallback(async (runId: string) => {
     try {
-      const data = await window.epoch.getPipelineRuns();
+      const data = await runsApi.getPipelineRuns();
       setRuns(data);
       const refreshedRun = data.find((run) => run.run_id === runId);
       const currentSelectedRun = useEpochStore.getState().selectedRun;
@@ -103,7 +104,7 @@ export const App: React.FC = () => {
 
   const loadRecords = async (run: PipelineRunRow) => {
     try {
-      const data = await window.epoch.getForensicRecords(run.run_id);
+      const data = await runsApi.getForensicRecords(run.run_id);
       setRecords(data);
       setRecordsLoaded(true);
       setDbStatus('connected');

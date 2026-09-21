@@ -51,7 +51,7 @@
  */
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '../../../shared/lib/utils';
+import { cn } from '../../libs/utils';
 import { Loader } from './Loader';
 
 const buttonVariants = cva(

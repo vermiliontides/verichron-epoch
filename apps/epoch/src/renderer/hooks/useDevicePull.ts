@@ -6,7 +6,8 @@ import type {
   ToolAcquisitionCommand,
   ToolAvailabilityStatus,
 } from '../../shared/types/tools';
- 
+import { devicesApi } from '../api/devices';
+
 export type Phase = 'checking' | 'unavailable' | 'available' | 'acquiring' | 'pulling' | 'pulled';
  
 export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
@@ -103,13 +104,13 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
         outputRafId = requestAnimationFrame(flushOutputBuffer);
       }
     });
-    const unsubOutput = window.epoch.onToolAcquisitionOutput(({ line }) => {
+    const unsubOutput = devicesApi.onToolAcquisitionOutput(({ line }) => {
       outputBuffer.push(line);
       if (outputRafId === null) {
         outputRafId = requestAnimationFrame(flushOutputBuffer);
       }
     });
-    const unsubFinished = window.epoch.onToolAcquisitionFinished((result) => {
+    const unsubFinished = devicesApi.onToolAcquisitionFinished((result) => {
       if (outputRafId !== null) {
         cancelAnimationFrame(outputRafId);
         flushOutputBuffer();
@@ -125,7 +126,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
         setHomebrewFallbackAvailable(!!result.homebrewFallbackAvailable);
       }
     });
-    const unsubProgress = window.epoch.onDeviceBackupProgress((progress) => {
+    const unsubProgress = devicesApi.onDeviceBackupProgress((progress) => {
       setPullProgress((prev) => [...prev, progress]);
       if (progress.phase === 'done') {
         setPhase('pulled');
@@ -158,7 +159,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     try {
       const prefixArg = action.steps.find((s: ToolAcquisitionCommand) => s.args.some((a: string) => a.startsWith('--prefix=')));
       const installPrefix = prefixArg?.args.find((a: string) => a.startsWith('--prefix='))?.slice('--prefix='.length) ?? '';
-      await window.epoch.runToolAcquisitionSteps(action.steps, installPrefix);
+      await devicesApi.runToolAcquisitionSteps(action.steps, installPrefix);
     } catch (error: unknown) {
       setPhase('unavailable');
       setAcquisitionStep(null);
@@ -174,7 +175,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     setHomebrewFallbackAvailable(false);
  
     try {
-      await window.epoch.runHomebrewInstall(formulas);
+      await devicesApi.runHomebrewInstall(formulas);
     } catch (error: unknown) {
       setPhase('unavailable');
       setAcquisitionStep(null);
@@ -183,7 +184,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
   };
  
   const handleSelectDestination = async () => {
-    const dir = await window.epoch.selectDeviceBackupDestination();
+    const dir = await devicesApi.selectDeviceBackupDestination();
     if (dir) setDestDir(dir);
   };
  
@@ -197,7 +198,7 @@ export function useDevicePull(onBackupPulled?: (destDir: string) => void) {
     setPullProgress([]);
     setPullError(null);
     try {
-      await window.epoch.pullDeviceBackup(sourceId, selectedDevice, destDir, password);
+      await devicesApi.pullDeviceBackup(sourceId, selectedDevice, destDir, password);
     } catch (err) {
       setPullError(err instanceof Error ? err.message : 'Unknown error');
       setPhase('available');

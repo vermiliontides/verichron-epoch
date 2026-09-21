@@ -22,7 +22,7 @@
  * finalized).
  */
 import * as React from 'react';
-import { cn } from '../../../shared/lib/utils';
+import { cn } from '../../libs/utils';
 
 export interface LoaderProps {
   variant?: 'spin' | 'pulse-dot';

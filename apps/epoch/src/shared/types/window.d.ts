@@ -106,8 +106,7 @@ declare global {
       checkDeviceBackupToolAvailable: (sourceId: string) => Promise<ToolAvailabilityStatus>;
       listConnectedDevices: (sourceId: string) => Promise<DeviceInfo[]>;
       getToolAcquisitionActions: (sourceId: string) => Promise<ToolAcquisitionAction[]>;
-      pullDeviceBackup: (sourceId: string, device: DeviceInfo, destDir: string) => Promise<string>;
-      runToolAcquisitionSteps: (
+      ßßpullDeviceBackup: (sourceId: string, device: DeviceInfo, destDir: string, password?: string) => Promise<string>;      runToolAcquisitionSteps: (
         steps: ToolAcquisitionCommand[],
         installPrefix: string
       ) => Promise<ToolAcquisitionResult>;

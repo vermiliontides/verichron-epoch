@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
-import type { PipelineRunRow } from '../../../../packages/etl-db-reader/dist';
+import type { PipelineRunRow } from '@verichron/etl-db-reader';
 import { Sidebar, type Section } from './components/layout/Sidebar';
 import { WorkspaceView } from './views/WorkspaceView';
 import { RunsView } from './views/RunsView';

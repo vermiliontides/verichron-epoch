@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import type { PipelineRunRow, ForensicRecordRow, CorrelatedContextRow } from '@verichron/db-reader';
 import { CORRELATION_WINDOW_MINUTES } from '@verichron/db-reader';
-import { Badge } from '../../components/ui/Badge';
+import { Badge } from '../components/ui/Badge';
 
 const IOC_SOURCE_TYPES = ['mvt_ioc_detection', 'timestamp_anomaly'] as const;
 type IocSourceType = (typeof IOC_SOURCE_TYPES)[number];

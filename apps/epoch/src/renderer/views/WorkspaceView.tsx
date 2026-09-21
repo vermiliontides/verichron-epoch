@@ -7,7 +7,7 @@ import { Button } from '../components/ui/Button';
 import { Loader } from '../components/ui/Loader';
 import type { MvtLogEntry, MvtFinishedResult, StartPipelineOptions } from '../../shared/types/window';
 import type { Backup } from '@verichron/contracts';
-import { applyMvtLogLine, initMvtRunProgress, type MvtRunProgress } from '../../shared/lib/mvtLogParser';
+import { applyMvtLogLine, initMvtRunProgress, type MvtRunProgress } from '../libs/mvtLogParser';
 
 export interface WorkspaceViewProps {
   onAnalysisComplete: () => void;

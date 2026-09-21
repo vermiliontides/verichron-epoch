@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../../shared/lib/utils';
+import { cn } from '../../libs/utils';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   /** Red focus ring + aria-invalid. Pairs with FieldError below rather than owning its own message. */

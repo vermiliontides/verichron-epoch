@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
-import type { PipelineRunRow, ForensicRecordRow, CorrelatedContextRow } from '@verichron/db-reader';
-import { CORRELATION_WINDOW_MINUTES } from '@verichron/db-reader';
+import type { PipelineRunRow, ForensicRecordRow, CorrelatedContextRow } from '@verichron/etl-db-reader';
+import { CORRELATION_WINDOW_MINUTES } from '@verichron/etl-db-reader';
 import { Badge } from '../components/ui/Badge';
+import { runsApi } from '../api/runs';
 
 const IOC_SOURCE_TYPES = ['mvt_ioc_detection', 'timestamp_anomaly'] as const;
 type IocSourceType = (typeof IOC_SOURCE_TYPES)[number];
@@ -40,7 +41,7 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
     
     setCorrelatedLoading(pivot.id);
     try {
-      const data = await window.epoch.getCorrelatedContext(selectedRun.run_id, pivot.event_time, pivot.id);
+      const data = await runsApi.getCorrelatedContext(selectedRun.run_id, pivot.event_time, pivot.id);
       setCorrelatedContext((prev) => ({ ...prev, [pivot.id]: data }));
     } catch (err) {
       console.error('Failed to load correlated context:', err);

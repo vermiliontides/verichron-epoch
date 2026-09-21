@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { PipelineRunRow } from '@verichron/db-reader';
 import type { ReportResult } from '../../shared/types/window';
 import { Button } from '../components/ui/Button';
+import { reportsApi } from '../api/reports';
  
 interface ReportsViewProps {
   selectedRun: PipelineRunRow | null;
@@ -16,7 +17,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
     setReportLoading(true);
     setReportLoadError(null);
     try {
-      const result = await window.epoch.getReport(run.backup_source);
+      const result = await reportsApi.getReport(run.backup_source);
       setReport(result);
     } catch (err) {
       console.error('Failed to load report:', err);
@@ -36,7 +37,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
  
   const openReportFile = async () => {
     if (!selectedRun) return;
-    const opened = await window.epoch.openReport(selectedRun.backup_source);
+    const opened = await reportsApi.openReport(selectedRun.backup_source);
     if (!opened) console.error('Failed to open report in default app');
   };
  

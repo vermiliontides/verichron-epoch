@@ -1,0 +1,32 @@
+import type {
+  DeviceInfo,
+  ToolAcquisitionAction,
+  ToolAcquisitionCommand,
+  ToolAcquisitionResult,
+  ToolAvailabilityStatus,
+  BackupProgress,
+} from '../../shared/types/tools';
+
+export const devicesApi = {
+  listDeviceBackupSources: () => window.epoch.listDeviceBackupSources(),
+  checkDeviceBackupToolAvailable: (sourceId: string) =>
+    window.epoch.checkDeviceBackupToolAvailable(sourceId),
+  listConnectedDevices: (sourceId: string) => window.epoch.listConnectedDevices(sourceId),
+  getToolAcquisitionActions: (sourceId: string): Promise<ToolAcquisitionAction[]> =>
+    window.epoch.getToolAcquisitionActions(sourceId),
+  selectDeviceBackupDestination: () => window.epoch.selectDeviceBackupDestination(),
+  pullDeviceBackup: (sourceId: string, device: DeviceInfo, destDir: string, password?: string) =>
+    window.epoch.pullDeviceBackup(sourceId, device, destDir, password),
+  runToolAcquisitionSteps: (steps: ToolAcquisitionCommand[], installPrefix: string): Promise<ToolAcquisitionResult> =>
+    window.epoch.runToolAcquisitionSteps(steps, installPrefix),
+  runHomebrewInstall: (formulas: string[]) => window.epoch.runHomebrewInstall(formulas),
+
+  onDeviceBackupProgress: (callback: (progress: BackupProgress) => void) =>
+    window.epoch.onDeviceBackupProgress(callback),
+  onToolAcquisitionStepStarted: (callback: (label: string) => void) =>
+    window.epoch.onToolAcquisitionStepStarted(callback),
+  onToolAcquisitionOutput: (callback: (entry: { step: string; line: string }) => void) =>
+    window.epoch.onToolAcquisitionOutput(callback),
+  onToolAcquisitionFinished: (callback: (result: ToolAcquisitionResult) => void) =>
+    window.epoch.onToolAcquisitionFinished(callback),
+};

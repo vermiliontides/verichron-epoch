@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
+import { pipelineApi } from '../api/pipeline';
 
 export function useMvtStream() {
   const [logs, setLogs] = useState<string[]>([]);
   const [pendingPasswordPrompt, setPendingPasswordPrompt] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubLog = window.epoch.onMvtLog?.((data) => {
+    const unsubLog = pipelineApi.onMvtLog?.((data) => {
       setLogs((prev) => [...prev, data.line]);
     });
-    const unsubPassword = window.epoch.onMvtPasswordRequired?.((username) => {
+    const unsubPassword = pipelineApi.onMvtPasswordRequired?.((username) => {
       setPendingPasswordPrompt(username);
     });
 
@@ -19,7 +20,7 @@ export function useMvtStream() {
   }, []);
 
   const submitPassword = async (password: string) => {
-    await window.epoch.submitMvtPassword(password);
+    await pipelineApi.submitMvtPassword(password);
     setPendingPasswordPrompt(null);
   };
 

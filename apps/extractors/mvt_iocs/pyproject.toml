@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "verichron-mvt-iocs"
 version = "0.1.0"
 description = "Extractor: normalizes mvt-ios's own check-backup output (alerts.json, timeline.csv) into forensic_records."
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "psycopg2-binary>=2.9",
     "verichron-runtime-env",

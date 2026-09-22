@@ -9,7 +9,7 @@ export default defineConfig({
       fileName: 'preload',
     },
     rollupOptions: {
-      external: ["electron", "@verichron/contracts", "@verichron/db-reader", "pg", /^node:.+/],
+      external: ["electron", "@verichron/contracts", "@verichron/etl-db-reader", "pg", /^node:.+/],
     },
   }
 });

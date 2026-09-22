@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-packages-py/etl-db-writer/migrate.py
+packages/etl-db-writer/migrate.py
 
 Minimal, dependency-light migration runner.
 

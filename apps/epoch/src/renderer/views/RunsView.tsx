@@ -1,8 +1,11 @@
-import React, { useEffect } from 'react';
-import { Inbox, MousePointerClick, Layers } from 'lucide-react';
-import type { PipelineRunRow, StageStatusRow } from '@verichron/db-reader';
+import React, { useEffect, useState } from 'react';
+import { Inbox, MousePointerClick, Layers, RefreshCw } from 'lucide-react';
+import type { PipelineRunRow, StageStatusRow } from '@verichron/etl-db-reader';
+import type { MvtLogEntry, MvtFinishedResult } from '../../shared/types/window';
 import { Badge } from '../components/ui/Badge';
- 
+import { Button } from '../components/ui/Button';
+import { TerminalLog } from '../components/layout/TerminalLog';
+import { pipelineApi } from '../api/pipeline';
 /**
  * Field names here are pulled directly from PipelineRunRow/StageStatusRow
  * (packages/db-reader), checked against packages/db/migrations/0001_init.sql.
@@ -97,6 +100,44 @@ export function RunsView({
   onRefreshStages,
   onRefreshRun,
 }: RunsViewProps) {
+
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const [retryLog, setRetryLog] = useState<MvtLogEntry[]>([]);
+
+  useEffect(() => {
+    const unsubLog = pipelineApi.onOrchestratorLog((entry) => {
+      setRetryLog((prev) => [...prev, entry]);
+    });
+    const unsubFinished = pipelineApi.onOrchestratorFinished((result: MvtFinishedResult) => {
+      setRetrying(false);
+      setRetryError(result.success ? null : result.error ?? 'Retry failed.');
+      if (selectedRun) {
+        onRefreshRun?.(selectedRun.run_id);
+        onRefreshStages?.(selectedRun.run_id);
+      }
+    });
+    return () => {
+      unsubLog();
+      unsubFinished();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRun?.run_id]);
+
+  const handleRetry = async () => {
+    if (!selectedRun || retrying) return;
+    setRetrying(true);
+    setRetryError(null);
+    setRetryLog([]);
+    try {
+      await pipelineApi.retryRun(selectedRun.backup_source);
+    } catch (err) {
+      setRetrying(false);
+      setRetryError(err instanceof Error ? err.message : 'Failed to start retry.');
+    }
+  };
+
+  const canRetry = !!selectedRun && runPhase(selectedRun) === 'finished' && stages.some((s) => s.status === 'failed');
   useEffect(() => {
     const hasInProgressRun = runs.some(run => runPhase(run) === 'in_progress');
     if (!hasInProgressRun || !selectedRun) return;
@@ -186,7 +227,25 @@ export function RunsView({
       <div className="flex-1 overflow-auto p-8">
         {/* DESIGN_2.md: Demoted from text-display to text-label to preserve structural UI chrome hierarchy */}
         <h2 className="text-label uppercase tracking-wider text-muted-foreground mb-6">Analysis progress</h2>
-        {selectedRun ? (
+                <div className="flex items-center justify-between mb-6">
+          <h2 className="text-label uppercase tracking-wider text-muted-foreground">Analysis progress</h2>
+          {canRetry && (
+            <Button variant="outline" size="sm" onClick={handleRetry} loading={retrying} loadingText="Retrying...">
+              <RefreshCw size="0.875rem" />
+              Retry failed stages
+            </Button>
+          )}
+        </div>
+        {retryError && (
+          <div className="text-flag bg-flag/10 border border-flag/30 shadow-elevation-1 rounded-md px-4 py-3 text-data mb-4">
+            {retryError}
+          </div>
+        )}
+        {(retrying || retryLog.length > 0) && (
+          <div className="mb-4">
+            <TerminalLog lines={retryLog} live={retrying} label="Retry log" />
+          </div>
+        )}
           stages.length === 0 ? (
             <EmptyState icon={Layers} title="No stages found for this run" />
           ) : (

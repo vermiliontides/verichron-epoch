@@ -69,6 +69,10 @@ const dbApi = {
   // backups succeeded -- orchestrator discovers that itself.
   startAnalysis: (workspace: string): Promise<{ started: boolean }> =>
     ipcRenderer.invoke('epoch:startAnalysis', workspace),
+    // EPOCH-308: retries the orchestrator against a single previously-run
+  // backup_source rather than a whole workspace.
+  retryRun: (backupSource: string): Promise<{ started: boolean }> =>
+    ipcRenderer.invoke('epoch:retryRun', backupSource),
   // EPOCH-305: lets the renderer break out of a stalled/deadlocked run
   // without restarting the app. Resolves { cancelled: false } (rather than
   // rejecting) when nothing was actually running, since "there was nothing

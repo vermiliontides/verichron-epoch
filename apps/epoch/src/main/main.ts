@@ -3,7 +3,7 @@ import electron from 'electron';
 import path from 'path';
 import { Pool } from 'pg';
 import type { BrowserWindowConstructorOptions, BrowserWindow as BrowserWindowType } from 'electron';
-import { config as loadEnv } from 'dotenv';
+import { loadRootEnv, resolveDatabaseUrl } from '@verichron/contracts';
 import { registerDbHandlers } from './ipc/dbHandlers';
 import { registerReportHandlers } from './ipc/reportHandlers';
 import { registerPipelineHandlers, reconcileStaleRunsOnStartup } from './ipc/pipelineHandlers';
@@ -15,7 +15,8 @@ console.log('\n=======================================');
 console.log('MAIN PROCESS IS EXECUTING!');
 console.log('=======================================\n');
 
-loadEnv({ path: '../../../.env' });
+const REPO_ROOT = path.resolve(__dirname, '../../../..');
+loadRootEnv(REPO_ROOT);
 
 process.on('uncaughtException', (error) => {
   console.error('\n--- FATAL UNCAUGHT EXCEPTION ---');
@@ -29,16 +30,17 @@ process.on('unhandledRejection', (reason) => {
   console.error('-----------------------------------\n');
 });
 
+
 const dbPool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
   database: process.env.DB_NAME || 'forensics',
-  user: process.env.DB_USER || 'forensics',
+  user: process.env.DB_USER || 'forensics', 
   password: process.env.DB_PASSWORD || 'forensics_dev_only',
+  connectionString: resolveDatabaseUrl(), 
   max: 10,
-});
+ });
 
-const REPO_ROOT = path.resolve(__dirname, '../../../..');
 let mainWindow: BrowserWindowType | null = null;
 const getMainWindow = () => mainWindow;
 

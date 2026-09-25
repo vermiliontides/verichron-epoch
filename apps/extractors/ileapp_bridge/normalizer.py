@@ -144,11 +144,12 @@ def build_normalized_record(source_artifact: str, timestamp: str | None, data: d
 def list_supported_artifacts(output_dir: str | Path) -> list[Path]:
     out_path = Path(output_dir)
     if not out_path.exists():
-        raise FileNotFoundError(f"iLEAPP output directory does not exist: {out_path}")
-
+        raise FileNotFoundError(...)
     return sorted(
         path for path in out_path.rglob("*")
-        if path.is_file() and path.suffix.lower() in SUPPORTED_SUFFIXES
+        if path.is_file()
+        and path.suffix.lower() in SUPPORTED_SUFFIXES
+        and not any(path.stem.lower().startswith(p) for p in EXCLUDED_TABLE_PREFIXES)
     )
 
 
@@ -291,6 +292,9 @@ def _parse_tabular_artifact(file_path: Path, delimiter: str = ",") -> list:
     failure it is (EXTRACTOR_CONTRACT.md section 5) while still not aborting
     the remaining artifacts.
     """
+    # iLEAPP asset-analysis artifacts can contain base64/binary fields
+    # that exceed Python's default 128KB csv field limit.
+    csv.field_size_limit(min(sys.maxsize, 10 * 1024 * 1024))  # 10MB ceiling
     records = []
     artifact_name = file_path.stem
     with open(file_path, mode="r", encoding="utf-8", errors="ignore", newline="") as handle:

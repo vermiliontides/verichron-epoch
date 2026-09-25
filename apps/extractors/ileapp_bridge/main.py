@@ -26,6 +26,11 @@ except ImportError:
 
 import psycopg2
 
+def _coerce_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s if s else Nones
 
 def _coerce_int(value: Any) -> int | None:
     if value is None:
@@ -74,7 +79,7 @@ def normalize_record(raw_record: dict) -> NormalizedRecord:
         fields[str(key)] = _clean_value(value)
 
     record = NormalizedRecord(
-        incident_id=(data.get("incident_id") or data.get("id") or None),
+        incident_id=_coerce_str(data.get("incident_id") or data.get("id") or None),
         source_type=SourceType.ILEAPP_RECORD,
         event_time=_coerce_datetime(raw_record.get("timestamp") or data.get("timestamp")),
         bug_type=data.get("bug_type"),

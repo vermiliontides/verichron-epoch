@@ -1,4 +1,3 @@
-
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import os from 'node:os';
@@ -88,6 +87,12 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
   // lets epoch:getAnalysisRunStatus tell "still actually running" apart from
   // "nothing tracked, but the DB has a dangling run from a past crash."
   let runningOrchestratorWorkspace: string | null = null;
+  // EPOCH-308: set instead of runningOrchestratorWorkspace when the in-flight
+  // orchestrator invocation is a single-run retry (epoch:retryRun) rather
+  // than a full-workspace analysis (epoch:startAnalysis). The two are
+  // mutually exclusive -- only one is ever non-null, since both paths share
+  // the single-flight guard on runningOrchestratorProcess below.
+  let runningOrchestratorBackupSource: string | null = null;
   let orchestratorTimeoutHandle: NodeJS.Timeout | null = null;
   let orchestratorKillEscalationHandle: NodeJS.Timeout | null = null;
   // Set immediately before *we* kill the process, so the 'close'/'error'
@@ -221,6 +226,35 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
       );
     } catch (err) {
       console.error('[pipelineHandlers] failed to mark dangling pipeline runs aborted:', err);
+    }
+  }
+
+  /**
+   * EPOCH-308 counterpart to markWorkspaceRunsAborted, scoped to one
+   * backup_source instead of a workspace prefix -- used when the
+   * orchestrator invocation that died was a single-run retry
+   * (epoch:retryRun), not a full-workspace epoch:startAnalysis.
+   */
+  async function markSingleRunAborted(backupSource: string, reason: string): Promise<void> {
+    try {
+      await dbPool.query(
+        `UPDATE pipeline_stage_status
+            SET status = 'failed', error_message = $2, finished_at = now()
+          WHERE status IN ('pending', 'running')
+            AND run_id IN (
+              SELECT run_id FROM pipeline_runs
+               WHERE backup_source = $1 AND finished_at IS NULL
+            )`,
+        [backupSource, reason]
+      );
+      await dbPool.query(
+        `UPDATE pipeline_runs
+            SET finished_at = now()
+          WHERE backup_source = $1 AND finished_at IS NULL`,
+        [backupSource]
+      );
+    } catch (err) {
+      console.error('[pipelineHandlers] failed to mark dangling single-run aborted:', err);
     }
   }
  
@@ -416,7 +450,103 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
  
     return { started: true };
   });
- 
+
+  /**
+   * EPOCH-308: re-invokes the orchestrator against exactly one previously-
+   * run backup_source instead of the whole workspace. ingest()'s per-file
+   * atomicity and hasSucceededRun()'s zero-failed-stages check already make
+   * this skip already-complete files and retry only what failed or never
+   * ran -- no orchestrator or extractor changes required. Shares
+   * runningOrchestratorProcess as its single-flight guard, so a retry and a
+   * full-workspace analysis can never run concurrently.
+   */
+  ipcMain.handle('epoch:retryRun', async (_event, backupSource: string) => {
+    if (runningOrchestratorProcess) {
+      throw new Error('The orchestrator is already running -- wait for it to finish before starting another.');
+    }
+    if (!backupSource || !backupSource.trim()) {
+      throw new Error('A backup source is required.');
+    }
+    const trimmedBackupSource = backupSource.trim();
+
+    const child = spawn(
+      'pnpm',
+      ['--filter', '@verichron/orchestrator', 'investigate', '--', trimmedBackupSource],
+      { cwd: repoRoot, stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    runningOrchestratorProcess = child;
+    runningOrchestratorBackupSource = trimmedBackupSource;
+    orchestratorTerminationReason = null;
+
+    orchestratorTimeoutHandle = setTimeout(() => {
+      killOrchestrator('timeout');
+    }, ORCHESTRATOR_TIMEOUT_MS);
+
+    const stdoutBuffer = makeOrchestratorStreamBuffer('stdout');
+    const stderrBuffer = makeOrchestratorStreamBuffer('stderr');
+    child.stdout.on('data', stdoutBuffer.onChunk);
+    child.stderr.on('data', stderrBuffer.onChunk);
+
+    child.on('error', (err) => {
+      clearOrchestratorTimers();
+      const reason = orchestratorTerminationReason;
+      const scopedBackupSource = runningOrchestratorBackupSource;
+      runningOrchestratorProcess = null;
+      runningOrchestratorBackupSource = null;
+      orchestratorTerminationReason = null;
+      if (scopedBackupSource) {
+        void markSingleRunAborted(scopedBackupSource, `orchestrator process error: ${err.message}`);
+      }
+      sendToRenderer('epoch:orchestratorFinished', {
+        success: false,
+        error: err.message,
+        cancelled: reason === 'cancelled',
+        timedOut: reason === 'timeout',
+      });
+    });
+
+    child.on('close', (code) => {
+      clearOrchestratorTimers();
+      stdoutBuffer.emitPending();
+      stderrBuffer.emitPending();
+      const reason = orchestratorTerminationReason;
+      const scopedBackupSource = runningOrchestratorBackupSource ?? trimmedBackupSource;
+      runningOrchestratorProcess = null;
+      runningOrchestratorBackupSource = null;
+      orchestratorTerminationReason = null;
+
+      const cancelled = reason === 'cancelled';
+      const timedOut = reason === 'timeout';
+
+      if (code !== 0) {
+        const closeReason = cancelled
+          ? 'cancelled by user'
+          : timedOut
+            ? `orchestrator timed out after ${ORCHESTRATOR_TIMEOUT_MS / 60000} minute(s)`
+            : `orchestrator process exited unexpectedly (code ${code})`;
+
+        void markSingleRunAborted(scopedBackupSource, closeReason).then(() => {
+          sendToRenderer('epoch:orchestratorFinished', {
+            success: false,
+            exitCode: code,
+            cancelled,
+            timedOut,
+            error: cancelled
+              ? 'Analysis was cancelled.'
+              : timedOut
+                ? `Analysis timed out after ${ORCHESTRATOR_TIMEOUT_MS / 60000} minutes and was stopped.`
+                : undefined,
+          });
+        });
+        return;
+      }
+
+      sendToRenderer('epoch:orchestratorFinished', { success: true, exitCode: code });
+    });
+
+    return { started: true };
+  });
+
   ipcMain.handle('epoch:cancelAnalysis', async (): Promise<{ cancelled: boolean }> => {
     if (!runningOrchestratorProcess) {
       return { cancelled: false };
@@ -454,4 +584,3 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
     }
   });
 }
- 

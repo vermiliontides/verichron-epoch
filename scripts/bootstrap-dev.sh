@@ -41,6 +41,14 @@ else
   echo "[bootstrap] WARNING: .githooks/ missing — commits are NOT guarded against forensic output" >&2
 fi
 
+# Symlink infra/.env -> root .env so docker-compose's env_file/variable
+# substitution resolve to the same file regardless of Compose version
+# quirks around project-directory vs compose-file-directory precedence.
+if [ -f .env ] && [ ! -e infra/.env ]; then
+  ln -s ../.env infra/.env
+  echo "[bootstrap] linked infra/.env -> ../.env"
+fi
+
 # 1) Python: single uv workspace, one lockfile, one venv for everything.
 if ! command -v uv >/dev/null 2>&1; then
   echo "[bootstrap] uv not found — install it (https://docs.astral.sh/uv/) and re-run this script"

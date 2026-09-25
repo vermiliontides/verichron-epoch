@@ -19,8 +19,11 @@ import argparse
 import os
 import sys
 
+from jsonschema.cli import parser
 import psycopg2
 import psycopg2.extras
+from runtime_env import load_root_env, resolve_database_url
+
 
 DEFAULT_DB_URL = "postgresql://forensics:forensics_dev_only@localhost:5432/forensics"
 
@@ -94,9 +97,10 @@ def print_run(cur, run_id: str) -> None:
 
 
 def main() -> None:
+
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--db-url", default=os.environ.get("DATABASE_URL", DEFAULT_DB_URL))
-    parser.add_argument("--run-id", default=None, help="Defaults to the most recent run in pipeline_runs")
+    load_root_env()
+    parser.add_argument("--db-url", default=resolve_database_url())
     args = parser.parse_args()
 
     conn = psycopg2.connect(args.db_url)

@@ -71,7 +71,7 @@
     "@verichron/etl-db-reader": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dotenv": "^17.4.2",
+    "dotenv": "catalog:",
     "electron-squirrel-startup": "^1.0.1",
     "lucide-react": "^1.37.0",
     "pg": "^8.13.0",

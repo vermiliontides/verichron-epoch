@@ -48,4 +48,4 @@ Because `apps/epoch` is part of a tightly integrated monorepo, its setup is gove
 
 
 
-Note: For details on the underlying Python extraction scripts (which make up 54.1% of the repository) or the LLM triage integrations, please refer to the `libs/` or `packages/` documentation.ßßsss
+Note: For details on the underlying Python extraction scripts (which make up 54.1% of the repository) or the LLM triage integrations, please refer to the `libs/` or `packages/` documentation.

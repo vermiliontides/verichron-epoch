@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "verichron-crash"
 version = "0.1.0"
 description = "Extractor: parses iOS .ips crash and telemetry files into forensic_records."
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
     "psycopg2-binary>=2.9",
     "verichron-runtime-env",

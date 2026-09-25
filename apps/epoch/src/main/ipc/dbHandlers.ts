@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import { Pool } from 'pg';
-import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/db-reader';
+import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/etl-db-reader';
 
 export function registerDbHandlers(dbPool: Pool) {
   ipcMain.handle('epoch:getPipelineRuns', async () => {

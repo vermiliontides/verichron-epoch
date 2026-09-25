@@ -45,7 +45,7 @@ catalog:
   tsx: ^4.23.12
   typescript: 6.0.3
   vite: ^5.4.0 # or ^6.x — plugin-vite@7.11.2 is built against vite@^5.0.12; check if a 6.x line is confirmed compatible before jumping there
-
+  dotenv: ^18.0.3
   # Virtualized data tables (RunsView, RecordsView) + virtualized lists
   # (IocsView) -- one pin, one place, per this workspace's existing catalog
   # convention (see the header comment above for why: no consumer should

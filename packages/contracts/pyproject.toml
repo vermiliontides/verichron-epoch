@@ -22,4 +22,6 @@ dependencies = [
 # not something other packages import, so they're left out.
 [tool.setuptools]
 py-modules = ["normalized_record", "adapter", "source_type"]
- 
+
+[tool.setuptools.package-dir]
+"" = "python"

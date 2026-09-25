@@ -50,11 +50,11 @@ from pathlib import Path
 # not files reached by hand-rolled sys.path surgery — so there's no
 # __file__-relative depth to keep in sync with this file's location
 # anymore, which is exactly the bug class that broke twice already when
-# this extractor moved from packages-py/extractors/ to apps/extractors/.
+# this extractor moved from packages/py/extractors/ to apps/extractors/.
 from runtime_env import fatal_if_missing_venv
 from typing import Any
 from etl_run import ETLRunResult
-from etl_db_writer import ingest
+from db_writer import ingest
 from normalized_record import NormalizedRecord, SourceType
 
 import psycopg2

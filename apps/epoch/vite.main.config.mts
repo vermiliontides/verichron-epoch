@@ -38,7 +38,7 @@ export default defineConfig({
       // broke the build the moment Rollup tried to bundle it as if it
       // were a real npm package.
       external: [
-        '@verichron/db-reader',
+        '@verichron/etl-db-reader',
         '@verichron/contracts',
         'pg',
         'electron',

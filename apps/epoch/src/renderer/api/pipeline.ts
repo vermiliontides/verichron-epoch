@@ -5,6 +5,7 @@ export const pipelineApi = {
   discoverBackups: (source: string) => window.epoch.discoverBackups(source),
   startPipeline: (source: string, options?: StartPipelineOptions) =>
     window.epoch.startPipeline(source, options),
+  retryRun: (backupSource: string) => window.epoch.retryRun(backupSource),
   submitMvtPassword: (password: string) => window.epoch.submitMvtPassword(password),
   onMvtLog: (callback: (entry: MvtLogEntry) => void) => window.epoch.onMvtLog(callback),
   onMvtPasswordRequired: (callback: (backupName: string) => void) =>

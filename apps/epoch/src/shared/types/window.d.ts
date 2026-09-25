@@ -97,6 +97,8 @@ declare global {
       // Reuses MvtLogEntry/MvtFinishedResult since the shape is identical;
       // no need for a second pair of structurally-equal types.
       startAnalysis: (workspace: string) => Promise<{ started: boolean }>;
+      // EPOCH-308
+      retryRun: (backupSource: string) => Promise<{ started: boolean }>;
       // EPOCH-305
       cancelAnalysis: () => Promise<{ cancelled: boolean }>;
       getAnalysisRunStatus: (workspace: string) => Promise<AnalysisRunStatus>;

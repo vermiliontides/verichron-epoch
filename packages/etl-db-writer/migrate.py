@@ -29,9 +29,9 @@ from pathlib import Path
 
 import psycopg2
 from runtime_env import load_runtime_env  # Standard workspace import via uv environment
+from runtime_env import fatal_if_missing_venv, load_root_env, resolve_database_url
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
-
 
 def ensure_migrations_table(conn) -> None:
     with conn.cursor() as cur:
@@ -110,6 +110,7 @@ def apply_migration(conn, path: Path) -> None:
 
 
 def main() -> None:
+    load_root_env()
     fatal_if_missing_venv()
     parser = argparse.ArgumentParser()
     parser.add_argument("--db-url", required=True)

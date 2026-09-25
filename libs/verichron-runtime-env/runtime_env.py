@@ -12,7 +12,7 @@ from __future__ import annotations
  
 import sys
 from pathlib import Path
- 
+from os import environ, path as os_path
  
 def repo_root() -> Path:
     # This file lives at libs/runtime-env/runtime_env.py -- two directories
@@ -49,3 +49,34 @@ def fatal_if_missing_venv() -> None:
     except Exception as exc:  # pragma: no cover - CLI guard behavior
         print(f"[env] {exc}", file=sys.stderr)
         raise
+
+def load_root_env() -> None:
+    """Load the repo-root .env, mirroring packages/contracts/ts/env.ts's
+    loadRootEnv(). Convenience for standalone scripts (migrate.py,
+    db_peek.py) run manually outside the orchestrator -- the orchestrator
+    itself never needs this on the Python side, since it passes --db-url
+    explicitly to every extractor rather than having them read env vars.
+    No-op if python-dotenv is unavailable or .env doesn't exist.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    env_path = repo_root() / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+
+
+def resolve_database_url() -> str:
+    """Mirrors packages/contracts/ts/env.ts's resolveDatabaseUrl(). Keep
+    the two in sync if the resolution order ever changes."""
+    if environ.get("DATABASE_URL"):
+        return environ["DATABASE_URL"]
+    user = environ.get("DB_USER")
+    password = environ.get("DB_PASSWORD")
+    name = environ.get("DB_NAME")
+    host = environ.get("DB_HOST", "localhost")
+    port = environ.get("DB_PORT", "5432")
+    if user and password and name:
+        return f"postgresql://{user}:{password}@{host}:{port}/{name}"
+    return "postgresql://forensics:forensics_dev_only@localhost:5432/forensics"

@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "dotenv": "catalog:",
     "@types/pg": "catalog:",
     "pg": "catalog:",
     "typescript": "catalog:"

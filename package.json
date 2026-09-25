@@ -13,6 +13,7 @@
     "gen:synthetic-backup": "python3 scripts/synthetic_backup_generator.py"
   },
   "devDependencies": {
+    "dotenv": "^18.0.3",
     "typescript": "^6.0.3",
     "zod": "^4.5.2"
   },

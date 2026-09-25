@@ -18,6 +18,9 @@ catalogs:
     '@types/pg':
       specifier: ^8.23.0ss
       version: 8.23.1
+    dotenv: 
+      specifier: ^17.4.2
+      version: 17.4.2
     pg:
       specifier: ^8.23.0
       version: 8.23.0

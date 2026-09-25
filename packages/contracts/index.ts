@@ -19,3 +19,4 @@ export type { Backup } from "./ts/discoverBackups.js";
 export { deriveResultsPath } from './ts/deriveResultsPath.js';
 export { SourceType, isSourceType } from './ts/sourceType'
 export type { SourceType as SourceTypeValue } from './ts/sourceType'
+export { loadRootEnv, resolveDatabaseUrl } from './ts/env.js';

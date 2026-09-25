@@ -3,6 +3,8 @@ import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { CliConfig } from "./types.js";
 import { REPO_ROOT } from "./discovery.js";
+import { loadRootEnv, resolveDatabaseUrl } from "@verichron/contracts";
+
 
 export function printUsage() {
   console.error(`Usage:\n  pnpm --filter @verichron/orchestrator investigate -- --workspace <mvt-runner-workspace-dir>`);
@@ -33,7 +35,7 @@ export async function parseCliConfig(): Promise<CliConfig> {
     },
     allowPositionals: true,
   });
-  const dbUrl = process.env.DATABASE_URL ?? "postgresql://forensics:forensics_dev_only@localhost:5432/forensics";
+  const dbUrl = resolveDatabaseUrl();
  
   if (values.workspace) {
     const decryptedDir = path.join(values.workspace, "decrypted");

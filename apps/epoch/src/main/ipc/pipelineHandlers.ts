@@ -1,4 +1,3 @@
-
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import os from 'node:os';
@@ -206,6 +205,30 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
    * Best-effort: a DB failure here doesn't block reporting the real error to
    * the renderer.
    */
+  async function markWorkspaceRunsAborted(workspace: string, reason: string): Promise<void> {
+    const backupSourcePrefix = backupSourceLikePrefix(workspace);
+    try {
+      await dbPool.query(
+        `UPDATE pipeline_stage_status
+            SET status = 'failed', error_message = $2, finished_at = now()
+          WHERE status IN ('pending', 'running')
+            AND run_id IN (
+              SELECT run_id FROM pipeline_runs
+               WHERE backup_source LIKE $1 AND finished_at IS NULL
+            )`,
+        [backupSourcePrefix, reason]
+      );
+      await dbPool.query(
+        `UPDATE pipeline_runs
+            SET finished_at = now()
+          WHERE backup_source LIKE $1 AND finished_at IS NULL`,
+        [backupSourcePrefix]
+      );
+    } catch (err) {
+      console.error('[pipelineHandlers] failed to mark dangling pipeline runs aborted:', err);
+    }
+  }
+
   /**
    * EPOCH-308 counterpart to markWorkspaceRunsAborted, scoped to one
    * backup_source instead of a workspace prefix -- used when the
@@ -524,7 +547,6 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
     return { started: true };
   });
 
- 
   ipcMain.handle('epoch:cancelAnalysis', async (): Promise<{ cancelled: boolean }> => {
     if (!runningOrchestratorProcess) {
       return { cancelled: false };
@@ -562,4 +584,3 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
     }
   });
 }
- 

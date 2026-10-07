@@ -18,6 +18,7 @@ time while both disagreed with the schema).
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -25,13 +26,14 @@ from pathlib import Path
 
 import pytest
 
-from packages.contracts.py.adapter import SCHEMA_PATH, load_schema, source_types, validate
-from packages.contracts.py.normalized_record import NormalizedRecord, SourceType
+from adapter import SCHEMA_PATH, load_schema, source_types, validate
+from normalized_record import NormalizedRecord, SourceType
 
-CONTRACTS_DIR = Path(__file__).resolve().parent
+CONTRACTS_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = CONTRACTS_DIR.parent.parent
 SYNC_SCRIPT = REPO_ROOT / "scripts" / "sync_contracts.py"
-ZOD_MIRROR = CONTRACTS_DIR / "normalizedRecord.ts"
+PY_ENUM_MIRROR = CONTRACTS_DIR / "python" / "source_type.py"
+TS_ENUM_MIRROR = CONTRACTS_DIR / "ts" / "sourceType.ts"
 
 # Reusable fixture timestamp — avoids repeating raw ISO strings in test bodies
 # and prevents Pylance/mypy from rejecting str where datetime is expected.
@@ -85,13 +87,20 @@ def test_pydantic_enum_matches_the_canonical_enum():
     assert [member.value for member in SourceType] == source_types()
 
 
-def test_zod_enum_matches_the_canonical_enum():
+def _ts_enum_values(text: str) -> list[str]:
+    """Values declared in sourceType.ts's generated block, in order.
+
+    Digits are allowed in both key and value (e.g. `ARM64_TRACE: 'arm64_trace'`);
+    a narrower pattern would silently drop such a line and report false drift.
+    """
+    block = text.split("SOURCE_TYPE GENERATED", 1)[1].split("END SOURCE_TYPE", 1)[0]
+    return re.findall(r"^\s+[A-Z0-9_]+:\s+'([a-z0-9_]+)',$", block, re.MULTILINE)
+
+
+def test_ts_enum_matches_the_canonical_enum():
     """Parsed out of the generated block so the TS mirror is covered by the
     Python suite; there is no TS test runner in this repo yet."""
-    text = ZOD_MIRROR.read_text(encoding="utf-8")
-    block = text.split("SOURCE_TYPE GENERATED", 1)[1].split("END SOURCE_TYPE", 1)[0]
-    declared = [line.strip().strip(',"') for line in block.splitlines() if line.strip().startswith('"')]
-    assert declared == source_types()
+    assert _ts_enum_values(TS_ENUM_MIRROR.read_text(encoding="utf-8")) == source_types()
 
 
 def test_ileapp_record_is_declared_everywhere():
@@ -102,7 +111,7 @@ def test_ileapp_record_is_declared_everywhere():
     """
     assert "ileapp_record" in source_types()
     assert SourceType.ILEAPP_RECORD.value == "ileapp_record"
-    assert '"ileapp_record"' in ZOD_MIRROR.read_text(encoding="utf-8")
+    assert "'ileapp_record'" in TS_ENUM_MIRROR.read_text(encoding="utf-8")
 
 
 # --------------------------------------------------------------------------
@@ -131,8 +140,10 @@ def test_sync_contracts_detects_enum_drift(tmp_path):
     sandbox = tmp_path / "repo"
     for relative in (
         "packages/contracts/normalized-record.schema.json",
-        "packages/contracts/normalized_record.py",
-        "packages/contracts/normalizedRecord.ts",
+        "packages/contracts/python/source_type.py",
+        "packages/contracts/python/normalized_record.py",
+        "packages/contracts/ts/sourceType.ts",
+        "packages/contracts/ts/normalizedRecord.ts",
         "scripts/sync_contracts.py",
     ):
         destination = sandbox / relative
@@ -141,7 +152,8 @@ def test_sync_contracts_detects_enum_drift(tmp_path):
 
     schema_path = sandbox / "packages/contracts/normalized-record.schema.json"
     schema = json.loads(schema_path.read_text())
-    schema["properties"]["source_type"]["enum"].append("keychain_entry")
+    # arm64_trace: a value with digits, which the TS parser above must not drop.
+    schema["properties"]["source_type"]["enum"] += ["keychain_entry", "arm64_trace"]
     schema_path.write_text(json.dumps(schema, indent=2) + "\n")
 
     script = sandbox / "scripts/sync_contracts.py"
@@ -152,18 +164,18 @@ def test_sync_contracts_detects_enum_drift(tmp_path):
 
     written = subprocess.run([sys.executable, str(script), "--write"], capture_output=True, text=True)
     assert written.returncode == 0
-    assert 'KEYCHAIN_ENTRY = "keychain_entry"' in (sandbox / "packages/contracts/normalized_record.py").read_text()
-    assert '"keychain_entry",' in (sandbox / "packages/contracts/normalizedRecord.ts").read_text()
+    assert re.search(r'KEYCHAIN_ENTRY\s+= "keychain_entry"', (sandbox / "packages/contracts/python/source_type.py").read_text())
+    assert re.search(r"KEYCHAIN_ENTRY:\s+'keychain_entry',", (sandbox / "packages/contracts/ts/sourceType.ts").read_text())
+    assert _ts_enum_values((sandbox / "packages/contracts/ts/sourceType.ts").read_text()) == (
+        schema["properties"]["source_type"]["enum"]
+    )
 
     assert subprocess.run([sys.executable, str(script), "--check"]).returncode == 0
 
 
 def test_generated_blocks_carry_a_do_not_edit_marker():
     """Codegen that silently overwrites hand edits is a trap without this."""
-    for path in (
-        CONTRACTS_DIR / "normalized_record.py",
-        ZOD_MIRROR,
-    ):
+    for path in (PY_ENUM_MIRROR, TS_ENUM_MIRROR):
         text = path.read_text(encoding="utf-8")
         assert "SOURCE_TYPE GENERATED FROM" in text
         assert "END SOURCE_TYPE" in text

@@ -40,9 +40,9 @@ from typing import Any
 
 #: Canonical schema location, resolved from this file rather than the
 #: caller's working directory -- an extractor invoked by the orchestrator
-#: does not run from the repo root. The schema is now a direct sibling, so
-#: this no longer has to climb out of a nested package.
-SCHEMA_PATH = Path(__file__).resolve().parent / "normalized-record.schema.json"
+#: does not run from the repo root. The schema lives at the package root
+#: (packages/contracts/), one level above this python/ directory.
+SCHEMA_PATH = Path(__file__).resolve().parent.parent / "normalized-record.schema.json"
 
 
 @lru_cache(maxsize=1)

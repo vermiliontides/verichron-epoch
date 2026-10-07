@@ -23,6 +23,6 @@
     "@types/pg": "catalog:",
     "pg": "catalog:",
     "typescript": "catalog:",
-    "dotenv": "catalog"
+    "dotenv": "catalog:"
   }
 }

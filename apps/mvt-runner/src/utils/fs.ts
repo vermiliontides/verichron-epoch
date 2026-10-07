@@ -26,3 +26,25 @@ export async function* walkFiles(dir: string): AsyncGenerator<string> {
     }
   }
 }
+/**
+ * Replace `p` with `data` so readers see either the old file or the complete
+ * new one, never a partial write: write a temp file in the same directory
+ * (same filesystem, so rename is atomic), fsync it, then rename over `p`.
+ */
+export async function writeFileAtomic(p: string, data: string): Promise<void> {
+  await fsp.mkdir(path.dirname(p), { recursive: true });
+  const tmp = path.join(path.dirname(p), `.${path.basename(p)}.${process.pid}.${Date.now()}.tmp`);
+  try {
+    const handle = await fsp.open(tmp, "w");
+    try {
+      await handle.writeFile(data);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fsp.rename(tmp, p);
+  } catch (err) {
+    await fsp.rm(tmp, { force: true });
+    throw err;
+  }
+}

@@ -32,22 +32,15 @@ import pytest
 
 import crash.main as crash_main
 import mvt_iocs.main as mvt_main
-from testing.pg_double import PgDouble, sqlite_supports_upsert_returning
-
-pytestmark = pytest.mark.skipif(
-    not sqlite_supports_upsert_returning(),
-    reason="test double needs SQLite >= 3.35 for UPSERT ... RETURNING",
-)
+from testing.pg_real import BACKENDS, open_db
 
 RUN_ID = "aaaaaaaa-0000-0000-0000-000000000000"
 RETRY_RUN_ID = "bbbbbbbb-0000-0000-0000-000000000000"
 
 
-@pytest.fixture
-def db():
-    conn = PgDouble()
-    yield conn
-    conn.close()
+@pytest.fixture(params=BACKENDS)
+def db(request):
+    yield from open_db(request.param, (RUN_ID, RETRY_RUN_ID))
 
 
 # ==========================================================================

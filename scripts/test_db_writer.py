@@ -26,7 +26,8 @@ import pytest
 
 from db_writer import compute_file_hash, incomplete_ingests, ingest, write_records
 from normalized_record import NormalizedRecord, SourceType
-from testing.pg_double import PgDouble, sqlite_supports_upsert_returning
+from testing.pg_double import sqlite_supports_upsert_returning
+from testing.pg_real import BACKENDS, open_db
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MIGRATION = REPO_ROOT / "packages" / "etl-db-writer" / "migrations" / "0002_ingest_completion.sql"
@@ -38,12 +39,20 @@ pytestmark = pytest.mark.skipif(
 
 RUN_ID = "11111111-1111-1111-1111-111111111111"
 
+#: Every run_id a test below ingests under. Real Postgres enforces the
+#: ingested_files/forensic_records -> pipeline_runs FK, so these are seeded.
+SEEDED_RUN_IDS = (
+    RUN_ID,
+    "22222222-2222-2222-2222-222222222222",
+    "33333333-3333-3333-3333-333333333333",
+    "44444444-4444-4444-4444-444444444444",
+    "55555555-5555-5555-5555-555555555555",
+)
 
-@pytest.fixture
-def db():
-    conn = PgDouble()
-    yield conn
-    conn.close()
+
+@pytest.fixture(params=BACKENDS)
+def db(request):
+    yield from open_db(request.param, SEEDED_RUN_IDS)
 
 
 @pytest.fixture

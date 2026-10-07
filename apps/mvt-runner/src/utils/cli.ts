@@ -79,7 +79,7 @@ function printUsage() {
 
 Options:
   --source <dir>          directory containing backup subdirectories (required)
-  --workspace <dir>        workspace directory for hashes/decrypted/results (default: ./mvt-workspace)
+  --workspace <dir>        workspace directory for evidence/decrypted/results (default: ./mvt-workspace)
   --mvt-bin <path>         path to mvt-ios binary (default: <repo-root>/.venv/bin/mvt-ios or your active mvt venv)
   --sqlite-bin <path>      path to sqlite3 binary used for repairing malformed DBs (default: "sqlite3" on PATH)
   --force                  re-run check-backup even if already done (does NOT touch decrypt/repair state)

@@ -28,8 +28,7 @@ import sys
 from pathlib import Path
 
 import psycopg2
-from runtime_env import load_runtime_env  # Standard workspace import via uv environment
-from runtime_env import fatal_if_missing_venv, load_root_env, resolve_database_url
+from runtime_env import fatal_if_missing_venv, load_root_env
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 

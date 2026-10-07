@@ -40,10 +40,11 @@ still drift, though, so it is asserted rather than ignored.
 
 Layout
 ------
-All three files are siblings under packages/contracts/:
     packages/contracts/normalized-record.schema.json   (source of truth)
-    packages/contracts/normalized_record.py             (Pydantic mirror)
-    packages/contracts/normalizedRecord.ts               (Zod mirror)
+    packages/contracts/python/source_type.py            (Python enum mirror, generated block)
+    packages/contracts/python/normalized_record.py      (Pydantic model, fields checked)
+    packages/contracts/ts/sourceType.ts                 (TS enum mirror, generated block)
+    packages/contracts/ts/normalizedRecord.ts           (Zod model, fields checked)
 """
 
 from __future__ import annotations
@@ -57,8 +58,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONTRACTS_DIR = REPO_ROOT / "packages" / "contracts"
 SCHEMA_PATH = CONTRACTS_DIR / "normalized-record.schema.json"
-PYDANTIC_PATH = CONTRACTS_DIR / "normalized_record.py"
-ZOD_PATH = CONTRACTS_DIR / "normalizedRecord.ts"
+PY_ENUM_PATH = CONTRACTS_DIR / "python" / "source_type.py"
+TS_ENUM_PATH = CONTRACTS_DIR / "ts" / "sourceType.ts"
+PYDANTIC_PATH = CONTRACTS_DIR / "python" / "normalized_record.py"
+ZOD_PATH = CONTRACTS_DIR / "ts" / "normalizedRecord.ts"
 
 BEGIN = "SOURCE_TYPE GENERATED FROM packages/contracts/normalized-record.schema.json"
 END = "END SOURCE_TYPE"
@@ -101,17 +104,22 @@ def schema_properties(schema: dict) -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-def render_pydantic_enum(values: list[str]) -> str:
+def render_python_enum(values: list[str]) -> str:
+    """StrEnum members, `=` aligned to the longest member name."""
+    width = max(len(value) for value in values)
     lines = [f"    # {_GENERATED_NOTE}"]
     for value in values:
-        lines.append(f'    {value.upper()} = "{value}"')
+        lines.append(f'    {value.upper():<{width}} = "{value}"')
     return "\n".join(lines)
 
 
-def render_zod_enum(values: list[str]) -> str:
-    lines = [f"  // {_GENERATED_NOTE}"]
+def render_ts_enum(values: list[str]) -> str:
+    """The whole `as const` object, values aligned past the longest key."""
+    width = max(len(value) for value in values) + 1  # +1 for the colon
+    lines = [f"// {_GENERATED_NOTE}", "export const SourceType = {"]
     for value in values:
-        lines.append(f'  "{value}",')
+        lines.append(f"  {value.upper() + ':':<{width}} '{value}',")
+    lines.append("} as const")
     return "\n".join(lines)
 
 
@@ -179,10 +187,12 @@ def build_expected() -> dict[Path, str]:
     schema = load_schema()
     values = source_types(schema)
     return {
-        PYDANTIC_PATH: splice(
-            PYDANTIC_PATH.read_text(encoding="utf-8"), "#", render_pydantic_enum(values), PYDANTIC_PATH
+        PY_ENUM_PATH: splice(
+            PY_ENUM_PATH.read_text(encoding="utf-8"), "#", render_python_enum(values), PY_ENUM_PATH
         ),
-        ZOD_PATH: splice(ZOD_PATH.read_text(encoding="utf-8"), "//", render_zod_enum(values), ZOD_PATH),
+        TS_ENUM_PATH: splice(
+            TS_ENUM_PATH.read_text(encoding="utf-8"), "//", render_ts_enum(values), TS_ENUM_PATH
+        ),
     }
 
 

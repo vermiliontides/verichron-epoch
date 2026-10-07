@@ -1,0 +1,45 @@
+name: TS Tests
+
+# EPOCH-401: first TypeScript test job in the repo. Scoped to mvt-runner and
+# its workspace dependencies (the `...` filter) so the Electron app's install
+# isn't pulled into every run. Widen the filter as other packages gain tests.
+#
+# Linux only, by decision (2026-10-07): the macOS-specific inputs the evidence
+# manifest must be invariant to (NFD filenames, `\` separators) are simulated
+# in apps/mvt-runner/src/utils/manifest.test.ts rather than run on a macOS
+# runner.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  mvt-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Version comes from package.json's packageManager field.
+      - name: Install pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Install Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter "@verichron/mvt-runner..."
+
+      # mvt-runner resolves @verichron/contracts through its built dist/.
+      - name: Build contracts
+        run: pnpm --filter @verichron/contracts build
+
+      - name: Typecheck
+        run: pnpm --filter @verichron/mvt-runner typecheck
+
+      - name: Test
+        run: pnpm --filter @verichron/mvt-runner test

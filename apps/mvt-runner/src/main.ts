@@ -3,12 +3,18 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
-import * as crypto from "node:crypto";
 import { spawn } from "node:child_process";
-import { discoverBackups, BACKUP_SEARCH_MAX_DEPTH, type Backup } from "@verichron/contracts";
+import {
+  discoverBackups,
+  BACKUP_SEARCH_MAX_DEPTH,
+  deriveEvidencePath,
+  EvidenceSidecar,
+  type Backup,
+} from "@verichron/contracts";
 
 import { parseFlags, type Config } from "./utils/cli.js";
-import { pathExists, walkFiles, writeMarker } from "./utils/fs.js";
+import { pathExists, writeFileAtomic, writeMarker } from "./utils/fs.js";
+import { hashTree } from "./utils/manifest.js";
 import { discoverMvtBin } from "./utils/resolver.js";
 import { repairDecrypted } from "./utils/repair.js";
 import { promptPassword } from "./utils/prompt.js";
@@ -19,6 +25,11 @@ import { writeSummary } from "./utils/summary.js";
 // decrypt failure (disk full, mvt-ios crash, etc.) fails immediately on
 // the first try, since retrying those wouldn't help and would just mask
 // a different problem behind a password-retry loop.
+/** Recorded in each evidence sidecar. ../package.json resolves from both src/ (tsx) and dist/. */
+const TOOL_VERSION: string = JSON.parse(
+  fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")
+).version;
+
 const MAX_PASSWORD_ATTEMPTS = 3;
 
 // mvt-ios/libimobiledevice's own wording for a bad decryption password,
@@ -302,32 +313,45 @@ async function readRepairFailures(p: string): Promise<string[]> {
   }
 }
 
+/**
+ * Canonical manifest + evidence sidecar for one backup (EPOCH-401).
+ *
+ * Runs every time rather than skipping when a manifest exists: an existing
+ * manifest says nothing about whether the tree changed since. The stat cache
+ * keeps an unchanged tree cheap; --verify re-reads every byte.
+ *
+ * Publish order is what keeps the sidecar trustworthy across crashes: the
+ * manifest goes to a content-addressed path first (never overwritten in
+ * place), then the sidecar is atomically replaced to point at it. At every
+ * instant the sidecar on disk names a root whose manifest exists and matches.
+ */
 async function hashBackup(cfg: Config, name: string, src: string): Promise<void> {
-  const manifestPath = path.join(cfg.workspace, "hashes", `${name}.sha256`);
-  if (!cfg.forceDecrypt && (await pathExists(manifestPath))) {
-    console.log("  [hash]    already done, skipping");
-    return;
-  }
+  const paths = deriveEvidencePath(cfg.workspace, name);
+  const result = await hashTree(src, { cachePath: paths.fingerprints, verify: cfg.verify });
 
-  const lines: string[] = [];
-  for await (const p of walkFiles(src)) {
-    const sum = await sha256File(p);
-    const rel = path.relative(src, p);
-    lines.push(`${sum}  ${rel}`);
-  }
+  const manifestPath = paths.manifestFor(result.contentRoot);
+  await writeFileAtomic(manifestPath, result.manifest);
 
-  await fsp.writeFile(manifestPath, lines.join("\n") + (lines.length ? "\n" : ""));
-  console.log("  [hash]    done ->", manifestPath);
-}
-
-function sha256File(p: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const hash = crypto.createHash("sha256");
-    const stream = fs.createReadStream(p);
-    stream.on("data", (chunk) => hash.update(chunk));
-    stream.on("end", () => resolve(hash.digest("hex")));
-    stream.on("error", reject);
+  const sidecar = EvidenceSidecar.parse({
+    schema_version: 1,
+    evidence_name: name,
+    algorithm: "sha256",
+    content_root: result.contentRoot,
+    manifest_path: path.relative(cfg.workspace, manifestPath).split(path.sep).join("/"),
+    file_count: result.fileCount,
+    total_bytes: result.totalBytes,
+    source_path: path.resolve(src),
+    hashed_at: new Date().toISOString(),
+    tool: { name: "mvt-runner", version: TOOL_VERSION },
   });
+  await writeFileAtomic(paths.sidecar, JSON.stringify(sidecar, null, 2) + "\n");
+
+  // Must start with "done": apps/epoch's mvtLogParser only completes a stage
+  // on a "[stage] done..." (or skip) line.
+  console.log(
+    `  [hash]    done -> ${paths.sidecar}` +
+      ` (${result.fileCount} files, ${result.hashed} hashed, ${result.reused} cached, root ${result.contentRoot})`
+  );
 }
 
 /**

@@ -17,6 +17,8 @@ export { NormalizedRecord } from "./ts/normalizedRecord.js";
 export { discoverBackups, BACKUP_SEARCH_MAX_DEPTH } from "./ts/discoverBackups.js";
 export type { Backup } from "./ts/discoverBackups.js";
 export { deriveResultsPath } from './ts/deriveResultsPath.js';
+export { deriveEvidencePath } from './ts/deriveEvidencePath.js';
+export { EvidenceSidecar } from './ts/evidenceSidecar.js';
 export { SourceType, isSourceType } from './ts/sourceType'
 export type { SourceType as SourceTypeValue } from './ts/sourceType'
 export { loadRootEnv, resolveDatabaseUrl } from './ts/env.js';

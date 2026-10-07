@@ -9,6 +9,7 @@ export interface Config {
   sqliteBin: string;
   force: boolean;
   forceDecrypt: boolean;
+  verify: boolean;
   refreshIOCs: boolean;
   iocMaxAgeMs: number;
   only: string;
@@ -30,6 +31,7 @@ export function parseFlags(): Config {
       "sqlite-bin": { type: "string", default: "sqlite3" },
       force: { type: "boolean", default: false },
       "force-decrypt": { type: "boolean", default: false },
+      verify: { type: "boolean", default: false },
       "refresh-iocs": { type: "boolean", default: false },
       "ioc-max-age": { type: "string", default: "168h" },
       only: { type: "string", default: "" },
@@ -64,6 +66,7 @@ export function parseFlags(): Config {
     sqliteBin: values["sqlite-bin"] as string,
     force: values.force as boolean,
     forceDecrypt: values["force-decrypt"] as boolean,
+    verify: values.verify as boolean,
     refreshIOCs: values["refresh-iocs"] as boolean,
     iocMaxAgeMs,
     only: values.only as string,
@@ -76,11 +79,12 @@ function printUsage() {
 
 Options:
   --source <dir>          directory containing backup subdirectories (required)
-  --workspace <dir>        workspace directory for hashes/decrypted/results (default: ./mvt-workspace)
+  --workspace <dir>        workspace directory for evidence/decrypted/results (default: ./mvt-workspace)
   --mvt-bin <path>         path to mvt-ios binary (default: <repo-root>/.venv/bin/mvt-ios or your active mvt venv)
   --sqlite-bin <path>      path to sqlite3 binary used for repairing malformed DBs (default: "sqlite3" on PATH)
   --force                  re-run check-backup even if already done (does NOT touch decrypt/repair state)
   --force-decrypt          re-run decrypt-backup, repair, and check-backup even if already done
+  --verify                 re-hash every file for the evidence manifest, ignoring the stat cache
   --refresh-iocs           force re-download of IOC indicators
   --ioc-max-age <dur>      re-download IOCs if older than this, e.g. "168h" (default: 168h)
   --only <names>           comma-separated list of backup dir names to process (default: all found)

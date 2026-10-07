@@ -15,6 +15,22 @@ on:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://verichron_ci:verichron_ci@localhost:5432/verichron_ci
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: verichron_ci
+          POSTGRES_USER: verichron_ci
+          POSTGRES_PASSWORD: verichron_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U verichron_ci -d verichron_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,7 +49,7 @@ jobs:
           enable-cache: true
 
       # uv resolves its own interpreter per pyproject's requires-python
-      # (>=3.10); no separate actions/setup-python step needed.
+      # (>=3.12); no separate actions/setup-python step needed.
       - name: Sync workspace
         run: uv sync --all-extras
         # NOTE (VER-18 open risk): root pyproject.toml depends on `mvt`,
@@ -43,17 +59,16 @@ jobs:
         # package gap, not a Python/test problem. apt-get steps to add
         # missing system libs go directly above this step once identified.
 
+      - name: Apply PostgreSQL migrations
+        run: uv run python packages/etl-db-writer/migrate.py --db-url "$DATABASE_URL"
+
+      - name: Verify PostgreSQL migrations are repeatable
+        run: uv run python packages/etl-db-writer/migrate.py --db-url "$DATABASE_URL"
+
       - name: Run pytest
         run: uv run pytest -q
         # testpaths / norecursedirs already scoped correctly in root
         # pyproject.toml ([tool.pytest.ini_options]): packages, scripts,
-        # apps; iLEAPP/node_modules/.venv/dist/.git/infra excluded.
-        # No DATABASE_URL / Postgres service container needed for the
-        # current suite -- the transaction-boundary tests
-        # (test_db_writer.py, test_extractor_ingest_atomicity.py) run
-        # against libs/testing/testing/pg_double.py's SQLite-backed
-        # double, gated by sqlite_supports_upsert_returning() (needs
-        # SQLite >= 3.35, which ubuntu-latest's Python ships with).
-        # Revisit this if a future test calls psycopg2.connect() against
-        # a real DATABASE_URL -- add a `services: postgres:` block then,
-        # not preemptively.
+        # apps; iLEAPP/node_modules/.venv/dist/.git/infra excluded. The
+        # transaction-boundary tests currently use PgDouble; PostgreSQL
+        # integration coverage will be added alongside the evidence schema.

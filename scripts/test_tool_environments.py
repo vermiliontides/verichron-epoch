@@ -24,7 +24,7 @@ from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ILEAPP_REQUIREMENTS = REPO_ROOT / "apps" / "extractors" / "ileapp_bridge" / "iLEAPP" / "requirements.txt"
+ILEAPP_REQUIREMENTS = REPO_ROOT / "tools" / "ileapp" / "iLEAPP" / "requirements.txt"
 
 
 def _dependencies(pyproject: Path) -> list[str]:

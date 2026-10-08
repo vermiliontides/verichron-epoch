@@ -1,7 +1,7 @@
 # mvt_iocs stage
 
 Turns mvt-ios's own analysis output into facts. Order 70; it reads the **mvt
-results** derivative (`requiresResultsPath: true`). It follows the
+results** derivative (`"reads": "mvt_results"`). It follows the
 [stage contract](../../../packages/contracts/EXTRACTOR_CONTRACT.md).
 
 mvt's verdicts are primary evidence here, not a second-hand parse. An alert *is*

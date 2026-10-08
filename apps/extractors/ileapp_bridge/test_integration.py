@@ -359,19 +359,17 @@ def test_file_hash_is_deterministic_and_content_sensitive(tmp_path):
 
 def test_input_copies_under_data_and_media_are_not_artifacts(tmp_path):
     """iLEAPP copies the backup's own databases into data/ (and media into
-    media/) of its run directory. Those are evidence, not iLEAPP results, and
-    must never be ingested as ileapp_record facts (VER-16)."""
-    run = tmp_path / "iLEAPP_Output_2026-10-08_Thursday_123713"
-    (run / "_TSV Exports").mkdir(parents=True)
-    (run / "_TSV Exports" / "iTunes Backup Information.tsv").write_text("property\tvalue\nName\tx\n")
+    media/) of its report directory. Those are evidence, not iLEAPP results,
+    and must never be ingested as ileapp_record facts (VER-16)."""
+    report = tmp_path / "BK1"
+    (report / "_TSV Exports").mkdir(parents=True)
+    (report / "_TSV Exports" / "iTunes Backup Information.tsv").write_text("property\tvalue\nName\tx\n")
     for copy in ("data/private/var/mobile/Library/SMS/sms.db", "media/IMG_0001.sqlite"):
-        (run / copy).parent.mkdir(parents=True)
-        (run / copy).write_bytes(b"")
+        (report / copy).parent.mkdir(parents=True)
+        (report / copy).write_bytes(b"")
 
-    found = [p.relative_to(tmp_path).as_posix() for p in list_supported_artifacts(tmp_path)]
-    assert found == ["iLEAPP_Output_2026-10-08_Thursday_123713/_TSV Exports/iTunes Backup Information.tsv"]
-    # The same rule applies when given the run directory itself (EPOCH-416).
-    assert [p.name for p in list_supported_artifacts(run)] == ["iTunes Backup Information.tsv"]
+    found = [p.relative_to(report).as_posix() for p in list_supported_artifacts(report)]
+    assert found == ["_TSV Exports/iTunes Backup Information.tsv"]
 
 
 def test_byte_order_mark_does_not_hide_the_time_column(tmp_path):
@@ -385,3 +383,16 @@ def test_byte_order_mark_does_not_hide_the_time_column(tmp_path):
 
     assert list(records[0]["data"])[0] == "Timestamp"
     assert records[0]["timestamp"] == "2026-09-27T23:00:30+00:00"
+
+
+def test_reads_only_the_output_directory_it_is_given(tmp_path):
+    """EPOCH-416: the bridge reads one backup's iLEAPP output, never a sibling's
+    or an earlier run's left beside it."""
+    own = tmp_path / "ileapp" / "BK1"
+    foreign = tmp_path / "ileapp" / "BK2"
+    stale = tmp_path / "ileapp" / "iLEAPP_Output_2026-01-01_000000"
+    for directory in (own, foreign, stale):
+        directory.mkdir(parents=True)
+        (directory / f"{directory.name}.csv").write_text("a,b\n1,2\n")
+
+    assert [p.name for p in list_supported_artifacts(own)] == ["BK1.csv"]

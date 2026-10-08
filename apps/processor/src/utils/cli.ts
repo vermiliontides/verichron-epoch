@@ -12,6 +12,10 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
  */
 export const DEFAULT_MVT_BIN = path.join(REPO_ROOT, "tools", "mvt", ".venv", "bin", "mvt-ios");
 
+/** iLEAPP: the submodule, and the interpreter of its own pinned environment, tools/ileapp. */
+export const DEFAULT_ILEAPP_DIR = path.join(REPO_ROOT, "tools", "ileapp", "iLEAPP");
+export const DEFAULT_ILEAPP_PYTHON = path.join(REPO_ROOT, "tools", "ileapp", ".venv", "bin", "python");
+
 export interface Config {
   source: string;
   workspace: string;
@@ -19,6 +23,9 @@ export interface Config {
   /** mvt-ios's data and config home (its IOC folder lives here); see mvtEnv(). */
   mvtHome: string;
   sqliteBin: string;
+  ileappDir: string;
+  ileappPython: string;
+  ileappTimeoutMs: number;
   force: boolean;
   forceDecrypt: boolean;
   verify: boolean;
@@ -42,6 +49,9 @@ export function parseFlags(): Config {
       "mvt-bin": { type: "string", default: DEFAULT_MVT_BIN },
       "mvt-home": { type: "string", default: defaultMvtHome() },
       "sqlite-bin": { type: "string", default: "sqlite3" },
+      "ileapp-dir": { type: "string", default: DEFAULT_ILEAPP_DIR },
+      "ileapp-python": { type: "string", default: DEFAULT_ILEAPP_PYTHON },
+      "ileapp-timeout": { type: "string", default: "30m" },
       force: { type: "boolean", default: false },
       "force-decrypt": { type: "boolean", default: false },
       verify: { type: "boolean", default: false },
@@ -64,13 +74,8 @@ export function parseFlags(): Config {
     process.exit(2);
   }
 
-  let iocMaxAgeMs = 168 * 60 * 60 * 1000;
-  try {
-    iocMaxAgeMs = parseDuration(values["ioc-max-age"] as string);
-  } catch (err) {
-    console.error(`error: invalid --ioc-max-age: ${err instanceof Error ? err.message : err}`);
-    process.exit(2);
-  }
+  const iocMaxAgeMs = durationFlag("ioc-max-age", values["ioc-max-age"] as string);
+  const ileappTimeoutMs = durationFlag("ileapp-timeout", values["ileapp-timeout"] as string);
 
   return {
     source: values.source as string,
@@ -78,6 +83,9 @@ export function parseFlags(): Config {
     mvtBin: values["mvt-bin"] as string,
     mvtHome: path.resolve(values["mvt-home"] as string),
     sqliteBin: values["sqlite-bin"] as string,
+    ileappDir: path.resolve(values["ileapp-dir"] as string),
+    ileappPython: values["ileapp-python"] as string,
+    ileappTimeoutMs,
     force: values.force as boolean,
     forceDecrypt: values["force-decrypt"] as boolean,
     verify: values.verify as boolean,
@@ -104,20 +112,33 @@ function printUsage() {
 
 Options:
   --source <dir>          directory containing backup subdirectories (required)
-  --workspace <dir>        workspace directory for evidence/decrypted/results (default: ./verichron-workspace)
+  --workspace <dir>        workspace directory for evidence/decrypted/results/ileapp (default: ~/verichron-workspace)
   --mvt-bin <path>         path to mvt-ios binary (default: <repo-root>/tools/mvt/.venv/bin/mvt-ios,
                            the pinned environment "mise run setup" creates)
   --mvt-home <dir>         mvt-ios data/config home; IOCs are kept and hashed here only
                            (default: $VERICHRON_MVT_HOME or ~/.local/share/verichron/mvt)
   --sqlite-bin <path>      path to sqlite3 binary used for repairing malformed DBs (default: "sqlite3" on PATH)
-  --force                  re-run check-backup even if already done (does NOT touch decrypt/repair state)
-  --force-decrypt          re-run decrypt-backup, repair, and check-backup even if already done
+  --ileapp-dir <dir>       the iLEAPP checkout to run (default: <repo-root>/tools/ileapp/iLEAPP, the submodule)
+  --ileapp-python <path>   interpreter for iLEAPP (default: <repo-root>/tools/ileapp/.venv/bin/python,
+                           the pinned environment "mise run setup" creates)
+  --ileapp-timeout <dur>   stop iLEAPP if it runs longer than this, e.g. "45m" (default: 30m)
+  --force                  re-run check-backup and iLEAPP even if already done (does NOT touch decrypt/repair state)
+  --force-decrypt          re-run decrypt-backup, repair, check-backup and iLEAPP even if already done
   --verify                 re-hash every file for the evidence manifest, ignoring the stat cache
   --refresh-iocs           force re-download of IOC indicators
   --ioc-max-age <dur>      re-download IOCs if older than this, e.g. "168h" (default: 168h)
   --only <names>           comma-separated list of backup dir names to process (default: all found)
   --different-passwords    prompt separately for each backup instead of reusing one password
   --help                   show this help`);
+}
+
+function durationFlag(name: string, value: string): number {
+  try {
+    return parseDuration(value);
+  } catch (err) {
+    console.error(`error: invalid --${name}: ${err instanceof Error ? err.message : err}`);
+    process.exit(2);
+  }
 }
 
 function parseDuration(s: string): number {

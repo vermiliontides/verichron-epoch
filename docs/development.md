@@ -38,7 +38,7 @@ the iLEAPP submodule. `mise.toml` and `.python-version` are updated by hand.
 |---|---|---|
 | `.venv/` | The uv workspace: our Python stages, writer, report and tests | the orchestrator's stages, `uv run` |
 | `tools/mvt/.venv/` | mvt, pinned | The processor runs `tools/mvt/.venv/bin/mvt-ios` (or `--mvt-bin`) |
-| `tools/ileapp/.venv/` | iLEAPP's runtime dependencies, pinned | the iLEAPP bridge runs `iLEAPP/ileapp.py` with this interpreter |
+| `tools/ileapp/.venv/` | iLEAPP's runtime dependencies, pinned | the processor runs the submodule, `tools/ileapp/iLEAPP/ileapp.py`, with this interpreter |
 | `node_modules/` | The pnpm workspace | the app, the processor, the orchestrator |
 
 mvt and iLEAPP each have their own uv project and lockfile because their exact

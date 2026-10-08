@@ -1,24 +1,34 @@
 /**
- * EPOCH-404: a decrypt (and the mvt results built on it) is reusable only if
- * it was made from the backup as it is now. Runs the real CLI against a stub
- * mvt-ios whose decrypt-backup writes a file named after the source's
- * version, so a stale decrypt surviving a source change is directly visible.
+ * The processor's derivatives: a decrypt, mvt results and iLEAPP output are
+ * each reusable only if made from the backup as it is now, by the tools as
+ * they are now (EPOCH-404, EPOCH-406, EPOCH-416). Runs the real CLI against a
+ * stub mvt-ios whose decrypt-backup writes a file named after the source's
+ * version, so a stale decrypt surviving a source change is directly visible,
+ * and a stub iLEAPP in a git checkout of its own.
  */
 
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 
-import { readCheckMarker, readDecryptMarker } from '@verichron/contracts';
+import { readCheckMarker, readDecryptMarker, readIleappMarker } from '@verichron/contracts';
 
 let tmp: string;
 let source: string;
 let workspace: string;
 let stub: string;
 let mvtHome: string;
+let ileappDir: string;
+let ileappPython: string;
+
+/** git in the stub iLEAPP checkout, with an identity so commits work anywhere. */
+const ileappGit = (...args: string[]) =>
+  execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@example.invalid', '-C', ileappDir, ...args], {
+    encoding: 'utf8',
+  }).trim();
 
 before(() => {
   tmp = mkdtempSync(path.join(os.tmpdir(), 'decrypt-provenance-'));
@@ -60,6 +70,30 @@ exit 0
 `
   );
   chmodSync(stub, 0o755);
+
+  // The stub stands in for iLEAPP's interpreter, so it is called as
+  //   <python> ileapp.py -t TYPE -i INPUT -o PARENT --custom_output_folder NAME
+  // and writes PARENT/NAME/input-type.
+  // STUB_ILEAPP=fail: exit 1. =hang: never finish. =none: exit 0 having written nothing.
+  ileappPython = path.join(tmp, 'ileapp-python-stub');
+  writeFileSync(
+    ileappPython,
+    `#!/bin/sh
+case "$STUB_ILEAPP" in
+  fail) echo "iLEAPP crashed" >&2; exit 1 ;;
+  hang) sleep 60 ;;
+  none) exit 0 ;;
+esac
+mkdir "$7/$9" && echo "$3" > "$7/$9/input-type"
+`
+  );
+  chmodSync(ileappPython, 0o755);
+  ileappDir = path.join(tmp, 'iLEAPP');
+  mkdirSync(ileappDir);
+  writeFileSync(path.join(ileappDir, 'ileapp.py'), '# stub\n');
+  ileappGit('init', '-q');
+  ileappGit('add', '.');
+  ileappGit('commit', '-q', '-m', 'stub iLEAPP');
 });
 
 after(() => rmSync(tmp, { recursive: true, force: true }));
@@ -70,8 +104,8 @@ function runCli(extraArgs: string[] = [], stubMode = '', extraEnv: Record<string
       process.execPath,
       ['--import', 'tsx', path.resolve(import.meta.dirname, 'main.ts'),
         '--source', source, '--workspace', workspace, '--mvt-bin', stub, '--sqlite-bin', '/nonexistent/sqlite3',
-        '--mvt-home', mvtHome, ...extraArgs],
-      { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, STUB_DECRYPT: stubMode, ...extraEnv } }
+        '--mvt-home', mvtHome, '--ileapp-dir', ileappDir, '--ileapp-python', ileappPython, ...extraArgs],
+      { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, STUB_DECRYPT: stubMode, STUB_ILEAPP: '', ...extraEnv } }
     );
     let out = '';
     child.stdout.on('data', (c) => (out += c));
@@ -84,6 +118,7 @@ function runCli(extraArgs: string[] = [], stubMode = '', extraEnv: Record<string
 
 const decrypted = () => path.join(workspace, 'decrypted', 'BK1');
 const results = () => path.join(workspace, 'results', 'BK1');
+const ileapp = () => path.join(workspace, 'ileapp', 'BK1');
 
 describe('decrypt provenance', () => {
   it('records the content root a decrypt and its results came from', async () => {
@@ -112,6 +147,7 @@ describe('decrypt provenance', () => {
     assert.ok(readdirSync(decrypted()).includes('from-v2.txt'));
     assert.ok(!readdirSync(decrypted()).includes('from-v1.txt'), 'the stale decrypt was removed, not merged into');
     assert.equal(readCheckMarker(results())?.content_root, after.content_root, 'results redone too');
+    assert.equal(readIleappMarker(ileapp())?.content_root, after.content_root, 'iLEAPP output redone too');
   });
 
   it('a forced re-decrypt that fails part-way leaves no marker vouching for the copy', async () => {
@@ -120,6 +156,7 @@ describe('decrypt provenance', () => {
     assert.match(out, /\[decrypt\] error/);
     assert.equal(readDecryptMarker(decrypted()), null, 'registration will refuse this copy');
     assert.equal(readCheckMarker(results()), null, 'results built on it are withdrawn too');
+    assert.equal(readIleappMarker(ileapp()), null, 'so is iLEAPP output');
 
     await runCli();
     assert.ok(readDecryptMarker(decrypted()), 'a clean re-run restores it');
@@ -210,5 +247,68 @@ describe('derivative provenance (EPOCH-406)', () => {
   it('refuses an mvt-ios whose version it cannot read', async () => {
     const out = await runCli([], '', { STUB_MVT_VERSION: ' ' });
     assert.match(out, /could not read the mvt-ios version/);
+  });
+});
+
+describe('iLEAPP output (EPOCH-416)', () => {
+  it('runs iLEAPP into ileapp/<label>/ and records the decrypt it read and the iLEAPP commit', async () => {
+    const out = await runCli();
+    assert.match(out, /\[ileapp\]  (done|already done)/);
+    const marker = readIleappMarker(ileapp())!;
+    assert.ok(marker, 'marker written');
+    assert.equal(marker.content_root, readDecryptMarker(decrypted())!.content_root);
+    assert.deepEqual(marker.tool, { name: 'iLEAPP', version: ileappGit('rev-parse', 'HEAD') });
+    assert.deepEqual(marker.params, { input_type: 'itunes' }, 'the decrypt has a top-level Manifest.db');
+    assert.equal(readFileSync(path.join(ileapp(), 'input-type'), 'utf8').trim(), 'itunes', 'the report is ileapp/<label> itself');
+  });
+
+  it('reuses current output', async () => {
+    const before = readIleappMarker(ileapp());
+    const out = await runCli();
+    assert.match(out, /\[ileapp\]  already done, skipping/);
+    assert.deepEqual(readIleappMarker(ileapp()), before);
+  });
+
+  it('a new iLEAPP commit runs it again, from an empty directory', async () => {
+    writeFileSync(path.join(ileapp(), 'stale-file'), 'from the old report');
+    writeFileSync(path.join(ileappDir, 'ileapp.py'), '# stub, revised\n');
+    ileappGit('commit', '-q', '-am', 'revise');
+    const out = await runCli();
+    assert.match(out, /\[ileapp\]  re-running: iLEAPP changed/);
+    assert.equal(readIleappMarker(ileapp())!.tool.version, ileappGit('rev-parse', 'HEAD'));
+    assert.ok(!existsSync(path.join(ileapp(), 'stale-file')), 'the old report was removed, not merged into');
+  });
+
+  it('refuses an iLEAPP checkout with local changes', async () => {
+    writeFileSync(path.join(ileappDir, 'local-edit.py'), '');
+    try {
+      const out = await runCli();
+      assert.match(out, /has local changes/);
+    } finally {
+      rmSync(path.join(ileappDir, 'local-edit.py'));
+    }
+  });
+
+  it('stops an iLEAPP run past its timeout; no marker vouches for it, and the check results stand', async () => {
+    const started = Date.now();
+    const out = await runCli(['--force', '--ileapp-timeout', '1s'], '', { STUB_ILEAPP: 'hang' });
+    assert.ok(Date.now() - started < 30_000, 'the hung iLEAPP and its children were killed');
+    assert.match(out, /\[ileapp\] error: iLEAPP did not finish within 1s/);
+    assert.equal(readIleappMarker(ileapp()), null);
+    assert.ok(readCheckMarker(results()), 'mvt results are unaffected');
+    assert.match(out, /backup\(s\) that need attention/);
+  });
+
+  it('a failed or empty iLEAPP run leaves no marker', async () => {
+    const failed = await runCli(['--force'], '', { STUB_ILEAPP: 'fail' });
+    assert.match(failed, /\[ileapp\] error: iLEAPP exited with code 1/);
+    assert.equal(readIleappMarker(ileapp()), null);
+
+    const empty = await runCli(['--force'], '', { STUB_ILEAPP: 'none' });
+    assert.match(empty, /\[ileapp\] error: iLEAPP exited cleanly but wrote no report/);
+    assert.equal(readIleappMarker(ileapp()), null);
+
+    await runCli();
+    assert.ok(readIleappMarker(ileapp()), 'a clean re-run restores it');
   });
 });

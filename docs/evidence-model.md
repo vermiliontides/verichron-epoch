@@ -34,8 +34,11 @@ UDID, and is refused.
 
 ## Derivatives
 
-A *derivative* is something produced from evidence: today, the **decrypted**
-backup and the **mvt results** checked from it (whose parent is the decrypt).
+A *derivative* is something produced from evidence: the **decrypted** backup,
+and two made from it, whose parent is the decrypt: the **mvt results** checked
+from it, and **iLEAPP's output** (`ileapp_output`). Facts are filed under the
+derivative they were read from, so iLEAPP records belong to iLEAPP's output, not
+to the decrypt (R7).
 
 A derivative's identity is **(evidence, kind, parent, provenance)**:
 
@@ -46,13 +49,16 @@ A derivative's identity is **(evidence, kind, parent, provenance)**:
     `.corrupt-<timestamp>`);
   - a results set records the mvt-ios version and the hash of the IOC set it
     was checked against;
+  - iLEAPP's output records the iLEAPP commit (the submodule's, because
+    iLEAPP's self-reported version does not match its release tag) and how
+    iLEAPP read the decrypt (`itunes` or `fs`);
 - `provenance_key` is the sha256 of that provenance in canonical form;
-- a different tool version, repair outcome or IOC set is therefore a **new
-  derivative**. A derivative's provenance is never rewritten; only its path, its
+- a different tool version, repair outcome, IOC set or iLEAPP commit is
+  therefore a **new derivative**. A derivative's provenance is never rewritten; only its path, its
   last-known location, is updated.
 
-**Completion markers.** The processor writes `.mvt_decrypted_ok` and `.mvt_check_ok`
-only once a derivative is finished. Each records the evidence `content_root` it
+**Completion markers.** The processor writes `.mvt_decrypted_ok`, `.mvt_check_ok`
+and `.ileapp_ok` only once a derivative is finished. Each records the evidence `content_root` it
 was made from and its provenance. Registration refuses a derivative whose marker
 is missing, malformed, or names different evidence. That's how a backup that
 changed under the same label can never have its old decrypt filed under the new
@@ -76,8 +82,8 @@ an audit event; facts belong to evidence, not to runs (R7).**
   makes a run incomplete. Nothing else may re-derive this.
 - **Resume.** Evidence is skipped only if a complete run already ran every stage
   enabled now, at the parser version declared now, against the derivative it
-  would read now. A parser version bump, a newly enabled stage or a new results
-  set therefore gets a new run.
+  would read now. A parser version bump, a newly enabled stage, a new results
+  set or new iLEAPP output therefore gets a new run.
 
 ## Facts and the ledger
 
@@ -116,5 +122,4 @@ counted and shown, never dropped.
 |---|---|
 | Database-level immutability of completed facts, and one audited purge procedure | EPOCH-412 |
 | LLM findings versioned by model and prompt (today they dedup across models) | EPOCH-426 |
-| Detections from a superseded results set still read as current | EPOCH-428 |
-| iLEAPP's output as its own derivative | EPOCH-416 |
+| Facts from a superseded results set or iLEAPP output still read as current | EPOCH-428 |

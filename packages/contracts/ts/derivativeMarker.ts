@@ -22,6 +22,11 @@ import { z } from 'zod';
  */
 export const DECRYPT_MARKER = '.mvt_decrypted_ok';
 export const CHECK_MARKER = '.mvt_check_ok';
+export const ILEAPP_MARKER = '.ileapp_ok';
+
+/** The derivative kinds evidence_derivatives.kind allows (migration 0008). */
+export const DerivativeKind = z.enum(['decrypted', 'mvt_results', 'ileapp_output']);
+export type DerivativeKind = z.infer<typeof DerivativeKind>;
 
 const ContentRoot = z.string().regex(/^[0-9a-f]{64}$/);
 const Count = z.number().int().nonnegative();
@@ -68,6 +73,14 @@ export const CheckParams = z
   .strict();
 export type CheckParams = z.infer<typeof CheckParams>;
 
+export const IleappParams = z
+  .object({
+    /** How iLEAPP walked the decrypt (its -t): 'itunes' with a Manifest.db, else 'fs'. */
+    input_type: z.enum(['itunes', 'fs']),
+  })
+  .strict();
+export type IleappParams = z.infer<typeof IleappParams>;
+
 const markerOf = <P extends z.ZodTypeAny>(params: P) =>
   z
     .object({
@@ -82,6 +95,8 @@ export const DecryptMarker = markerOf(DecryptParams);
 export type DecryptMarker = z.infer<typeof DecryptMarker>;
 export const CheckMarker = markerOf(CheckParams);
 export type CheckMarker = z.infer<typeof CheckMarker>;
+export const IleappMarker = markerOf(IleappParams);
+export type IleappMarker = z.infer<typeof IleappMarker>;
 
 function readMarker<S extends z.ZodTypeAny>(schema: S, dir: string, marker: string): z.infer<S> | null {
   const file = path.join(dir, marker);
@@ -100,12 +115,19 @@ export const readDecryptMarker = (dir: string): DecryptMarker | null => readMark
 /** The results' provenance, or null if the marker is missing or not in this format. */
 export const readCheckMarker = (dir: string): CheckMarker | null => readMarker(CheckMarker, dir, CHECK_MARKER);
 
+/** iLEAPP's output's provenance, or null if the marker is missing or not in this format. */
+export const readIleappMarker = (dir: string): IleappMarker | null => readMarker(IleappMarker, dir, ILEAPP_MARKER);
+
 export function renderDecryptMarker(contentRoot: string, tool: ToolVersion, params: DecryptParams): string {
   return render(DecryptMarker, contentRoot, tool, params);
 }
 
 export function renderCheckMarker(contentRoot: string, tool: ToolVersion, params: CheckParams): string {
   return render(CheckMarker, contentRoot, tool, params);
+}
+
+export function renderIleappMarker(contentRoot: string, tool: ToolVersion, params: IleappParams): string {
+  return render(IleappMarker, contentRoot, tool, params);
 }
 
 function render<S extends z.ZodTypeAny>(schema: S, contentRoot: string, tool: ToolVersion, params: unknown): string {

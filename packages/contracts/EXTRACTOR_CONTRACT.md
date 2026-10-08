@@ -17,12 +17,12 @@ The stage's name is its directory name.
 | `entrypoint` | File to run, relative to the stage directory |
 | `runtime` | `python` (run with the repo's `.venv` interpreter) or `node` |
 | `order` | Run position; unique among enabled stages |
-| `requiresResultsPath` | `true` if the stage reads mvt results rather than the decrypted backup |
+| `reads` | The derivative the stage reads: `decrypted` (the decrypted backup), `mvt_results` (mvt-ios's check-backup results) or `ileapp_output` (iLEAPP's report). Each is produced by the processor |
 | `parserVersion` | Integer, bumped whenever what the stage writes changes; omit if it writes no facts |
 | `enabled` | `false` records the stage as `skipped` instead of running it. Disabling a stage is a team decision, never a shortcut |
 
-An invalid manifest, a missing entrypoint or a duplicate `order` stops the
-orchestrator before any run starts.
+An invalid manifest (including a key the schema doesn't allow), a missing
+entrypoint or a duplicate `order` stops the orchestrator before any run starts.
 
 ## 2. Take your identity from the orchestrator
 
@@ -31,12 +31,12 @@ The orchestrator registers the evidence before the run and passes every stage:
 | Argument | Value |
 |---|---|
 | `--run-id`, `--evidence-id` | This run and the evidence it processes |
-| `--derivative-id` | The derivative this stage reads: mvt results if `requiresResultsPath`, otherwise the decrypted backup |
+| `--derivative-id`, `--derivative-path` | The derivative this stage reads (`reads` in `stage.json`): its id, and the directory to read. A stage whose derivative isn't registered for the backup fails before it is spawned |
 | `--parser-version` | From `stage.json`, when declared |
 | `--backup-path`, `--results-path` | Where the decrypted backup and the mvt results are |
 | `--db-url` | The database. *Moving to the environment (EPOCH-423).* |
 
-Python stages register the four identity arguments with
+Python stages register the identity arguments and `--derivative-path` with
 `db_writer.add_context_args` and build one `IngestContext` with
 `context_from_args`. Add `--backup-path`, `--results-path` and `--db-url`
 separately. **Never invent, default or

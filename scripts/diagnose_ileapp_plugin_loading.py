@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Diagnose why apps/extractors/ileapp_bridge/iLEAPP's PluginLoader discovers
+Diagnose why tools/ileapp/iLEAPP's PluginLoader discovers
 zero plugins even though scripts/artifacts/ contains hundreds of real
 plugin .py files (confirmed: 384 files present in a real smoketest run).
 
@@ -22,7 +22,7 @@ import traceback
 
 def main() -> int:
     repo_root = pathlib.Path(__file__).resolve().parent.parent
-    ileapp_dir = repo_root / "apps" / "extractors" / "ileapp_bridge" / "iLEAPP"
+    ileapp_dir = repo_root / "tools" / "ileapp" / "iLEAPP"
 
     if not ileapp_dir.exists():
         print(f"error: {ileapp_dir} does not exist -- vendored iLEAPP checkout missing.")
@@ -30,8 +30,8 @@ def main() -> int:
 
     # ileapp.py itself does `import scripts.plugin_loader as plugin_loader`, so
     # `scripts` must be importable as a top-level package -- ileapp_dir (not
-    # ileapp_dir/scripts) needs to be on sys.path. This matches how bridge.py
-    # invokes iLEAPP (cwd=ileapp_script.parent, i.e. ileapp_dir).
+    # ileapp_dir/scripts) needs to be on sys.path. This matches how the
+    # processor invokes iLEAPP (cwd = ileapp_dir; apps/processor/src/utils/ileapp.ts).
     #
     # IMPORTANT: this repo ALSO has an unrelated scripts/plugin_loader.py at
     # <repo_root>/scripts/plugin_loader.py (flagged for deletion -- see that

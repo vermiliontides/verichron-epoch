@@ -136,6 +136,11 @@ def add_context_args(parser) -> None:
     parser.add_argument(
         "--parser-version", required=True, type=int, help="this stage's parserVersion from its stage.json"
     )
+    parser.add_argument(
+        "--derivative-path",
+        required=True,
+        help="where that derivative is: the directory the stage reads (the 'reads' kind in its stage.json)",
+    )
 
 
 def context_from_args(args) -> IngestContext:

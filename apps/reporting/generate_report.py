@@ -538,6 +538,7 @@ def main():
     # Passed to every stage by the orchestrator; the report reads the
     # evidence's current facts, not one derivative's.
     parser.add_argument("--derivative-id", required=False)
+    parser.add_argument("--derivative-path", required=False)
     parser.add_argument("--backup-path", required=False)  # unused here, present for contract consistency
     parser.add_argument("--results-path", required=False, help="enables the timeline.csv correlation supplement (see render_correlation_section), and is also where the report itself is written by default -- see resolve_output_path")
     parser.add_argument("--db-url", required=True)

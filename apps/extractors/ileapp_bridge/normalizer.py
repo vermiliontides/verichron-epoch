@@ -38,12 +38,9 @@ INPUT_COPY_DIRS = ("data", "media")
 
 
 def _is_input_copy(relative_parts: tuple[str, ...]) -> bool:
-    """True if a path (relative to the output directory) lies under data/ or
-    media/ of an iLEAPP run directory, or of the output directory itself."""
-    for i, part in enumerate(relative_parts[:-1]):
-        if part in INPUT_COPY_DIRS and (i == 0 or relative_parts[i - 1].startswith("iLEAPP_Output_")):
-            return True
-    return False
+    """True if a path, relative to the iLEAPP report directory (the
+    ileapp_output derivative, EPOCH-416), lies under its data/ or media/."""
+    return len(relative_parts) > 1 and relative_parts[0] in INPUT_COPY_DIRS
 
 # Column names, in priority order, that genuinely carry "when did this event
 # happen". Matched case-insensitively and exactly — not by substring.

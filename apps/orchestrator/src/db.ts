@@ -1,7 +1,7 @@
 import { Client } from "pg";
 import { randomUUID } from "node:crypto";
 import type { StageSet } from "./types.js";
-import { derivativeFor, type Registration } from "./registration.js";
+import { derivativeFor, type Registration, type RegisteredDerivatives } from "./registration.js";
 
 export type RunState = "running" | "incomplete" | "complete";
 
@@ -12,13 +12,14 @@ export type RunState = "running" | "incomplete" | "complete";
  * re-derived here) AND in which every stage enabled now succeeded at the
  * parserVersion its stage.json declares now, reading the derivative it would
  * read now. A parserVersion bump (R8), a newly enabled stage, or a new
- * results set (e.g. a new IOC set, EPOCH-406) therefore gets a new run
+ * results set or iLEAPP output (e.g. a new IOC set, EPOCH-406, or a new
+ * iLEAPP commit, EPOCH-416) therefore gets a new run
  * instead of being skipped as done; unchanged stages dedup in the ledger, so
  * re-running them writes nothing new.
  */
 export async function hasCompleteRunFor(
   client: Client,
-  registration: Pick<Registration, "evidenceId" | "decryptedDerivativeId" | "resultsDerivativeId">,
+  registration: Pick<Registration, "evidenceId"> & RegisteredDerivatives,
   enabled: StageSet["enabled"]
 ): Promise<boolean> {
   const { rows } = await client.query(
@@ -73,7 +74,7 @@ export async function createRun(
   backupPath: string,
   stages: StageSet,
   provenance: RunProvenance,
-  registration: Pick<Registration, "evidenceId" | "decryptedDerivativeId" | "resultsDerivativeId">
+  registration: Pick<Registration, "evidenceId"> & RegisteredDerivatives
 ): Promise<string> {
   const runId = randomUUID();
   await client.query(

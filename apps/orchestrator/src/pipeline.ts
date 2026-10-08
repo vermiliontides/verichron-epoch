@@ -6,7 +6,7 @@ import { Client } from "pg";
 import type { StageDefinition, StageSet, RunConfig } from "./types.js";
 import { createRun, hasCompleteRunFor, markStage, markRunFailed, type RunProvenance } from "./db.js";
 import { derivativeFor, registerEvidence, RegistrationError, type Registration } from "./registration.js";
-import { contractVersion, deriveResultsPath } from "@verichron/contracts";
+import { contractVersion, deriveIleappPath, deriveResultsPath, type DerivativeKind } from "@verichron/contracts";
 
 async function validateBackupPath(backupPath: string): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (!backupPath || backupPath.startsWith('-')) {
@@ -24,10 +24,17 @@ async function validateBackupPath(backupPath: string): Promise<{ ok: true } | { 
   return { ok: true };
 }
 
+/** What each derivative kind is, for a stage whose input is missing. */
+const DERIVATIVE_NAMES: Record<DerivativeKind, string> = {
+  decrypted: "the decrypted backup",
+  mvt_results: "mvt-ios results",
+  ileapp_output: "iLEAPP output",
+};
+
 /**
- * The derivative a stage reads: mvt-ios's results for stages that need them,
- * otherwise the decrypted backup. Null when the stage needs results that
- * weren't registered (no results directory).
+ * Runs one stage against the derivative its stage.json says it reads, passing
+ * that derivative's id and path. A stage whose derivative wasn't registered
+ * (the processor hasn't completed it) fails before it is spawned.
  */
 function runStage(
   stage: StageDefinition,
@@ -35,31 +42,33 @@ function runStage(
   runId: string,
   registration: Registration
 ): Promise<{ success: boolean; stderr: string }> {
-  if (stage.manifest.requiresResultsPath && !config.resultsPath) {
+  const paths: Record<DerivativeKind, string | undefined> = {
+    decrypted: config.backupPath,
+    mvt_results: config.resultsPath,
+    ileapp_output: config.ileappPath,
+  };
+  // Identity comes from here, never from the stage (R16): the evidence, the
+  // derivative this stage reads, and its declared parser version.
+  const derivativeId = derivativeFor(stage, registration);
+  const derivativePath = paths[stage.manifest.reads];
+  if (!derivativeId || !derivativePath) {
     return Promise.resolve({
       success: false,
-      stderr: `stage "${stage.name}" requires --results-path but none could be derived from --backup-path`,
+      stderr:
+        `stage "${stage.name}" reads ${DERIVATIVE_NAMES[stage.manifest.reads]}, but none is registered for ` +
+        "this backup; run the processor to complete it",
     });
   }
 
   return new Promise((resolve) => {
-    // Identity comes from here, never from the stage (R16): the evidence, the
-    // derivative this stage reads, and its declared parser version.
-    const derivativeId = derivativeFor(stage, registration);
-    if (!derivativeId) {
-      resolve({
-        success: false,
-        stderr: `stage "${stage.name}" reads mvt-ios results, but no results directory was registered for this backup`,
-      });
-      return;
-    }
     const extraArgs = [
       "--run-id", runId,
       "--evidence-id", registration.evidenceId,
       "--backup-path", config.backupPath,
       "--db-url", config.dbUrl,
+      "--derivative-id", derivativeId,
+      "--derivative-path", derivativePath,
     ];
-    extraArgs.push("--derivative-id", derivativeId);
     if (stage.manifest.parserVersion !== undefined) extraArgs.push("--parser-version", String(stage.manifest.parserVersion));
     if (config.resultsPath) extraArgs.push("--results-path", config.resultsPath);
     
@@ -132,9 +141,10 @@ export async function runPipelineForBackup(
   }
 
   const resultsPath = deriveResultsPath(backupPath);
+  const ileappPath = deriveIleappPath(backupPath);
   let registration: Registration;
   try {
-    registration = await registerEvidence(client, { backupPath, resultsPath, secretPath: options.secretPath });
+    registration = await registerEvidence(client, { backupPath, resultsPath, ileappPath, secretPath: options.secretPath });
   } catch (err) {
     if (err instanceof RegistrationError) return { success: false, error: err.message };
     throw err;
@@ -154,7 +164,7 @@ export async function runPipelineForBackup(
   try {
     for (const stage of stages.enabled) {
       await markStage(client, runId, stage.name, "running");
-      const { success, stderr } = await runStage(stage, { backupPath, resultsPath, dbUrl, pythonBin }, runId, registration);
+      const { success, stderr } = await runStage(stage, { backupPath, resultsPath, ileappPath, dbUrl, pythonBin }, runId, registration);
 
       if (success) {
         await markStage(client, runId, stage.name, "succeeded");

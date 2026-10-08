@@ -9,12 +9,15 @@ import {
   BACKUP_SEARCH_MAX_DEPTH,
   CHECK_MARKER,
   DECRYPT_MARKER,
+  ILEAPP_MARKER,
   deriveEvidencePath,
   EvidenceSidecar,
   readCheckMarker,
   readDecryptMarker,
+  readIleappMarker,
   renderCheckMarker,
   renderDecryptMarker,
+  renderIleappMarker,
   type Backup,
   type CheckParams,
   type RepairProvenance,
@@ -23,6 +26,7 @@ import {
 
 import { parseFlags, type Config } from "./utils/cli.js";
 import { pathExists, writeFileAtomic, writeMarker } from "./utils/fs.js";
+import { ileappInputType, ileappToolVersion, runIleapp } from "./utils/ileapp.js";
 import { hashTree } from "./utils/manifest.js";
 import { repairDecrypted } from "./utils/repair.js";
 import { promptPassword } from "./utils/prompt.js";
@@ -94,7 +98,20 @@ async function run(cfg: Config): Promise<void> {
   const mvtTool = await mvtToolVersion(cfg);
   console.log(`[processor] mvt-ios ${mvtTool.version}; IOC folder ${indicatorsDir(cfg)}`);
 
-  const dirs = ["hashes", "decrypted", "results", "logs"];
+  if (!(await pathExists(cfg.ileappPython))) {
+    throw new Error(
+      `iLEAPP's interpreter not found at ${cfg.ileappPython}. Run \`mise run setup\` to create the pinned tools/ileapp environment, or pass --ileapp-python`
+    );
+  }
+  if (!(await pathExists(path.join(cfg.ileappDir, "ileapp.py")))) {
+    throw new Error(
+      `no ileapp.py in ${cfg.ileappDir}. Run \`mise run setup\` to initialize the iLEAPP submodule, or pass --ileapp-dir`
+    );
+  }
+  const ileappTool = await ileappToolVersion(cfg.ileappDir);
+  console.log(`[processor] iLEAPP ${ileappTool.version.slice(0, 12)} (${cfg.ileappDir})`);
+
+  const dirs = ["hashes", "decrypted", "results", "ileapp", "logs"];
   for (const d of dirs) {
     await fsp.mkdir(path.join(cfg.workspace, d), { recursive: true });
   }
@@ -108,13 +125,18 @@ async function run(cfg: Config): Promise<void> {
   }
   console.log(`[processor] IOC set ${iocs.params.ioc_set_hash.slice(0, 12)} (${iocs.params.ioc_file_count} file(s))`);
   try {
-    await runBackups(cfg, mvtTool, iocs);
+    await runBackups(cfg, { mvt: mvtTool, ileapp: ileappTool }, iocs);
   } finally {
     await fsp.rm(iocs.dataFolder, { recursive: true, force: true });
   }
 }
 
-async function runBackups(cfg: Config, mvtTool: ToolVersion, iocs: IocSnapshot): Promise<void> {
+async function runBackups(
+  cfg: Config,
+  tools: { mvt: ToolVersion; ileapp: ToolVersion },
+  iocs: IocSnapshot
+): Promise<void> {
+  const mvtTool = tools.mvt;
   const iocSet = iocs.params;
 
   let backups: Backup[];
@@ -157,6 +179,7 @@ async function runBackups(cfg: Config, mvtTool: ToolVersion, iocs: IocSnapshot):
     const decDir = path.join(cfg.workspace, "decrypted", name);
     const decMarker = path.join(decDir, DECRYPT_MARKER);
     const resDir = path.join(cfg.workspace, "results", name);
+    const ileDir = path.join(cfg.workspace, "ileapp", name);
     let decryptRan = false;
     // The decrypt is reusable only if it was made from the backup as it is
     // now: its marker records the content_root it came from (EPOCH-404).
@@ -166,12 +189,13 @@ async function runBackups(cfg: Config, mvtTool: ToolVersion, iocs: IocSnapshot):
       console.log("  [decrypt] already done, skipping");
     } else {
       if (!decryptIsCurrent && (await pathExists(decDir))) {
-        // A decrypt (and the results built on it) from a different version
-        // of this backup, or with no provenance: remove both so no stale
+        // A decrypt (and everything built on it) from a different version
+        // of this backup, or with no provenance: remove it all so no stale
         // file can survive into the new decrypt.
-        console.log("  [decrypt] the backup changed since its last decrypt; clearing the stale decrypt and results");
+        console.log("  [decrypt] the backup changed since its last decrypt; clearing the stale decrypt, results and iLEAPP output");
         await fsp.rm(decDir, { recursive: true, force: true });
         await fsp.rm(resDir, { recursive: true, force: true });
+        await fsp.rm(ileDir, { recursive: true, force: true });
       }
       // Withdraw every marker that vouches for this decrypt BEFORE touching
       // it. A decrypt that dies part-way (e.g. --force-decrypt over an
@@ -179,6 +203,7 @@ async function runBackups(cfg: Config, mvtTool: ToolVersion, iocs: IocSnapshot):
       // files; only a decrypt that completes recreates them below.
       await fsp.rm(decMarker, { force: true });
       await fsp.rm(path.join(resDir, CHECK_MARKER), { force: true });
+      await fsp.rm(path.join(ileDir, ILEAPP_MARKER), { force: true });
       // Bounded retry loop: a wrong password re-prompts up to
       // MAX_PASSWORD_ATTEMPTS times before this backup is given up on and
       // recorded as failed. Any non-password decrypt failure breaks out
@@ -331,13 +356,54 @@ async function runBackups(cfg: Config, mvtTool: ToolVersion, iocs: IocSnapshot):
       await fsp.rm(resMarker, { force: true });
       try {
         await checkBackup(cfg, decDir, resDir, logPath, iocs.dataFolder);
+        await writeFileAtomic(resMarker, renderCheckMarker(contentRoot, mvtTool, iocSet));
+        console.log("  [check]   done ->", resDir);
       } catch (err) {
+        // iLEAPP reads the decrypt, not these results, so it still runs.
         console.error(`  [check] error: ${err instanceof Error ? err.message : err}`);
         failedBackups.add(name);
-        continue;
       }
-      await writeFileAtomic(resMarker, renderCheckMarker(contentRoot, mvtTool, iocSet));
-      console.log("  [check]   done ->", resDir);
+    }
+
+    // iLEAPP's output is current only if made from this backup's decrypt by
+    // this iLEAPP commit (EPOCH-416). Otherwise it is removed and made again:
+    // iLEAPP writes a fresh report folder and never updates one in place.
+    const previousIleapp = readIleappMarker(ileDir);
+    const ileappStaleBecause = !previousIleapp
+      ? null
+      : previousIleapp.content_root !== contentRoot
+        ? "the backup changed"
+        : previousIleapp.tool.version !== tools.ileapp.version
+          ? `iLEAPP changed (${previousIleapp.tool.version.slice(0, 12)} -> ${tools.ileapp.version.slice(0, 12)})`
+          : null;
+    if (!cfg.force && !decryptRan && previousIleapp && ileappStaleBecause === null) {
+      console.log("  [ileapp]  already done, skipping");
+    } else {
+      if (ileappStaleBecause && !decryptRan) console.log(`  [ileapp]  re-running: ${ileappStaleBecause} since the last run`);
+      // Marker first, then the directory: no marker ever vouches for a
+      // report that is being removed or rewritten.
+      await fsp.rm(path.join(ileDir, ILEAPP_MARKER), { force: true });
+      await fsp.rm(ileDir, { recursive: true, force: true });
+      try {
+        const inputType = ileappInputType(decDir);
+        await runIleapp({
+          python: cfg.ileappPython,
+          ileappDir: cfg.ileappDir,
+          decryptedDir: decDir,
+          inputType,
+          outputDir: ileDir,
+          logPath: path.join(cfg.workspace, "logs", `${name}.ileapp.log`),
+          timeoutMs: cfg.ileappTimeoutMs,
+        });
+        await writeFileAtomic(
+          path.join(ileDir, ILEAPP_MARKER),
+          renderIleappMarker(contentRoot, tools.ileapp, { input_type: inputType })
+        );
+        console.log("  [ileapp]  done ->", ileDir);
+      } catch (err) {
+        console.error(`  [ileapp] error: ${err instanceof Error ? err.message : err}`);
+        failedBackups.add(name);
+      }
     }
     console.log();
   }

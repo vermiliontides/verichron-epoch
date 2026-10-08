@@ -3,7 +3,7 @@
   "entrypoint": "main.py",
   "runtime": "python",
   "order": 70,
-  "requiresResultsPath": true,
+  "reads": "mvt_results",
   "parserVersion": 1,
   "enabled": true
 }

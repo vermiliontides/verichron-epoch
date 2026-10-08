@@ -43,12 +43,14 @@ def ensure_repo_venv() -> Path:
  
  
 def fatal_if_missing_venv() -> None:
-    """Common entrypoint guard used by Python scripts and extractors."""
+    """Common entrypoint guard used by Python scripts and extractors: without
+    the venv, print why and exit 2. The message is the whole story, so no
+    traceback follows it."""
     try:
         ensure_repo_venv()
-    except Exception as exc:  # pragma: no cover - CLI guard behavior
+    except RuntimeError as exc:
         print(f"[env] {exc}", file=sys.stderr)
-        raise
+        sys.exit(2)
 
 def load_root_env() -> None:
     """Load the repo-root .env, mirroring packages/contracts/ts/env.ts's

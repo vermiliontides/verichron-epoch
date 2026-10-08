@@ -9,7 +9,7 @@
 // (`=== <name> ===`, `  [stage]  <detail>`) -- see apps/processor/src/main.ts's
 // run() loop, which is what actually produces these lines.
 
-export type StageName = 'hash' | 'decrypt' | 'repair' | 'check';
+export type StageName = 'hash' | 'decrypt' | 'repair' | 'check' | 'ileapp';
 export type StageState = 'pending' | 'running' | 'done' | 'skipped' | 'error';
 export type BackupOverallState = 'queued' | 'running' | 'done' | 'failed';
 
@@ -26,17 +26,18 @@ export interface MvtRunProgress {
   currentLabel: string | null;
 }
 
-export const STAGE_ORDER: StageName[] = ['hash', 'decrypt', 'repair', 'check'];
+export const STAGE_ORDER: StageName[] = ['hash', 'decrypt', 'repair', 'check', 'ileapp'];
 
 export const STAGE_LABELS: Record<StageName, string> = {
   hash: 'Checking backup files',
   decrypt: 'Decrypting',
   repair: 'Repairing damaged files',
   check: 'Scanning for indicators',
+  ileapp: 'Reading device activity',
 };
 
 function emptyStages(): Record<StageName, StageState> {
-  return { hash: 'pending', decrypt: 'pending', repair: 'pending', check: 'pending' };
+  return { hash: 'pending', decrypt: 'pending', repair: 'pending', check: 'pending', ileapp: 'pending' };
 }
 
 // Seeds progress for a fresh run from the labels the user actually
@@ -53,8 +54,8 @@ export function initMvtRunProgress(labels: string[]): MvtRunProgress {
 }
 
 const BACKUP_START_RE = /^=== (.+) ===$/;
-const STAGE_LINE_RE = /^\s*\[(hash|decrypt|repair|check)\]\s*(.*)$/;
-const STAGE_ERROR_RE = /^\s*\[(hash|decrypt|repair|check)\]\s*error\b:?\s*(.*)$/i;
+const STAGE_LINE_RE = /^\s*\[(hash|decrypt|repair|check|ileapp)\]\s*(.*)$/;
+const STAGE_ERROR_RE = /^\s*\[(hash|decrypt|repair|check|ileapp)\]\s*error\b:?\s*(.*)$/i;
 
 export function applyMvtLogLine(state: MvtRunProgress, rawLine: string): MvtRunProgress {
   const line = rawLine.replace(/\s+$/, '');
@@ -119,7 +120,8 @@ export function applyMvtLogLine(state: MvtRunProgress, rawLine: string): MvtRunP
         [state.currentLabel]: {
           ...current,
           stages,
-          overall: isLastStage ? 'done' : current.overall,
+          // A failed check doesn't stop iLEAPP, but the backup still failed.
+          overall: isLastStage && current.overall !== 'failed' ? 'done' : current.overall,
         },
       },
     };

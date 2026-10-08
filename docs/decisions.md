@@ -46,6 +46,8 @@ never silently deleted.
 | Completion markers record the evidence they were made from and their provenance. The processor withdraws a marker before redoing work, and registration refuses any mismatch | A changed backup must never have its old decrypt filed under the new evidence | EPOCH-404 |
 | The processor owns mvt's data and config folders, refuses `MVT_STIX2`, and checks each run against a private, hashed copy of the IOCs | The recorded IOC set must be exactly the one used | EPOCH-406 |
 | iLEAPP's output becomes its own derivative (parent: the decrypt), in `<workspace>/ileapp/<label>/` | Its files are iLEAPP's output, not the decrypt's (R7); a shared directory mixed backups together | EPOCH-416 |
+| The processor runs iLEAPP, as its third derivative after decrypt and check-backup, and marks the output complete with `.ileapp_ok`; the iLEAPP bridge only ingests the registered output. iLEAPP's provenance is its submodule commit, and a checkout with local changes is refused. The submodule lives at `tools/ileapp/iLEAPP`, beside its environment | One component makes derivatives and the stages only read them, so iLEAPP output gets the same markers, reuse rules and registration as mvt's. iLEAPP's self-reported version (2026.3.0) does not match its release tag (v2026.3.1), so only the commit identifies the code that ran | EPOCH-416 |
+| Each stage declares the derivative it reads (`reads` in `stage.json`: `decrypted`, `mvt_results` or `ileapp_output`), and the orchestrator passes that derivative's id and directory (`--derivative-id`, `--derivative-path`). `requiresResultsPath` is removed | A stage reads exactly the derivative its facts are filed under, from a path it is given rather than one it infers (R7, R18) | EPOCH-416 |
 
 ## Runs and completeness
 

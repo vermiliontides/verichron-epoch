@@ -1,7 +1,7 @@
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { StageDefinition, StageManifest } from "./types.js"
+import { StageDefinition, StageManifest, StageSet } from "./types.js"
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,6 +19,8 @@ export function isStageManifest(value: unknown): value is StageManifest {
     (v.runtime === "python" || v.runtime === "node") &&
     typeof v.order === "number" &&
     typeof v.requiresResultsPath === "boolean" &&
+    (v.parserVersion === undefined ||
+      (typeof v.parserVersion === "number" && Number.isInteger(v.parserVersion) && v.parserVersion >= 1)) &&
     typeof v.enabled === "boolean"
   );
 }
@@ -43,7 +45,7 @@ async function loadStageFromDir(dir: string, name: string): Promise<StageDefinit
     throw new Error(
       `[orchestrator] ${manifestPath} does not match stage-manifest.schema.json ` +
         `(need entrypoint: string, runtime: "python"|"node", order: number, ` +
-        `requiresResultsPath: boolean, enabled: boolean).`
+        `requiresResultsPath: boolean, enabled: boolean, optional parserVersion: integer >= 1).`
     );
   }
 
@@ -56,7 +58,7 @@ async function loadStageFromDir(dir: string, name: string): Promise<StageDefinit
   return { name, dir, manifest: parsed };
 }
 
-export async function discoverStages(): Promise<StageDefinition[]> {
+export async function discoverStages(): Promise<StageSet> {
   const extractorEntries = await fsp.readdir(EXTRACTORS_DIR, { withFileTypes: true });
   const candidateDirs = extractorEntries
     .filter((e) => e.isDirectory())
@@ -65,7 +67,9 @@ export async function discoverStages(): Promise<StageDefinition[]> {
   candidateDirs.push({ dir: REPORTING_DIR, name: path.basename(REPORTING_DIR) });
 
   const loaded = await Promise.all(candidateDirs.map((c) => loadStageFromDir(c.dir, c.name)));
-  const stages = loaded.filter((s): s is StageDefinition => s !== null && s.manifest.enabled);
+  const found = loaded.filter((s): s is StageDefinition => s !== null);
+  const stages = found.filter((s) => s.manifest.enabled);
+  const disabled = found.filter((s) => !s.manifest.enabled);
 
   const orderCounts = new Map<number, string[]>();
   for (const s of stages) {
@@ -91,5 +95,8 @@ export async function discoverStages(): Promise<StageDefinition[]> {
 
   stages.sort((a, b) => a.manifest.order - b.manifest.order);
   console.log(`[orchestrator] discovered ${stages.length} enabled stage(s): ${stages.map((s) => `${s.name}(${s.manifest.order})`).join(", ")}`);
-  return stages;
+  if (disabled.length > 0) {
+    console.log(`[orchestrator] ${disabled.length} disabled stage(s), recorded as skipped: ${disabled.map((s) => s.name).join(", ")}`);
+  }
+  return { enabled: stages, disabled };
 }

@@ -26,6 +26,7 @@ import {
   getForensicRecords,
   getRunEvidence,
   getRunDecryptedPath,
+  getRunResultsPath,
   type ForensicRecordQuery,
   type ForensicRecordRow,
   type RecordSortKey,
@@ -41,6 +42,9 @@ const RUN = '33333333-3333-3333-3333-333333333333';
 const FAILED_CHECK_RUN = '44444444-4444-4444-4444-444444444444';
 const DECRYPT = '55555555-5555-5555-5555-555555555555';
 const UNREGISTERED_RUN = '77777777-7777-7777-7777-777777777777';
+const SHARED_DECRYPT = '88888888-8888-8888-8888-888888888888';
+const RESULTS_A = '99999999-0000-0000-0000-00000000000a';
+const RUN_A = '99999999-0000-0000-0000-0000000000aa';
 
 /** 23 records for EVIDENCE: more than several pages at limit 4. Includes NULL
  * times and names, exact ties (decided by id), and two times that differ only
@@ -349,5 +353,44 @@ describe('getRunDecryptedPath', live, () => {
   it('is null for a run without registered evidence, and for an unknown run', async () => {
     assert.equal(await getRunDecryptedPath(db, UNREGISTERED_RUN), null);
     assert.equal(await getRunDecryptedPath(db, '66666666-6666-6666-6666-666666666666'), null);
+  });
+});
+
+
+describe('getRunResultsPath', live, () => {
+  before(async () => {
+    // Run A in workspace A read results made with IOC set A. The same backup,
+    // decrypted identically, was then registered from workspace B with another
+    // IOC set: the shared decrypt now points at B, run A's results still at A.
+    await db.query(
+      `INSERT INTO evidence_derivatives (derivative_id, evidence_id, kind, path, tool, params, provenance_key)
+       VALUES ($1, $2, 'decrypted', '/ws-b/decrypted/a', '{"name": "mvt-ios", "version": "0"}',
+               '{"repair": {"status": "skipped", "reason": "test fixture"}}', repeat('3', 64))`,
+      [SHARED_DECRYPT, EVIDENCE]
+    );
+    await db.query(
+      `INSERT INTO evidence_derivatives (derivative_id, evidence_id, kind, path, parent_derivative_id, tool, params, provenance_key)
+       VALUES ($1, $2, 'mvt_results', '/ws-a/results/a', $3, '{"name": "mvt-ios", "version": "0"}', '{}', repeat('4', 64))`,
+      [RESULTS_A, EVIDENCE, SHARED_DECRYPT]
+    );
+    await db.query(
+      `INSERT INTO pipeline_runs (run_id, backup_source, contract_version, tool_versions, evidence_id, derivative_id)
+       VALUES ($1, '/ws-a/decrypted/a', 'test', '{}', $2, $3)`,
+      [RUN_A, EVIDENCE, SHARED_DECRYPT]
+    );
+    await db.query(
+      `INSERT INTO pipeline_stage_status (run_id, stage_name, status, derivative_id)
+       VALUES ($1, 'crash', 'succeeded', $2), ($1, 'mvt_iocs', 'succeeded', $3), ($1, 'reporting', 'succeeded', $2)`,
+      [RUN_A, SHARED_DECRYPT, RESULTS_A]
+    );
+  });
+
+  it("returns the run's own results, not the shared decrypt's latest workspace", async () => {
+    assert.equal(await getRunResultsPath(db, RUN_A), '/ws-a/results/a');
+    assert.equal(await getRunDecryptedPath(db, RUN_A), '/ws-b/decrypted/a');
+  });
+
+  it('is null for a run that read no mvt results, which falls back to its decrypt', async () => {
+    assert.equal(await getRunResultsPath(db, FAILED_CHECK_RUN), null);
   });
 });

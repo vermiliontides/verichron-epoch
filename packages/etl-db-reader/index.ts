@@ -31,6 +31,7 @@ export {
   getPipelineRuns,
   getRunEvidence,
   getRunDecryptedPath,
+  getRunResultsPath,
   getStageStatus,
   getForensicRecords,
   getCorrelationPivots,

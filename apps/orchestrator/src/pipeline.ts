@@ -1,10 +1,11 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { Client } from "pg";
 import { StageDefinition, RunConfig } from "./types.js";
-import { createRun, markStage, markRunFailed } from "./db.js";
-import { deriveResultsPath } from "@verichron/contracts";
+import { createRun, markStage, markRunFailed, type RunProvenance } from "./db.js";
+import { contractVersion, deriveResultsPath } from "@verichron/contracts";
 
 async function validateBackupPath(backupPath: string): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (!backupPath || backupPath.startsWith('-')) {
@@ -47,6 +48,31 @@ function runStage(stage: StageDefinition, config: RunConfig, runId: string): Pro
   });
 }
  
+/** ../package.json resolves from both src/ (tsx) and dist/. */
+const ORCHESTRATOR_VERSION: string = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8")
+).version;
+
+/**
+ * Provenance recorded on every run (R35). Tool versions here are the
+ * run-level ones; per-derivative tool versions (mvt-ios, iLEAPP) belong to
+ * EPOCH-406.
+ */
+export function collectProvenance(pythonBin: string): RunProvenance {
+  let python = "unavailable";
+  try {
+    // "Python 3.12.3" -> "3.12.3"
+    python = execFileSync(pythonBin, ["--version"], { encoding: "utf8" }).trim().replace(/^Python\s+/, "");
+  } catch {
+    // Recorded as unavailable rather than failing the run here: the Python
+    // stages will fail on their own and say why.
+  }
+  return {
+    contractVersion: contractVersion(),
+    toolVersions: { orchestrator: ORCHESTRATOR_VERSION, node: process.version, python },
+  };
+}
+
 export async function runPipelineForBackup(
   client: Client,
   backupPath: string,
@@ -61,7 +87,7 @@ export async function runPipelineForBackup(
     return { success: false, error: validation.reason };
   }
 
-  const runId = await createRun(client, backupPath, stages);
+  const runId = await createRun(client, backupPath, stages, collectProvenance(pythonBin));
   const resultsPath = deriveResultsPath(backupPath);
   const results: { stage: string; success: boolean }[] = [];
 

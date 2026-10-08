@@ -93,7 +93,7 @@ class PgReal:
                     )
                     cur.execute(
                         "INSERT INTO evidence_derivatives (derivative_id, evidence_id, kind, path, tool, params, provenance_key) "
-                        "VALUES (%s, %s, 'decrypted', %s, '{\"name\": \"pytest\", \"version\": \"0\"}', '{}', repeat('0', 64))",
+                        "VALUES (%s, %s, 'decrypted', %s, '{\"name\": \"pytest\", \"version\": \"0\"}', '{\"repair\": {\"status\": \"skipped\", \"reason\": \"pytest fixture\"}}', repeat('0', 64))",
                         (derivative_id, evidence_id, f"/pytest/decrypted/{evidence_id[:8]}"),
                     )
                 for run_id in run_ids:

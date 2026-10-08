@@ -86,6 +86,11 @@ never silently deleted.
 | Contract parity across TS, Python and JSON schemas is validated sync (`sync_contracts.py --check` and tests), not code generation | Already enforced in CI, with tests for each mirror | EPOCH-451 |
 | No class hierarchies for stages, extractors or devices; plain functions plus `stage.json` | Every audit that proposed one found the need already met more simply | Audits, 2026-10-08 |
 | The unused Qdrant service is removed | Unused network services are attack surface | EPOCH-438 |
+| Tool versions are pinned exactly, each in the one file its tool enforces: Node, pnpm and uv in `mise.toml` (pnpm's exact version in `packageManager`), Python in `.python-version` | Setup must give the same result on every machine and in CI; a minimum version (`>=`) let machines drift | EPOCH-458 |
+| **Python 3.14**, always a uv-managed CPython; system interpreters are never used | Current release, supported to 2030, and the version iLEAPP builds with; 3.12 is security-only, ends in 2028 and forces an unmaintained numpy | EPOCH-458 |
+| **Node 24 LTS** and **Electron 44**, pinned to the latest patch; Node moves only together with Electron | Electron 44 bundles Node 24, so tooling and app runtime match; Electron patches carry Chromium security fixes | EPOCH-458 |
+| mvt and iLEAPP each run from their own pinned uv environment (`tools/mvt`, `tools/ileapp`), not from the workspace venv | Their exact dependency pins conflict (`packaging` 26.x against 24.1); sharing one venv had silently held mvt at an outdated release | EPOCH-458 |
+| Setup checks every prerequisite before installing and installs only from lockfiles; Dependabot proposes dependency updates | Failures name the missing prerequisite instead of surfacing deep inside an install; exact pins stay current only if updates are proposed | EPOCH-458 |
 
 ## Testing and CI
 

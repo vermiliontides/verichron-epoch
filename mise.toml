@@ -1,0 +1,45 @@
+# Development toolchain for Verichron Epoch (EPOCH-458).
+#
+# `mise install` provides the exact tool versions below on any machine, and CI
+# reads this same file. Two versions are pinned elsewhere, by the tool that
+# enforces them, and not repeated here:
+#   - Python: .python-version, read by uv, which installs a uv-managed CPython
+#     (pyproject.toml forbids system interpreters).
+#   - pnpm's exact version: package.json "packageManager"; pnpm 10 switches to
+#     that version automatically.
+#
+# Start here on a new machine:  mise install && mise run setup
+
+[tools]
+node = "24.21.0"
+pnpm = "10"
+uv = "0.12.23"
+
+[settings]
+# Python is uv's to manage; mise must not also install it from .python-version.
+idiomatic_version_file_enable_tools = []
+
+[tasks.check]
+description = "Report missing or wrong prerequisites; change nothing"
+run = "scripts/bootstrap-dev.sh --check"
+
+[tasks.setup]
+description = "Check prerequisites, then install every environment from the lockfiles"
+run = "scripts/bootstrap-dev.sh"
+
+[tasks."test:py"]
+description = "Python test suite (TEST_DATABASE_URL enables the real-Postgres tier)"
+run = "uv run pytest -q"
+
+[tasks."test:ts"]
+description = "TypeScript test suites (need TEST_DATABASE_URL)"
+run = [
+  "pnpm --filter @verichron/contracts build",
+  "pnpm --filter @verichron/mvt-runner test",
+  "pnpm --filter @verichron/etl-db-reader test",
+  "pnpm --filter @verichron/orchestrator test",
+]
+
+[tasks.test]
+description = "All test suites"
+depends = ["test:py", "test:ts"]

@@ -1,83 +1,158 @@
 #!/usr/bin/env bash
 #
-# Bootstrap developer environment for the repo.
+# Set up a development environment for Verichron Epoch (EPOCH-458).
 #
-# When/why: run once after cloning, or any time dependencies change and
-# `.venv`/node_modules need to catch up. Sets up everything needed to run
-# the Python extractors/orchestrator/tests and the Electron app (Epoch)
-# from a clean checkout.
+# Run through mise, which puts the pinned Node, pnpm and uv on PATH:
+#   mise run check    report missing or wrong prerequisites; change nothing
+#   mise run setup    check, then install every environment from the lockfiles
 #
-# What it does:
-#   - Installs the forensic-output pre-commit guard (see SECURITY.md)
-#   - Creates/updates the repo-root .venv via `uv sync` (NOT pip -- this
-#     is a single uv workspace; see pyproject.toml's [tool.uv.workspace].
-#     `uv sync` resolves every member package plus third-party deps from
-#     uv.lock in one pass, including the local editable packages
-#     (verichron-contracts, verichron-db, the extractor apps, etc.) --
-#     pip install -r requirements.txt never installed those at all, and
-#     requirements.txt itself was a second, hand-maintained dependency
-#     list that had already drifted out of sync with the real one more
-#     than once. See git history for both.)
-#   - Runs pnpm install for the Node/pnpm workspace (apps/epoch and friends)
-#   - Syncs and updates git submodules (apps/extractors/ileapp_bridge/iLEAPP)
+# The script checks every prerequisite first and reports all problems at once,
+# each with the command that fixes it. It changes nothing unless every check
+# passes. Installs use the lockfiles only (`uv sync --locked`,
+# `pnpm install --frozen-lockfile`); a lockfile that doesn't match its manifest
+# is an error, not something to repair here.
 #
-# Usage:
-#   ./scripts/bootstrap-dev.sh
+# Environments it creates:
+#   .venv/           the uv workspace (our Python code), Python from .python-version
+#   tools/mvt/.venv     mvt-ios, pinned; run by mvt-runner
+#   tools/ileapp/.venv  iLEAPP's runtime, pinned; run by the iLEAPP bridge
+#   node_modules/    the pnpm workspace
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
-echo "[bootstrap] Repo root: $REPO_ROOT"
+CHECK_ONLY=0
+case "${1:-}" in
+  --check) CHECK_ONLY=1 ;;
+  "") ;;
+  *) echo "usage: $0 [--check]" >&2; exit 2 ;;
+esac
 
-# 0) Pre-commit guard FIRST — before any step that could produce output worth
-#    accidentally committing. See SECURITY.md for why this is not optional.
-if [ -d .githooks ]; then
-  echo "[bootstrap] Installing forensic-output pre-commit guard (core.hooksPath=.githooks)"
-  chmod +x .githooks/* 2>/dev/null || true
-  git config core.hooksPath .githooks
+# Versions come from the files that enforce them; nothing is repeated here.
+NODE_WANT="$(sed -n 's/^node = "\(.*\)"$/\1/p' mise.toml)"
+UV_WANT="$(sed -n 's/^uv = "\(.*\)"$/\1/p' mise.toml)"
+PNPM_WANT="$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' package.json)"
+PYTHON_WANT="$(tr -d '[:space:]' < .python-version)"
+
+problems=()
+problem() { problems+=("$1"$'\n'"      fix: $2"); }
+ok() { echo "  ok    $1"; }
+
+case "$(uname -s)" in
+  Darwin) COMPILER_FIX="xcode-select --install" ;;
+  *)      COMPILER_FIX="sudo apt install build-essential   (Fedora: sudo dnf install gcc make)" ;;
+esac
+
+echo "[setup] checking prerequisites"
+
+if command -v mise >/dev/null 2>&1; then
+  ok "mise $(mise --version 2>/dev/null | awk '{print $1}')"
 else
-  echo "[bootstrap] WARNING: .githooks/ missing — commits are NOT guarded against forensic output" >&2
+  problem "mise is not installed (it provides the pinned Node, pnpm and uv)" \
+    "curl https://mise.run | sh, then activate it in your shell (https://mise.jdx.dev/getting-started.html)"
 fi
 
-# Symlink infra/.env -> root .env so docker-compose's env_file/variable
-# substitution resolve to the same file regardless of Compose version
-# quirks around project-directory vs compose-file-directory precedence.
-if [ -f .env ] && [ ! -e infra/.env ]; then
+have_node="$(node --version 2>/dev/null | sed 's/^v//' || true)"
+if [ "$have_node" = "$NODE_WANT" ]; then
+  ok "node $have_node"
+else
+  problem "node ${have_node:-not found}, need $NODE_WANT" "mise install, and run this through \`mise run setup\`"
+fi
+
+have_uv="$(uv --version 2>/dev/null | awk '{print $2}' || true)"
+if [ "$have_uv" = "$UV_WANT" ]; then
+  ok "uv $have_uv"
+else
+  problem "uv ${have_uv:-not found}, need $UV_WANT" "mise install, and run this through \`mise run setup\`"
+fi
+
+have_pnpm="$(pnpm --version 2>/dev/null || true)"
+if [ "$have_pnpm" = "$PNPM_WANT" ]; then
+  ok "pnpm $have_pnpm"
+else
+  problem "pnpm ${have_pnpm:-not found}, need $PNPM_WANT" "mise install, and run this through \`mise run setup\`"
+fi
+
+# Two of iLEAPP's dependencies (pyliblzfse, astc-decomp-faster) publish no Linux
+# wheels, so building tools/ileapp compiles them. uv's managed Python ships the
+# headers; only the compiler is needed.
+if command -v cc >/dev/null 2>&1 && echo 'int main(void){return 0;}' | cc -x c -o /dev/null - >/dev/null 2>&1; then
+  ok "C compiler ($(cc --version 2>/dev/null | head -1))"
+else
+  problem "no working C compiler (needed to build iLEAPP's environment)" "$COMPILER_FIX"
+fi
+
+if docker compose version >/dev/null 2>&1; then
+  ok "docker compose $(docker compose version --short 2>/dev/null)"
+else
+  problem "docker with the compose plugin is not available (local PostgreSQL)" \
+    "install Docker Engine or Docker Desktop (https://docs.docker.com/engine/install/)"
+fi
+
+if [ -f .env ]; then
+  missing_vars=()
+  for var in DB_USER DB_PASSWORD DB_NAME DB_HOST DB_PORT; do
+    grep -Eq "^${var}=.+" .env || missing_vars+=("$var")
+  done
+  if [ ${#missing_vars[@]} -eq 0 ]; then
+    ok ".env"
+  else
+    problem ".env has no value for: ${missing_vars[*]}" "edit .env and set them"
+  fi
+else
+  problem ".env is missing" "cp .env.example .env, then set DB_USER, DB_PASSWORD, DB_NAME, DB_HOST, DB_PORT"
+fi
+
+if [ ${#problems[@]} -gt 0 ]; then
+  echo
+  echo "[setup] ${#problems[@]} problem(s); nothing was changed:"
+  for p in "${problems[@]}"; do
+    echo "  - $p"
+  done
+  exit 1
+fi
+
+if [ "$CHECK_ONLY" -eq 1 ]; then
+  echo "[setup] all prerequisites present (check only; nothing was changed)"
+  exit 0
+fi
+
+echo "[setup] installing"
+
+# The forensic-output pre-commit guard comes first, before anything can produce
+# output worth committing by mistake (SECURITY.md).
+git config core.hooksPath .githooks
+chmod +x .githooks/*
+echo "  done  git hooks (core.hooksPath=.githooks)"
+
+# docker compose reads infra/.env; keep it the same file as the root .env.
+if [ ! -e infra/.env ]; then
   ln -s ../.env infra/.env
-  echo "[bootstrap] linked infra/.env -> ../.env"
 fi
+echo "  done  infra/.env -> ../.env"
 
-# 1) Python: single uv workspace, one lockfile, one venv for everything.
-if ! command -v uv >/dev/null 2>&1; then
-  echo "[bootstrap] uv not found — install it (https://docs.astral.sh/uv/) and re-run this script"
-  exit 1
-fi
-echo "[bootstrap] Syncing Python workspace via uv (creates/updates .venv)"
-uv sync
+git submodule sync --recursive >/dev/null
+git submodule update --init --recursive
+echo "  done  submodules (iLEAPP)"
 
-# 2) Node workspace install
-if command -v pnpm >/dev/null 2>&1; then
-  echo "[bootstrap] Installing pnpm workspace dependencies"
-  pnpm install
-else
-  echo "[bootstrap] pnpm not found — please install pnpm and re-run the script"
-  exit 1
-fi
+uv sync --locked
+echo "  done  workspace .venv (Python $PYTHON_WANT)"
 
-# 3) Sync and initialize submodules
-if [ -f .gitmodules ]; then
-  echo "[bootstrap] Syncing and initializing git submodules"
-  git submodule sync --recursive
-  git submodule update --init --recursive
-else
-  echo "[bootstrap] No .gitmodules file found — skipping submodule init"
-fi
+uv sync --locked --project tools/mvt
+echo "  done  tools/mvt/.venv ($(tools/mvt/.venv/bin/mvt-ios version 2>/dev/null | sed -n 's/^ *Version: *//p'))"
 
-echo "[bootstrap] Bootstrap complete. Next steps:"
-echo "  - Start Postgres (infra/docker-compose.yml) and run migrations: python3 packages/etl-db-writer/migrate.py --db-url <DB_URL>"
-echo "  - Optionally build TypeScript packages: pnpm --recursive build"
-echo "  - Run smoke checks or orchestrator as needed."
+uv sync --locked --project tools/ileapp
+echo "  done  tools/ileapp/.venv"
 
-exit 0
+pnpm install --frozen-lockfile
+echo "  done  node_modules"
+
+cat <<EOF
+
+[setup] complete. Next:
+  docker compose -f infra/docker-compose.yml up -d postgres
+  set -a; . ./.env; set +a
+  uv run python packages/etl-db-writer/migrate.py --db-url "postgresql://\$DB_USER:\$DB_PASSWORD@\$DB_HOST:\$DB_PORT/\$DB_NAME"
+EOF

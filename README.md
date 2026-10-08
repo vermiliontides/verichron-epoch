@@ -34,6 +34,7 @@ Read [docs/architecture.md](docs/architecture.md) for the full picture.
 | [packages/contracts/EXTRACTOR_CONTRACT.md](packages/contracts/EXTRACTOR_CONTRACT.md) | What every pipeline stage must do |
 | [apps/epoch/DESIGN.md](apps/epoch/DESIGN.md) | The desktop app's visual design system |
 | [AGENTS.md](AGENTS.md) | How AI coding agents work in this repo |
+| [Roadmap](https://claude.ai/code/artifact/44e87cfa-27da-47cd-87ae-d6ef351b9ff6) (external) | A visual, living view of progress: dependency map, rule-by-rule status, open questions. The docs here win any disagreement |
 
 Each package has a short README covering only what is specific to it.
 

@@ -43,9 +43,16 @@ from pathlib import Path
 
 from runtime_env import fatal_if_missing_venv
 from etl_run import ETLRunResult
-from db_writer import ingest
+from db_writer import IngestContext, add_context_args, context_from_args, ingest
 from normalized_record import NormalizedRecord, SourceType
 import psycopg2
+
+#: Bump when the flagged-row mapping changes what this stage writes; a bump
+#: re-ingests every file as a new unit beside the old rows (R8). Model and
+#: prompt are NOT part of this yet: findings from a different --model dedup
+#: against the earlier ones. Versioning interpretations by producer (R8's
+#: second half) is not ticketed.
+PARSER_VERSION = 1
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, UTC
@@ -314,7 +321,7 @@ def flagged_row_to_record(raw_row: str) -> NormalizedRecord:
 
 def ingest_file_findings(
     pg_conn,
-    run_id: str,
+    ctx: IngestContext,
     file_path: str,
     checkpoint_conn: sqlite3.Connection,
     filename: str,
@@ -329,7 +336,15 @@ def ingest_file_findings(
     result = ETLRunResult()
     record_count = 0
     try:
-        with ingest(pg_conn, run_id, file_path, source_type=SourceType.LLM_FLAGGED_ANOMALY.value) as unit:
+        with ingest(
+            pg_conn,
+            ctx,
+            file_path,
+            source_type=SourceType.LLM_FLAGGED_ANOMALY.value,
+            parser_version=PARSER_VERSION,
+            # Only derived findings are written; the analyzed file is not kept (R12).
+            payload_kind="none",
+        ) as unit:
             if unit.already_ingested:
                 return result  # dedup: a prior run already finished this file
             raw_rows = collect_flagged_rows(checkpoint_conn, filename)
@@ -535,7 +550,7 @@ def write_final_report(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="LLM-assisted triage over MVT log output.")
-    parser.add_argument("--run-id", required=True, help="Pipeline run ID (orchestrator passes this automatically).")
+    add_context_args(parser)
     parser.add_argument("--backup-path", default=None, help="Accepted for contract consistency with every other stage; unused here (--results-path is what this stage actually reads).")
     parser.add_argument("--db-url", required=True, help="Postgres connection string for writing flagged findings.")
     parser.add_argument("--results-path", type=str, required=True, help="mvt-runner's results/<n>/ output directory to analyze (orchestrator passes this automatically).")
@@ -573,6 +588,7 @@ def process_file(conn: sqlite3.Connection, filename: str, chunks: list[str], sch
 def main() -> None:
     fatal_if_missing_venv()
     args = parse_args()
+    ctx = context_from_args(args)
 
     # Scoped under results-path/automated_forensics/ so two different
     # backups' checkpoint DBs and reports never collide -- see the module
@@ -672,7 +688,7 @@ def main() -> None:
             if not file_completion_summary(conn, filename)["complete"]:
                 continue
             file_path = os.path.join(args.results_path, filename)
-            ingest_result = ingest_result.merge(ingest_file_findings(pg_conn, args.run_id, file_path, conn, filename))
+            ingest_result = ingest_result.merge(ingest_file_findings(pg_conn, ctx, file_path, conn, filename))
     finally:
         pg_conn.close()
     ingest_result.print_summary("automated_forensics")

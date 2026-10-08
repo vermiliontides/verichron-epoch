@@ -1,12 +1,16 @@
 import * as path from 'node:path';
 
-/** <workspace>/decrypted/<label> -> <workspace>/<dir>/<label>, or undefined if not under decrypted/. */
+/**
+ * <workspace>/decrypted/<label> -> <workspace>/<dir>/<label>, or undefined if
+ * the backup's own parent is not `decrypted/`. Only the immediate parent
+ * counts, as in the orchestrator's locateWorkspace: a `decrypted` directory
+ * higher up (/mnt/decrypted/case/decrypted/BK1) is not the workspace's.
+ */
 function siblingOfDecrypted(backupSource: string, dir: string): string | undefined {
-  const parts = backupSource.split(path.sep);
-  const idx = parts.indexOf('decrypted');
-  if (idx === -1) return undefined;
-  parts[idx] = dir;
-  return parts.join(path.sep);
+  const label = path.basename(backupSource);
+  const parent = path.dirname(backupSource);
+  if (path.basename(parent) !== 'decrypted') return undefined;
+  return path.join(path.dirname(parent), dir, label);
 }
 
 /** Where the processor writes mvt-ios's check-backup results for a decrypt. */

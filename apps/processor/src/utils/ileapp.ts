@@ -73,55 +73,73 @@ export interface IleappRun {
  * every process it started, and fails.
  */
 export async function runIleapp(opts: IleappRun): Promise<void> {
-  await fsp.mkdir(path.dirname(opts.outputDir), { recursive: true });
-  const logStream = fs.createWriteStream(opts.logPath);
+  // iLEAPP runs from its checkout (cwd), so every path it is given must be
+  // absolute; a relative one would resolve against the checkout instead. A
+  // bare interpreter name stays a PATH lookup.
+  const resolve = (p: string) => path.resolve(p);
+  const python = opts.python.includes(path.sep) ? resolve(opts.python) : opts.python;
+  const ileappDir = resolve(opts.ileappDir);
+  const outputDir = resolve(opts.outputDir);
   const args = [
-    path.join(opts.ileappDir, "ileapp.py"),
+    path.join(ileappDir, "ileapp.py"),
     "-t", opts.inputType,
-    "-i", opts.decryptedDir,
-    "-o", path.dirname(opts.outputDir),
-    "--custom_output_folder", path.basename(opts.outputDir),
+    "-i", resolve(opts.decryptedDir),
+    "-o", path.dirname(outputDir),
+    "--custom_output_folder", path.basename(outputDir),
   ];
+  await fsp.mkdir(path.dirname(outputDir), { recursive: true });
+  const logStream = fs.createWriteStream(resolve(opts.logPath));
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      // Its own process group, so a timeout can stop everything iLEAPP started.
-      const child = spawn(opts.python, args, {
-        cwd: opts.ileappDir,
+    await new Promise<void>((resolveRun, reject) => {
+      // Its own process group, so a timeout or a failed log can stop
+      // everything iLEAPP started.
+      const child = spawn(python, args, {
+        cwd: ileappDir,
         stdio: ["ignore", "pipe", "pipe"],
         detached: true,
       });
-      let timedOut = false;
-      const timer = setTimeout(() => {
-        timedOut = true;
+      let stopReason: Error | null = null;
+      const stop = (reason: Error) => {
+        if (stopReason) return;
+        stopReason = reason;
         try {
           process.kill(-child.pid!, "SIGKILL");
         } catch {
-          // already gone
+          // not started, or already gone
         }
-      }, opts.timeoutMs);
+      };
+      const timer = setTimeout(
+        () => stop(new Error(`iLEAPP did not finish within ${opts.timeoutMs / 1000}s and was stopped`)),
+        opts.timeoutMs
+      );
+
+      // The log can fail to open, or fill the disk mid-run. Without this
+      // listener Node would exit the whole processor; instead iLEAPP is
+      // stopped and this backup fails.
+      logStream.on("error", (err) => stop(new Error(`could not write the iLEAPP log ${opts.logPath}: ${err.message}`)));
 
       for (const stream of [child.stdout, child.stderr]) {
         stream.on("data", (chunk) => {
           process.stdout.write(chunk);
-          logStream.write(chunk);
+          if (!logStream.destroyed) logStream.write(chunk);
         });
       }
       child.on("error", (err) => {
         clearTimeout(timer);
-        reject(err);
+        reject(stopReason ?? err);
       });
       child.on("close", (code) => {
         clearTimeout(timer);
-        if (timedOut) reject(new Error(`iLEAPP did not finish within ${opts.timeoutMs / 1000}s and was stopped`));
-        else if (code === 0) resolve();
+        if (stopReason) reject(stopReason);
+        else if (code === 0) resolveRun();
         else reject(new Error(`iLEAPP exited with code ${code}`));
       });
     });
   } finally {
-    await new Promise((resolve) => logStream.end(resolve));
+    if (!logStream.destroyed) await new Promise((done) => logStream.end(done));
   }
-  if (!fs.existsSync(opts.outputDir)) {
-    throw new Error(`iLEAPP exited cleanly but wrote no report at ${opts.outputDir}`);
+  if (!fs.existsSync(outputDir)) {
+    throw new Error(`iLEAPP exited cleanly but wrote no report at ${outputDir}`);
   }
 }

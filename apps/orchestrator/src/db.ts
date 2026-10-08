@@ -1,43 +1,45 @@
 import { Client } from "pg";
 import { randomUUID } from "node:crypto";
 import type { StageSet } from "./types.js";
-import type { Registration } from "./registration.js";
+import { derivativeFor, type Registration } from "./registration.js";
 
 export type RunState = "running" | "incomplete" | "complete";
 
 /**
- * Whether this evidence has already been fully processed from this
- * derivative, as these stages would process it now: a run against the same
- * (evidence, derivative) whose state in the run_completeness view is
- * 'complete' (R23, migration 0005; not re-derived here) AND in which every
- * stage enabled now succeeded at the parserVersion its stage.json declares
- * now. A parserVersion bump (R8) or a newly enabled stage therefore gets a
- * new run instead of being skipped as done; stages that are unchanged dedup
- * in the ledger, so re-running them writes nothing new.
+ * Whether this evidence has already been fully processed, as these stages
+ * would process it now: a run against the same (evidence, decrypt) whose
+ * state in the run_completeness view is 'complete' (R23, migration 0005; not
+ * re-derived here) AND in which every stage enabled now succeeded at the
+ * parserVersion its stage.json declares now, reading the derivative it would
+ * read now. A parserVersion bump (R8), a newly enabled stage, or a new
+ * results set (e.g. a new IOC set, EPOCH-406) therefore gets a new run
+ * instead of being skipped as done; unchanged stages dedup in the ledger, so
+ * re-running them writes nothing new.
  */
 export async function hasCompleteRunFor(
   client: Client,
-  evidenceId: string,
-  derivativeId: string,
+  registration: Pick<Registration, "evidenceId" | "decryptedDerivativeId" | "resultsDerivativeId">,
   enabled: StageSet["enabled"]
 ): Promise<boolean> {
   const { rows } = await client.query(
     `SELECT 1 FROM run_completeness c
       WHERE c.evidence_id = $1 AND c.derivative_id = $2 AND c.state = 'complete'
         AND NOT EXISTS (
-          SELECT 1 FROM unnest($3::text[], $4::int[]) AS want(stage_name, parser_version)
+          SELECT 1 FROM unnest($3::text[], $4::int[], $5::uuid[]) AS want(stage_name, parser_version, derivative_id)
            WHERE NOT EXISTS (
              SELECT 1 FROM pipeline_stage_status s
               WHERE s.run_id = c.run_id
                 AND s.stage_name = want.stage_name
                 AND s.status = 'succeeded'
-                AND s.parser_version IS NOT DISTINCT FROM want.parser_version))
+                AND s.parser_version IS NOT DISTINCT FROM want.parser_version
+                AND s.derivative_id IS NOT DISTINCT FROM want.derivative_id))
       LIMIT 1`,
     [
-      evidenceId,
-      derivativeId,
+      registration.evidenceId,
+      registration.decryptedDerivativeId,
       enabled.map((stage) => stage.name),
       enabled.map((stage) => stage.manifest.parserVersion ?? null),
+      enabled.map((stage) => derivativeFor(stage, registration)),
     ]
   );
   return rows.length > 0;
@@ -71,7 +73,7 @@ export async function createRun(
   backupPath: string,
   stages: StageSet,
   provenance: RunProvenance,
-  registration: Pick<Registration, "evidenceId" | "decryptedDerivativeId">
+  registration: Pick<Registration, "evidenceId" | "decryptedDerivativeId" | "resultsDerivativeId">
 ): Promise<string> {
   const runId = randomUUID();
   await client.query(
@@ -89,9 +91,9 @@ export async function createRun(
   );
   for (const stage of stages.enabled) {
     await client.query(
-      `INSERT INTO pipeline_stage_status (run_id, stage_name, status, parser_version)
-       VALUES ($1, $2, 'pending', $3)`,
-      [runId, stage.name, stage.manifest.parserVersion ?? null]
+      `INSERT INTO pipeline_stage_status (run_id, stage_name, status, parser_version, derivative_id)
+       VALUES ($1, $2, 'pending', $3, $4)`,
+      [runId, stage.name, stage.manifest.parserVersion ?? null, derivativeFor(stage, registration)]
     );
   }
   for (const stage of stages.disabled) {

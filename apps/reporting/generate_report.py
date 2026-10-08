@@ -94,6 +94,69 @@ def render_stage_preface(stages: list[dict]) -> list[str]:
     return lines
 
 
+# --- provenance (EPOCH-406) ---------------------------------------------
+
+
+def fetch_run_derivatives(conn, run_id: str) -> list[dict]:
+    """The derivatives this run read: its decrypt, and whatever each stage
+    read (pipeline_stage_status.derivative_id), with the provenance each was
+    registered with."""
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT d.derivative_id, d.kind, d.path, d.tool, d.params, d.provenance_key
+            FROM evidence_derivatives d
+            WHERE d.derivative_id IN (
+                SELECT derivative_id FROM pipeline_runs WHERE run_id = %s
+                UNION
+                SELECT derivative_id FROM pipeline_stage_status WHERE run_id = %s
+            )
+            ORDER BY d.kind, d.created_at
+            """,
+            (run_id, run_id),
+        )
+        return cur.fetchall()
+
+
+def describe_derivative(d: dict) -> list[str]:
+    """One line of what produced a derivative, plus any repair failures."""
+    tool = d["tool"]
+    params = d["params"]
+    produced = f"produced by {tool['name']} {tool['version']}"
+    if d["kind"] == "mvt_results":
+        return [
+            f"- **mvt results** (`{d['path']}`): {produced}, "
+            f"IOC set `{params['ioc_set_hash'][:12]}` ({params['ioc_file_count']} file(s))"
+        ]
+    repair = params["repair"]
+    if repair["status"] == "skipped":
+        repair_note = f"repair skipped ({repair['reason']})"
+    else:
+        failed = repair["failed_files"]
+        repair_note = (
+            f"repair by {repair['tool']['name']} {repair['tool']['version']}: "
+            f"{repair['scanned']} database(s) checked, {repair['repaired']} repaired, "
+            f"{len(failed)} could not be fully recovered, "
+            f"{len(repair['preserved_originals'])} original(s) preserved"
+        )
+    lines = [f"- **Decrypted copy** (`{d['path']}`): {produced}; {repair_note}"]
+    if repair["status"] == "ran":
+        for f in repair["failed_files"]:
+            lines.append(f"  - not fully recovered: `{f}` (facts from it may be incomplete)")
+    return lines
+
+
+def render_provenance_section(derivatives: list[dict]) -> list[str]:
+    lines = ["## Provenance", ""]
+    if not derivatives:
+        lines += ["No registered derivative was read by this run.", ""]
+        return lines
+    for d in derivatives:
+        lines += describe_derivative(d)
+    lines.append("")
+    return lines
+
+
 # --- correlation section (Extractor Requirements.md §7) ------------------
 
 
@@ -353,6 +416,7 @@ def generate_report(
         "",
     ]
     lines += render_stage_preface(stages)
+    lines += render_provenance_section(fetch_run_derivatives(conn, run_id))
     lines.append("---")
     lines.append("")
 

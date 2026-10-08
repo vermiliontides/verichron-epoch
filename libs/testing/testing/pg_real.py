@@ -92,8 +92,8 @@ class PgReal:
                         (evidence_id, _hex64(f"root:{evidence_id}"), device_id),
                     )
                     cur.execute(
-                        "INSERT INTO evidence_derivatives (derivative_id, evidence_id, kind, path) "
-                        "VALUES (%s, %s, 'decrypted', %s)",
+                        "INSERT INTO evidence_derivatives (derivative_id, evidence_id, kind, path, tool, params, provenance_key) "
+                        "VALUES (%s, %s, 'decrypted', %s, '{\"name\": \"pytest\", \"version\": \"0\"}', '{}', repeat('0', 64))",
                         (derivative_id, evidence_id, f"/pytest/decrypted/{evidence_id[:8]}"),
                     )
                 for run_id in run_ids:

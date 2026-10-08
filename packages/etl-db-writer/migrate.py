@@ -85,6 +85,10 @@ APPLIED_MARKERS: dict[str, tuple[str, str]] = {
         _column("pipeline_stage_status", "parser_version"),
         _column("pipeline_stage_status", "parser_version"),
     ),
+    "0007_derivative_provenance.sql": (
+        _column("evidence_derivatives", "provenance_key"),
+        _column("pipeline_stage_status", "derivative_id"),
+    ),
 }
 
 

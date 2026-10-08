@@ -2,27 +2,11 @@ import { ipcMain, shell } from 'electron';
 import path from 'path';
 import fs from 'fs/promises';
 import type { Pool } from 'pg';
-import { deriveResultsPath } from '@verichron/contracts';
-import { getRunDecryptedPath, getRunResultsPath } from '@verichron/etl-db-reader';
+import { getRunResultsLocation } from '@verichron/etl-db-reader';
 
-/**
- * Where a run's report is: in the run's results path, where the orchestrator
- * points the reporting stage. Locations come from the database, where
- * registration keeps them current when a workspace moves; the run's
- * backup_source goes stale after a move.
- *
- * The mvt results the run read come first: they are specific to the run's
- * results set. A decrypt can be shared by results sets in several workspaces
- * and points wherever it was last registered, so it is only the fallback, for
- * a run that read no mvt results (check-backup failed). There the orchestrator
- * derived the results path from the decrypt (`deriveResultsPath`), as here.
- */
+/** A run's report is in its results location (see getRunResultsLocation). */
 async function reportPathFor(dbPool: Pool, runId: string): Promise<string | undefined> {
-  let resultsPath = await getRunResultsPath(dbPool, runId);
-  if (!resultsPath) {
-    const decryptedPath = await getRunDecryptedPath(dbPool, runId);
-    resultsPath = decryptedPath ? (deriveResultsPath(decryptedPath) ?? null) : null;
-  }
+  const resultsPath = await getRunResultsLocation(dbPool, runId);
   return resultsPath ? path.join(resultsPath, 'investigation_report.md') : undefined;
 }
 

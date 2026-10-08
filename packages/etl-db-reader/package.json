@@ -16,6 +16,9 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test '*.test.ts'"
   },
+  "dependencies": {
+    "@verichron/contracts": "workspace:*"
+  },
   "peerDependencies": {
     "pg": "catalog:"
   },

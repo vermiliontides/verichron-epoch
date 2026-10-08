@@ -8,9 +8,9 @@ import { TerminalLog } from '../components/layout/TerminalLog';
 import { pipelineApi } from '../api/pipeline';
 import { DataTable, type DataTableColumn } from '../components/ui/DataTable';
 
-function runPhase(run: PipelineRunRow): 'in_progress' | 'finished' {
-  return run.finished_at ? 'finished' : 'in_progress';
-}
+/** Labels for run_completeness states. The state itself comes from the
+ * database (EPOCH-404); this view never derives it from stage rows. */
+const RUN_STATE_LABEL: Record<PipelineRunRow['state'], string> = { running: 'in progress', incomplete: 'incomplete', complete: 'complete' };
 
 function stageDurationMs(stage: StageStatusRow): number | null {
   if (!stage.started_at || !stage.finished_at) return null;
@@ -113,7 +113,7 @@ export function RunsView({
   };
 
   useEffect(() => {
-    const hasInProgressRun = runs.some((run) => runPhase(run) === 'in_progress');
+    const hasInProgressRun = runs.some((run) => run.state === 'running');
     if (!hasInProgressRun || !selectedRun) return;
 
     const interval = setInterval(async () => {
@@ -155,16 +155,16 @@ export function RunsView({
       header: 'Status',
       meta: { width: 'minmax(10rem, 0.6fr)' },
       cell: ({ row }) => {
-        const phase = runPhase(row.original);
+        const { state } = row.original;
         return (
           <div className="flex items-center gap-1.5">
-            {phase === 'in_progress' && (
+            {state === 'running' && (
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-accent"></span>
               </span>
             )}
-            <Badge variant={phase}>{phase === 'finished' ? 'finished' : 'in progress'}</Badge>
+            <Badge variant={state}>{RUN_STATE_LABEL[state]}</Badge>
           </div>
         );
       },
@@ -187,7 +187,9 @@ export function RunsView({
       return <div className="p-6 text-data text-muted-foreground">Loading extraction details...</div>;
     }
 
-    const canRetry = runPhase(selectedRun) === 'finished' && stages.some((s) => s.status === 'failed');
+    // The canonical predicate, not a local rule: a run whose process was killed
+    // with a stage still pending or running is incomplete too, and retryable.
+    const canRetry = selectedRun.state === 'incomplete';
 
     return (
       <div className="p-6 flex flex-col gap-6 bg-surface shadow-inner">
@@ -196,7 +198,7 @@ export function RunsView({
           {canRetry && (
             <Button variant="outline" size="sm" onClick={handleRetry} loading={retrying} loadingText="Retrying...">
               <RefreshCw size="0.875rem" />
-              Retry failed stages
+              Retry incomplete run
             </Button>
           )}
         </div>

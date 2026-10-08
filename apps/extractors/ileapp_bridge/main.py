@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from runtime_env import fatal_if_missing_venv
-from db_writer import incomplete_ingests, ingest
+from db_writer import IngestContext, add_context_args, context_from_args, incomplete_ingests, ingest
 from etl_run import ETLRunResult
 from normalized_record import NormalizedRecord, SourceType
 
@@ -25,6 +25,7 @@ except ImportError:
     from normalizer import list_supported_artifacts, parse_artifact_file
 
 import psycopg2
+
 
 def _coerce_str(value: Any) -> str | None:
     if value is None:
@@ -104,7 +105,7 @@ def _summarize_raw_payload(file_path: Path, records: list[dict]) -> dict[str, An
     }
 
 
-def process_artifact_file(conn, run_id: str, file_path: Path) -> ETLRunResult:
+def process_artifact_file(conn, ctx: IngestContext, file_path: Path) -> ETLRunResult:
     result = ETLRunResult()
     records = parse_artifact_file(file_path)
     if not records:
@@ -124,9 +125,11 @@ def process_artifact_file(conn, run_id: str, file_path: Path) -> ETLRunResult:
     # run was dropped permanently, even after the normalizer was fixed.
     with ingest(
         conn,
-        run_id,
+        ctx,
         file_path,
         source_type=SourceType.ILEAPP_RECORD.value,
+        # A summary with sample rows, not the artifact itself (R12).
+        payload_kind="summary",
         raw_payload=summary,
     ) as unit:
         if unit.already_ingested:
@@ -195,7 +198,7 @@ def _warn_about_incomplete_ingests(conn) -> None:
         print(f"[ileapp]   ... and {len(stranded) - 20} more", file=sys.stderr)
 
 
-def process_output_directory(db_url: str, run_id: str, output_dir: str) -> ETLRunResult:
+def process_output_directory(db_url: str, ctx: IngestContext, output_dir: str) -> ETLRunResult:
     out_path = Path(output_dir)
     artifacts = list_supported_artifacts(out_path)
     if not artifacts:
@@ -206,7 +209,7 @@ def process_output_directory(db_url: str, run_id: str, output_dir: str) -> ETLRu
     try:
         for artifact in artifacts:
             try:
-                file_result = process_artifact_file(conn, run_id, artifact)
+                file_result = process_artifact_file(conn, ctx, artifact)
             except Exception as exc:
                 # Per-file isolation (EXTRACTOR_CONTRACT.md #5): one
                 # unreadable/unparseable artifact must not abort the rest
@@ -230,23 +233,24 @@ def process_output_directory(db_url: str, run_id: str, output_dir: str) -> ETLRu
         conn.close()
 
 
-def run_pipeline(artifact_path: str, output_dir: str, db_url: str, run_id: str | None = None) -> ETLRunResult:
+def run_pipeline(artifact_path: str, output_dir: str, db_url: str, ctx: IngestContext) -> ETLRunResult:
+    # ctx is required: a made-up run_id used to be generated here when none
+    # was passed, which labeled facts with a run that doesn't exist.
     out_path = Path(output_dir)
-    run_id = run_id or __import__("uuid").uuid4().hex
 
     extraction = run_ileapp_extraction(artifact_path, str(out_path))
     if extraction.get("status") != "success":
         raise RuntimeError(extraction.get("error") or "iLEAPP extraction failed without a detailed error")
 
-    result = process_output_directory(db_url, run_id, str(out_path))
-    print(f"[+] Persisted {result.succeeded} iLEAPP record(s) to Postgres for run {run_id}.")
+    result = process_output_directory(db_url, ctx, str(out_path))
+    print(f"[+] Persisted {result.succeeded} iLEAPP record(s) to Postgres for run {ctx.run_id}.")
     return result
 
 
 def main() -> int:
     fatal_if_missing_venv()
     parser = argparse.ArgumentParser(description="Run the iLEAPP bridge using the repo's shared Postgres extractor contract")
-    parser.add_argument("--run-id", required=True, help="Pipeline run id assigned by the orchestrator")
+    add_context_args(parser)
     parser.add_argument("--backup-path", required=True, help="Decrypted iPhone backup or extraction directory")
     parser.add_argument("--db-url", required=True, help="Postgres connection string")
     parser.add_argument("--output", "--output-dir", dest="output_dir", default="./ileapp_raw_output", help="Directory for raw iLEAPP output")
@@ -259,7 +263,7 @@ def main() -> int:
         if args.clean and Path(args.output_dir).exists():
             import shutil
             shutil.rmtree(args.output_dir)
-        result = run_pipeline(args.backup_path, args.output_dir, args.db_url, run_id=args.run_id)
+        result = run_pipeline(args.backup_path, args.output_dir, args.db_url, context_from_args(args))
     except Exception as exc:
         print(f"[ileapp] extraction pipeline failed: {exc}", file=sys.stderr)
         return 1

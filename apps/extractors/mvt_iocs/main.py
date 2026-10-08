@@ -54,10 +54,11 @@ from pathlib import Path
 from runtime_env import fatal_if_missing_venv
 from typing import Any
 from etl_run import ETLRunResult
-from db_writer import ingest
+from db_writer import IngestContext, add_context_args, context_from_args, ingest
 from normalized_record import NormalizedRecord, SourceType
 
 import psycopg2
+
 
 
 # Modules that legitimately contain forward-looking, scheduled data rather
@@ -143,7 +144,7 @@ def alert_to_record(alert: dict) -> NormalizedRecord:
     )
 
 
-def process_alerts(conn, run_id: str, results_dir: Path) -> ETLRunResult:
+def process_alerts(conn, ctx: IngestContext, results_dir: Path) -> ETLRunResult:
     """
     One `ingest()` unit for the whole file (see db_writer.ingest): the
     ledger row, the raw alerts.json payload, and every normalized
@@ -167,9 +168,11 @@ def process_alerts(conn, run_id: str, results_dir: Path) -> ETLRunResult:
     try:
         with ingest(
             conn,
-            run_id,
+            ctx,
             path,
             source_type=SourceType.MVT_IOC_DETECTION.value,
+            # The whole parsed alerts.json is kept (R12).
+            payload_kind="full",
         ) as unit:
             if unit.already_ingested:
                 return result  # dedup: a prior run already finished this file
@@ -231,7 +234,7 @@ def anomaly_to_record(ts: datetime, plugin: str, event: str, desc: str, backup_d
     )
 
 
-def process_timeline(conn, run_id: str, results_dir: Path) -> ETLRunResult:
+def process_timeline(conn, ctx: IngestContext, results_dir: Path) -> ETLRunResult:
     """
     Same atomicity guarantee as process_alerts: one `ingest()` unit covers
     the ledger row, the row_count/plugin_counts summary raw_payload (see
@@ -263,9 +266,12 @@ def process_timeline(conn, run_id: str, results_dir: Path) -> ETLRunResult:
     try:
         with ingest(
             conn,
-            run_id,
+            ctx,
             path,
             source_type=SourceType.TIMESTAMP_ANOMALY.value,
+            # Row and plugin counts only, not the timeline itself (R12; see
+            # the comment below).
+            payload_kind="summary",
         ) as unit:
             if unit.already_ingested:
                 return result  # dedup: a prior run already finished this file
@@ -331,7 +337,7 @@ def process_timeline(conn, run_id: str, results_dir: Path) -> ETLRunResult:
 def main():
     fatal_if_missing_venv()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run-id", required=True)
+    add_context_args(parser)
     parser.add_argument("--backup-path", required=True)
     parser.add_argument("--results-path", default=None, help="results/<name>/ dir; derived from --backup-path if omitted")
     parser.add_argument("--db-url", required=True)
@@ -354,8 +360,9 @@ def main():
         sys.exit(1)
 
     try:
-        alerts_result = process_alerts(conn, args.run_id, results_dir)
-        timeline_result = process_timeline(conn, args.run_id, results_dir)
+        ctx = context_from_args(args)
+        alerts_result = process_alerts(conn, ctx, results_dir)
+        timeline_result = process_timeline(conn, ctx, results_dir)
     except Exception as e:
         print(f"[mvt_iocs] unhandled error: {e}", file=sys.stderr)
         sys.exit(1)

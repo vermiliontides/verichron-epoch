@@ -28,11 +28,12 @@ from pathlib import Path
 from typing import Any
 
 from runtime_env import fatal_if_missing_venv
-from db_writer import ingest
+from db_writer import IngestContext, add_context_args, context_from_args, ingest
 from etl_run import ETLRunResult
 from normalized_record import NormalizedRecord, SourceType
 
 import psycopg2
+
 
 
 # --- parsing (ported from deep_ips_report.py, unchanged logic) -------------
@@ -189,7 +190,7 @@ def telemetry_to_record(telemetry: dict) -> NormalizedRecord:
 # --- main --------------------------------------------------------------
 
 
-def run(conn, run_id: str, backup_path: str) -> ETLRunResult:
+def run(conn, ctx: IngestContext, backup_path: str) -> ETLRunResult:
     """
     Partial-failure choice (per EXTRACTOR_CONTRACT.md #5): a malformed or
     unparseable .ips file is skipped and logged, everything else still
@@ -217,9 +218,11 @@ def run(conn, run_id: str, backup_path: str) -> ETLRunResult:
         try:
             with ingest(
                 conn,
-                run_id,
+                ctx,
                 file_path,
                 source_type=SourceType.CRASH_REPORT.value,
+                # The whole parsed .ips document is kept (R12).
+                payload_kind="full",
             ) as unit:
                 if unit.already_ingested:
                     # A resumed run still counts an already-complete file as
@@ -252,7 +255,7 @@ def run(conn, run_id: str, backup_path: str) -> ETLRunResult:
 def main():
     fatal_if_missing_venv()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run-id", required=True)
+    add_context_args(parser)
     parser.add_argument("--backup-path", required=True)
     parser.add_argument("--db-url", required=True)
     # Unused here — crash parses .ips files straight out of the decrypted
@@ -272,7 +275,7 @@ def main():
         sys.exit(1)
 
     try:
-        result = run(conn, args.run_id, args.backup_path)
+        result = run(conn, context_from_args(args), args.backup_path)
     except Exception as e:
         print(f"[crash] unhandled error: {e}", file=sys.stderr)
         sys.exit(1)

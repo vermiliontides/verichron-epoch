@@ -34,14 +34,14 @@
  *     is `run_id` not `pipeline_run_id`, and there is no `stage_order`
  *     column at all -- see CANONICAL_STAGE_ORDER below for how ordering is
  *     done instead.
- *   - forensic_records has `run_id`, not `stage_run_id` -- there is no
- *     stage-level FK on this table, only a run-level one. getForensicRecords
- *     now takes `runId` and an optional `sourceType` narrowing filter
- *     instead of a nonexistent stage-run id. Its original `ORDER BY
- *     extracted_at` also doesn't exist; ordering is now by `event_time`,
- *     the column the schema comment identifies as the actual cross-domain
- *     correlation axis, falling back to `id` (insertion order) for rows
- *     where event_time is NULL.
+ *
+ * EPOCH-403: facts are read by EVIDENCE, never by run (R7). Since migration
+ * 0003, forensic_records has no run_id at all; a run is an audit event and
+ * every run over the same evidence sees the same facts. Fact reads go through
+ * the 0004 views -- current_forensic_records by default, or
+ * forensic_records_history on request -- which apply the completed-units and
+ * latest-parser_version rules in the database, so this file and
+ * apps/reporting/generate_report.py can't disagree about them (R27).
  */
 
 import type { Client, Pool, PoolClient } from 'pg';
@@ -53,6 +53,14 @@ export interface PipelineRunRow {
   backup_source: string;
   started_at: string;
   finished_at: string | null;
+  /** NULL until EPOCH-404's pre-flight registration sets it. */
+  evidence_id: string | null;
+  derivative_id: string | null;
+  contract_version: string;
+  tool_versions: Record<string, string>;
+  /** From the run_completeness view: the ONE completeness predicate (R23,
+   * EPOCH-404). Read this; never re-derive it from stage rows. */
+  state: 'running' | 'incomplete' | 'complete';
 }
 
 export type StageStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped';
@@ -66,10 +74,17 @@ export interface StageStatusRow {
   finished_at: string | null;
 }
 
+/**
+ * One fact, as the driver returns it (R26): `id` and `ingest_id` are BIGINT
+ * columns, which node-postgres returns as strings.
+ */
 export interface ForensicRecordRow {
-  id: number;
+  id: string;
+  ingest_id: string;
+  evidence_id: string;
+  derivative_id: string;
   file_hash: string;
-  run_id: string;
+  parser_version: number;
   incident_id: string | null;
   source_type: string;
   event_time: string | null;
@@ -80,17 +95,37 @@ export interface ForensicRecordRow {
   fields: Record<string, unknown>;
 }
 
+const RECORD_COLUMNS = `id, ingest_id, evidence_id, derivative_id, file_hash, parser_version,
+       incident_id, source_type, event_time, bug_type, process_name, pid,
+       bundle_id, fields`;
+
 /**
  * Most recent pipeline runs, newest first.
  */
 export async function getPipelineRuns(client: Db, limit = 100): Promise<PipelineRunRow[]> {
   const result = await client.query<PipelineRunRow>(
-    `SELECT * FROM pipeline_runs
-      ORDER BY started_at DESC
+    `SELECT r.run_id, r.backup_source, r.started_at, r.finished_at, r.evidence_id, r.derivative_id,
+            r.contract_version, r.tool_versions, c.state
+       FROM pipeline_runs r
+       JOIN run_completeness c USING (run_id)
+      ORDER BY r.started_at DESC
       LIMIT $1`,
     [limit]
   );
   return result.rows;
+}
+
+/**
+ * The evidence a run processed, or null if the run predates EPOCH-404's
+ * pre-flight registration (or doesn't exist). How a run-centric caller gets
+ * to the evidence-scoped reads below.
+ */
+export async function getRunEvidence(client: Db, runId: string): Promise<string | null> {
+  const result = await client.query<{ evidence_id: string | null }>(
+    `SELECT evidence_id FROM pipeline_runs WHERE run_id = $1`,
+    [runId]
+  );
+  return result.rows[0]?.evidence_id ?? null;
 }
 
 /**
@@ -116,7 +151,8 @@ export const CANONICAL_STAGE_ORDER = ['crash', 'safari', 'sms', 'network', 'gclo
  */
 export async function getStageStatus(client: Db, runId: string): Promise<StageStatusRow[]> {
   const result = await client.query<StageStatusRow>(
-    `SELECT * FROM pipeline_stage_status
+    `SELECT run_id, stage_name, status, error_message, started_at, finished_at
+       FROM pipeline_stage_status
       WHERE run_id = $1`,
     [runId]
   );
@@ -130,47 +166,185 @@ export async function getStageStatus(client: Db, runId: string): Promise<StageSt
   });
 }
 
+/** Sort keys a caller may ask for (R24: named, allowlisted; never raw SQL). */
+const SORT_COLUMNS = {
+  event_time: 'event_time',
+  source_type: 'source_type',
+  process_name: 'process_name',
+} as const;
+export type RecordSortKey = keyof typeof SORT_COLUMNS;
+
+const RECORD_SOURCES = {
+  current: 'current_forensic_records',
+  history: 'forensic_records_history',
+} as const;
+
+export const MAX_RECORDS_PAGE = 1000;
+const DEFAULT_RECORDS_PAGE = 500;
+
+export interface ForensicRecordQuery {
+  /** Narrow to one source type. */
+  sourceType?: string;
+  /** Inclusive event_time range (ISO 8601). Untimed records never match a range. */
+  eventTimeFrom?: string;
+  eventTimeTo?: string;
+  /** Case-insensitive substring of process_name or bundle_id. */
+  text?: string;
+  sort?: RecordSortKey;
+  direction?: 'asc' | 'desc';
+  /** Opt in to every parser_version, not just the latest (R8). */
+  history?: boolean;
+  /** Page size, 1 to MAX_RECORDS_PAGE. */
+  limit?: number;
+  /** `nextCursor` from the previous page. */
+  cursor?: string | null;
+}
+
+/** A bounded read always reports its bound (R25). */
+export interface ForensicRecordPage {
+  rows: ForensicRecordRow[];
+  /** Every record matching the filters, across all pages. */
+  total: number;
+  /** Pass back as `cursor` for the next page; null on the last page. */
+  nextCursor: string | null;
+}
+
+const QUERY_KEYS = new Set<keyof ForensicRecordQuery>([
+  'sourceType', 'eventTimeFrom', 'eventTimeTo', 'text', 'sort', 'direction', 'history', 'limit', 'cursor',
+]);
+
+interface CursorState {
+  /** Sort-column value of the last row returned; null when it was NULL. */
+  v: string | null;
+  id: string;
+}
+
+function encodeCursor(state: CursorState): string {
+  return Buffer.from(JSON.stringify(state), 'utf8').toString('base64url');
+}
+
+function decodeCursor(cursor: string): CursorState {
+  try {
+    const state = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if ((state.v === null || typeof state.v === 'string') && /^\d+$/.test(state.id)) return state;
+  } catch {
+    // fall through
+  }
+  throw new Error('invalid cursor: pass back nextCursor exactly as returned');
+}
+
 /**
- * Forensic records for one pipeline run, oldest event first, capped at 500.
+ * Forensic records for one evidence item, one page at a time.
  *
- * forensic_records has no stage-level FK -- only run_id. `sourceType` is an
- * optional narrowing filter for callers that want just one extractor's
- * records (source_type is set per-extractor, e.g. the crash extractor's
- * output), which approximates "this stage's records" without pretending a
- * stage-run relationship exists in the schema.
- *
- * The 500 cap matches the original inline query in apps/epoch/main.ts. This
- * is a UI-facing read, not an export/report path -- if a caller needs the
- * full set for a run, this function is the wrong tool; it should get a
- * paginated or streaming variant instead of a raised limit, since a single
- * backup's forensic_records for a busy run can be very large.
+ * - Scoped by evidence, never run (R7); latest parser_version of completed
+ *   units by default, every version with `history: true` (R8).
+ * - Never truncates silently (R25): every page carries the true `total` and
+ *   a `nextCursor`. Keyset pagination on (sort column, id), with NULLs last
+ *   in either direction, so pages never skip or repeat a row while sorting.
+ * - Sort keys and filters are a fixed allowlist (R24); anything else throws.
  */
 export async function getForensicRecords(
   client: Db,
-  runId: string,
-  options: { sourceType?: string; limit?: number } = {}
-): Promise<ForensicRecordRow[]> {
-  const { sourceType, limit = 500 } = options;
-
-  if (sourceType) {
-    const result = await client.query<ForensicRecordRow>(
-      `SELECT * FROM forensic_records
-        WHERE run_id = $1 AND source_type = $2
-        ORDER BY event_time ASC NULLS LAST, id ASC
-        LIMIT $3`,
-      [runId, sourceType, limit]
-    );
-    return result.rows;
+  evidenceId: string,
+  query: ForensicRecordQuery = {}
+): Promise<ForensicRecordPage> {
+  for (const key of Object.keys(query)) {
+    if (!QUERY_KEYS.has(key as keyof ForensicRecordQuery)) {
+      throw new Error(`getForensicRecords: unsupported parameter "${key}"`);
+    }
+  }
+  const sort = query.sort ?? 'event_time';
+  if (!Object.hasOwn(SORT_COLUMNS, sort)) {
+    throw new Error(`getForensicRecords: unsupported sort "${String(sort)}"`);
+  }
+  const direction = query.direction ?? 'asc';
+  if (direction !== 'asc' && direction !== 'desc') {
+    throw new Error(`getForensicRecords: unsupported direction "${String(direction)}"`);
+  }
+  const limit = query.limit ?? DEFAULT_RECORDS_PAGE;
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_RECORDS_PAGE) {
+    throw new Error(`getForensicRecords: limit must be an integer from 1 to ${MAX_RECORDS_PAGE}`);
   }
 
-  const result = await client.query<ForensicRecordRow>(
-    `SELECT * FROM forensic_records
-      WHERE run_id = $1
-      ORDER BY event_time ASC NULLS LAST, id ASC
-      LIMIT $2`,
-    [runId, limit]
+  const source = query.history ? RECORD_SOURCES.history : RECORD_SOURCES.current;
+  const column = SORT_COLUMNS[sort];
+  const params: unknown[] = [evidenceId];
+  const filters = ['evidence_id = $1'];
+  if (query.sourceType !== undefined) {
+    params.push(query.sourceType);
+    filters.push(`source_type = $${params.length}`);
+  }
+  if (query.eventTimeFrom !== undefined) {
+    params.push(query.eventTimeFrom);
+    filters.push(`event_time >= $${params.length}`);
+  }
+  if (query.eventTimeTo !== undefined) {
+    params.push(query.eventTimeTo);
+    filters.push(`event_time <= $${params.length}`);
+  }
+  if (query.text !== undefined && query.text !== '') {
+    params.push(`%${query.text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+    filters.push(`(process_name ILIKE $${params.length} OR bundle_id ILIKE $${params.length})`);
+  }
+
+  // Keyset: rows strictly after the cursor in (col IS NULL, col, id) order.
+  // NULLs sort last whatever the direction, so the null region is always the
+  // tail and is walked by id alone.
+  const pageFilters = [...filters];
+  const pageParams = [...params];
+  if (query.cursor) {
+    const after = decodeCursor(query.cursor);
+    const cmp = direction === 'asc' ? '>' : '<';
+    pageParams.push(after.id);
+    const idParam = `$${pageParams.length}::bigint`;
+    if (after.v === null) {
+      pageFilters.push(`(${column} IS NULL AND id ${cmp} ${idParam})`);
+    } else {
+      pageParams.push(after.v);
+      const vParam = `$${pageParams.length}`;
+      pageFilters.push(
+        `(${column} IS NULL OR ${column} ${cmp} ${vParam} OR (${column} = ${vParam} AND id ${cmp} ${idParam}))`
+      );
+    }
+  }
+  pageParams.push(limit + 1);
+  const dir = direction.toUpperCase();
+  // ONE statement for the count and the page. Postgres takes one snapshot per
+  // statement, so `total` and `rows` always describe the same state of the
+  // views; as two queries, an ingest completing between them could give a
+  // page with more rows than `total`, or a stale total (R25). The client may
+  // be a Pool, so a transaction across two queries isn't an option.
+  //
+  // The LEFT JOIN keeps the count when the page is empty. sort_value is the
+  // sort column as Postgres prints it: the cursor is built from it, not from
+  // the mapped row, because node-postgres turns timestamptz into a JS Date,
+  // which drops microseconds and would skip or repeat rows across pages.
+  const result = await client.query<
+    { [K in keyof ForensicRecordRow]: ForensicRecordRow[K] | null } & { total: string; sort_value: string | null }
+  >(
+    `SELECT counted.total, page.*
+       FROM (SELECT COUNT(*) AS total FROM ${source} WHERE ${filters.join(' AND ')}) counted
+       LEFT JOIN LATERAL (
+         SELECT ${RECORD_COLUMNS}, (${column})::text AS sort_value
+           FROM ${source}
+          WHERE ${pageFilters.join(' AND ')}
+          ORDER BY (${column} IS NULL), ${column} ${dir}, id ${dir}
+          LIMIT $${pageParams.length}
+       ) page ON TRUE
+      ORDER BY (page.${column} IS NULL), page.${column} ${dir}, page.id ${dir}`,
+    pageParams
   );
-  return result.rows;
+
+  const total = Number(result.rows[0].total);
+  const fetched = result.rows.filter((row) => row.id !== null);
+  const pageRows = fetched.slice(0, limit);
+  const last = pageRows.at(-1);
+  const nextCursor =
+    fetched.length > limit && last ? encodeCursor({ v: last.sort_value, id: String(last.id) }) : null;
+  const rows = pageRows.map(
+    ({ total: _total, sort_value: _cursorOnly, ...row }) => row as ForensicRecordRow
+  );
+  return { rows, total, nextCursor };
 }
 
 /**
@@ -185,14 +359,14 @@ export async function getForensicRecords(
  */
 
 export interface CorrelationPivotRow {
-  id: number;
+  id: string;
   source_type: string;
   event_time: string | null;
   fields: Record<string, unknown>;
 }
 
 export interface CorrelatedContextRow {
-  id: number;
+  id: string;
   source_type: string;
   event_time: string | null;
   process_name: string | null;
@@ -207,25 +381,25 @@ export interface CorrelatedContextRow {
 export const CORRELATION_WINDOW_MINUTES = 15;
 
 /**
- * Every mvt_ioc_detection / timestamp_anomaly row for a run -- the pivot
+ * Every mvt_ioc_detection / timestamp_anomaly row for an evidence item -- the pivot
  * points a correlation view builds a window around. Rows with a null
  * event_time (e.g. an untimed alert) come back too; there's nothing to
  * correlate them against, so a caller should render those separately rather
  * than pass them to getCorrelatedContext.
  */
-export async function getCorrelationPivots(client: Db, runId: string): Promise<CorrelationPivotRow[]> {
+export async function getCorrelationPivots(client: Db, evidenceId: string): Promise<CorrelationPivotRow[]> {
   const result = await client.query<CorrelationPivotRow>(
     `SELECT id, source_type, event_time, fields
-       FROM forensic_records
-      WHERE run_id = $1 AND source_type IN ('mvt_ioc_detection', 'timestamp_anomaly')
-      ORDER BY event_time ASC NULLS LAST`,
-    [runId]
+       FROM current_forensic_records
+      WHERE evidence_id = $1 AND source_type IN ('mvt_ioc_detection', 'timestamp_anomaly')
+      ORDER BY event_time ASC NULLS LAST, id ASC`,
+    [evidenceId]
   );
   return result.rows;
 }
 
 /**
- * Everything else in forensic_records for this run within the correlation
+ * Everything else known about this evidence within the correlation
  * window of one pivot's event_time, across every source_type -- the entire
  * point per generate_report.py's own comment: crash today, every other
  * domain automatically once its extractor lands, no change needed here when
@@ -233,9 +407,9 @@ export async function getCorrelationPivots(client: Db, runId: string): Promise<C
  */
 export async function getCorrelatedContext(
   client: Db,
-  runId: string,
+  evidenceId: string,
   eventTime: string,
-  excludeId: number,
+  excludeId: string,
   windowMinutes: number = CORRELATION_WINDOW_MINUTES
 ): Promise<CorrelatedContextRow[]> {
   const center = new Date(eventTime);
@@ -244,10 +418,10 @@ export async function getCorrelatedContext(
 
   const result = await client.query<CorrelatedContextRow>(
     `SELECT id, source_type, event_time, process_name, bundle_id, fields
-       FROM forensic_records
-      WHERE run_id = $1 AND event_time BETWEEN $2 AND $3 AND id != $4
-      ORDER BY event_time ASC`,
-    [runId, lo, hi, excludeId]
+       FROM current_forensic_records
+      WHERE evidence_id = $1 AND event_time BETWEEN $2 AND $3 AND id != $4
+      ORDER BY event_time ASC, id ASC`,
+    [evidenceId, lo, hi, excludeId]
   );
   return result.rows;
 }

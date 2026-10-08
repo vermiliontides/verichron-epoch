@@ -2,6 +2,8 @@ import type {
   PipelineRunRow,
   StageStatusRow,
   ForensicRecordRow,
+  ForensicRecordPage,
+  ForensicRecordQuery,
   CorrelationPivotRow,
   CorrelatedContextRow,
 } from '@verichron/db-reader';
@@ -83,12 +85,12 @@ declare global {
       onMvtFinished: (callback: (result: MvtFinishedResult) => void) => () => void;
       getPipelineRuns: () => Promise<PipelineRunRow[]>;
       getStageStatus: (runId: string) => Promise<StageStatusRow[]>;
-      getForensicRecords: (runId: string, sourceType?: string) => Promise<ForensicRecordRow[]>;
+      getForensicRecords: (runId: string, query?: ForensicRecordQuery) => Promise<ForensicRecordPage>;
       getCorrelationPivots: (runId: string) => Promise<CorrelationPivotRow[]>;
       getCorrelatedContext: (
         runId: string,
         eventTime: string,
-        excludeId: number,
+        excludeId: string,
         windowMinutes?: number
       ) => Promise<CorrelatedContextRow[]>;
       getReport: (backupSource: string) => Promise<ReportResult>;

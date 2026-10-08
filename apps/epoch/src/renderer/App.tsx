@@ -11,9 +11,6 @@ import { TooltipProvider } from './components/ui/Tooltip';
 import { useEpochStore } from './store/useEpochStore';
 import { runsApi } from './api/runs';
 
-function runPhase(run: PipelineRunRow): 'in_progress' | 'finished' {
-  return run.finished_at ? 'finished' : 'in_progress';
-}
 
 const IOC_SOURCE_TYPES = ['mvt_ioc_detection', 'timestamp_anomaly'] as const;
 
@@ -24,6 +21,7 @@ export const App: React.FC = () => {
     selectedRun,
     stages,
     records,
+    recordsTotal,
     recordsLoaded,
     sourceTypeFilter,
     loading,
@@ -103,9 +101,18 @@ export const App: React.FC = () => {
   }, [setDbStatus, setRuns, setSelectedRun]);
 
   const loadRecords = async (run: PipelineRunRow) => {
+    if (!run.evidence_id) {
+      // Nothing to read; RecordsView says the evidence isn't registered.
+      setRecords([], 0);
+      setRecordsLoaded(true);
+      return;
+    }
     try {
-      const data = await runsApi.getForensicRecords(run.run_id);
-      setRecords(data);
+      // First page only, with the true total (R25). RecordsView says when it
+      // is showing less than everything; the paged, server-filtered grid is
+      // EPOCH-411.
+      const page = await runsApi.getForensicRecords(run.run_id);
+      setRecords(page.rows, page.total);
       setRecordsLoaded(true);
       setDbStatus('connected');
     } catch (err) {
@@ -133,7 +140,7 @@ export const App: React.FC = () => {
         <Sidebar active={section} onSelect={handleSectionSelect} dbStatus={dbStatus} />
 
         <div className="flex-1 flex flex-col min-w-0">
-          {selectedRun && <EvidenceTag run={selectedRun} phase={runPhase(selectedRun)} />}
+          {selectedRun && <EvidenceTag run={selectedRun} />}
 
           <div className="flex-1 overflow-auto p-8">
             {section === 'workspace' && (
@@ -162,6 +169,9 @@ export const App: React.FC = () => {
               <RecordsView
                 selectedRun={!!selectedRun}
                 records={visibleRecords}
+                loadedCount={records.length}
+                totalCount={recordsTotal}
+                evidenceRegistered={!!selectedRun?.evidence_id}
                 availableSourceTypes={availableSourceTypes}
                 sourceTypeFilter={sourceTypeFilter}
                 onFilterChange={setSourceTypeFilter}
@@ -169,10 +179,7 @@ export const App: React.FC = () => {
             )}
 
             {section === 'iocs' && (
-              <IocsView 
-                selectedRun={selectedRun} 
-                records={records} 
-              />
+              <IocsView selectedRun={selectedRun} />
             )}
 
             {section === 'reports' && (

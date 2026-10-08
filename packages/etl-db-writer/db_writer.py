@@ -9,7 +9,8 @@ the contract, they call these functions.
  
 Owns exactly what the two shared tables need:
   - ingest()      -> a transaction that covers the ingested_files row AND the
-                     forensic_records rows for one file, or neither
+                     forensic_records rows for one file, or neither. Units are
+                     evidence-scoped (EPOCH-402): see IngestContext.
   - write_record() / write_records() -> validated insert into forensic_records
  
 Deliberately does NOT own:
@@ -67,6 +68,7 @@ from __future__ import annotations
 import hashlib
 import sys
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
  
@@ -91,41 +93,104 @@ def compute_file_hash(path: str | Path) -> str:
     return h.hexdigest()
  
  
+PAYLOAD_KINDS = ("full", "summary", "none")
+
+
+@dataclass(frozen=True)
+class IngestContext:
+    """Who an ingest is stamped with: the evidence, the derivative being read,
+    the run doing the reading, and the parser version doing the parsing.
+
+    Built once per extractor process from the orchestrator's CLI arguments
+    (`add_context_args` / `context_from_args`) and handed to every `ingest()`
+    call. Extractor code never constructs these values itself, so it cannot
+    misattribute what it cannot label (R16). The parser version comes from
+    the stage's stage.json, through the orchestrator (EPOCH-404), so there is
+    one source for it rather than a constant in each extractor (R2).
+    """
+
+    evidence_id: str
+    derivative_id: str
+    run_id: str
+    parser_version: int
+
+    def __post_init__(self) -> None:
+        for name in ("evidence_id", "derivative_id", "run_id"):
+            if not getattr(self, name):
+                raise ValueError(
+                    f"IngestContext.{name} is required: an ingest cannot happen before "
+                    "evidence is registered (EPOCH-404's pre-flight step)"
+                )
+        version = self.parser_version
+        if not isinstance(version, int) or isinstance(version, bool) or version < 1:
+            raise ValueError(f"IngestContext.parser_version must be an integer >= 1, got {version!r}")
+
+
+def add_context_args(parser) -> None:
+    """The identity flags every extractor accepts from the orchestrator."""
+    parser.add_argument("--run-id", required=True, help="pipeline_runs.run_id of this run")
+    parser.add_argument("--evidence-id", required=True, help="evidence_items.evidence_id being processed")
+    parser.add_argument(
+        "--derivative-id", required=True, help="evidence_derivatives.derivative_id this stage reads"
+    )
+    parser.add_argument(
+        "--parser-version", required=True, type=int, help="this stage's parserVersion from its stage.json"
+    )
+
+
+def context_from_args(args) -> IngestContext:
+    return IngestContext(
+        evidence_id=args.evidence_id,
+        derivative_id=args.derivative_id,
+        run_id=args.run_id,
+        parser_version=args.parser_version,
+    )
+
+
 class IngestUnit:
     """One file's worth of work, inside one transaction.
- 
+
     Handed to the caller by `ingest()`. The caller checks
     `already_ingested`, then writes records and (optionally) the raw payload.
     Nothing here commits; `ingest()` commits once on clean exit.
     """
- 
-    def __init__(self, conn, run_id: str, file_path: Path, file_hash: str, already_ingested: bool):
+
+    def __init__(
+        self,
+        conn,
+        ctx: IngestContext,
+        file_path: Path,
+        file_hash: str,
+        ingest_id: int,
+        already_ingested: bool,
+    ):
         self._conn = conn
-        self._run_id = run_id
+        self._ctx = ctx
         self.file_path = file_path
         self.file_hash = file_hash
+        self.ingest_id = ingest_id
         self.already_ingested = already_ingested
         self.records_written = 0
- 
+
     def write(self, records: list[NormalizedRecord]) -> int:
         """Write validated records for this file. Callable more than once;
         counts accumulate into the ledger's record_count."""
         self._guard()
-        written = write_records(self._conn, self._run_id, self.file_hash, records)
+        written = write_records(self._conn, self.ingest_id, self._ctx.evidence_id, records)
         self.records_written += written
         return written
- 
+
     def write_one(self, record: NormalizedRecord) -> None:
         """Single-record form, for extractors that produce one record per file
         (crash reports). No longer more expensive than batching per commit,
         since neither commits."""
         self._guard()
-        write_record(self._conn, self._run_id, self.file_hash, record)
+        write_record(self._conn, self.ingest_id, self._ctx.evidence_id, record)
         self.records_written += 1
- 
+
     def set_raw_payload(self, payload: dict[str, Any]) -> None:
         """Attach the parsed payload to the ledger row.
- 
+
         Extractors that can only build the payload after parsing (crash,
         mvt_iocs) used to insert `{}`, commit, parse, then UPDATE and commit
         again — a second window in which the ledger was wrong. Inside a unit
@@ -134,164 +199,183 @@ class IngestUnit:
         self._guard()
         with self._conn.cursor() as cur:
             cur.execute(
-                "UPDATE ingested_files SET raw_payload = %s WHERE file_hash = %s",
-                (psycopg2.extras.Json(payload), self.file_hash),
+                "UPDATE ingested_files SET raw_payload = %s WHERE ingest_id = %s",
+                (psycopg2.extras.Json(payload), self.ingest_id),
             )
- 
+
     def _guard(self) -> None:
         if self.already_ingested:
             raise RuntimeError(
-                f"{self.file_path.name}: this file is already fully ingested "
-                f"(file_hash {self.file_hash[:12]}). Check `already_ingested` and return "
-                "before writing; writing here would duplicate records that are already "
-                "committed, because the dedup key is the file hash and this file has one."
+                f"{self.file_path.name}: this file is already fully ingested for this "
+                f"evidence and parser version (file_hash {self.file_hash[:12]}). Check "
+                "`already_ingested` and return before writing; writing here would "
+                "duplicate records that are already committed."
             )
- 
- 
+
+
+def _label_run(cur, ctx: IngestContext, ingest_id: int) -> None:
+    """Record this run on the unit's produced_by_runs (R7), once.
+
+    An audit label only: it never decides dedup. Appending only when absent
+    keeps a re-run under the same run_id a no-op.
+    """
+    cur.execute(
+        """
+        UPDATE ingested_files
+        SET produced_by_runs = array_append(produced_by_runs, %s::uuid)
+        WHERE ingest_id = %s AND NOT (%s::uuid = ANY(produced_by_runs))
+        """,
+        (ctx.run_id, ingest_id, ctx.run_id),
+    )
+
+
 @contextmanager
 def ingest(
     conn,
-    run_id: str,
+    ctx: IngestContext,
     file_path: str | Path,
+    *,
     source_type: str,
+    payload_kind: str,
     raw_payload: dict[str, Any] | None = None,
 ) -> Iterator[IngestUnit]:
     """
     Atomic ingest of one file: ledger row + records + completion flag, or nothing.
- 
+
     Usage::
- 
-        with ingest(conn, run_id, path, source_type=..., raw_payload=summary) as unit:
+
+        with ingest(conn, ctx, path, source_type=..., payload_kind="full") as unit:
             if unit.already_ingested:
-                pass            # dedup — prior run finished this file
+                pass            # dedup — this evidence's file is already complete
             else:
                 unit.write(records)
- 
+
+    A unit is identified by (evidence_id, file_hash, source_type,
+    parser_version) (R6, R8): the same bytes under two evidence items are two
+    units, and a parser_version bump is a new unit beside the old one.
+
     Guarantees:
- 
+
     - On clean exit the ledger row is marked complete with its record count and
       everything commits together.
     - On any exception the whole unit rolls back, including the ledger row, so
-      the file has no trace in the ledger and the NEXT run retries it. That is
-      the property the old two-commit API lacked.
-    - `already_ingested` is True only when a previous run marked the file
+      the file has no trace in the ledger and the NEXT run retries it.
+    - `already_ingested` is True only when a previous run marked the unit
       complete — never merely because a row exists.
+    - Every attempt that ends cleanly, fresh or dedup hit, adds ctx.run_id to
+      produced_by_runs. A completed unit's other columns are never rewritten.
     - An abandoned unit from an earlier crash (row present, not complete) is
-      reclaimed: its orphaned records are deleted and it is re-ingested under
-      the current run_id. Without this, rows stranded by the old code, or by a
-      hard kill of the new code, would be retried but their partial records
-      double-counted.
- 
+      reclaimed: its orphaned records are deleted and it is re-ingested, so a
+      retry cannot double-count a partial write.
+
     Concurrency: the upsert below locks the ledger row for the duration of the
-    transaction, so two extractors racing on the same file serialize instead of
-    both deciding to write. The previous SELECT-then-INSERT was a read outside
-    any lock; its `ON CONFLICT DO NOTHING` avoided a crash on the race but left
-    both callers believing they should write records.
+    transaction, so two extractors racing on the same unit serialize instead of
+    both deciding to write.
     """
+    if not isinstance(ctx, IngestContext):
+        raise TypeError("ingest() needs an IngestContext (evidence_id, derivative_id, run_id, parser_version)")
+    parser_version = ctx.parser_version
+    if payload_kind not in PAYLOAD_KINDS:
+        raise ValueError(f"payload_kind must be one of {PAYLOAD_KINDS}, got {payload_kind!r}")
+
     file_path = Path(file_path)
     file_hash = compute_file_hash(file_path)
- 
+    unit_key = (ctx.evidence_id, file_hash, source_type, parser_version)
+
     try:
         with conn.cursor() as cur:
-            # Fast path for the common case on a re-run: the file is already
-            # complete, so there is nothing to lock and nothing to write.
-            #
-            # This read is deliberately unlocked, which is safe because
-            # ingest_complete is monotonic -- it goes FALSE -> TRUE exactly
-            # once and never back, so a TRUE observed here cannot be
-            # invalidated by a concurrent transaction. A FALSE might be stale,
-            # which is why FALSE falls through to the locking upsert below
-            # rather than being acted on.
-            #
-            # Without this, re-running against a large backup would issue a
-            # no-op UPDATE per already-finished file, producing a dead tuple
-            # and a row lock per file for no reason.
+            # Fast path for the common case on a re-run: the unit is already
+            # complete. The read is unlocked, which is safe because
+            # ingest_complete is monotonic -- FALSE -> TRUE exactly once -- so a
+            # TRUE seen here cannot be invalidated. A FALSE might be stale, which
+            # is why it falls through to the locking upsert below.
             cur.execute(
-                "SELECT ingest_complete FROM ingested_files WHERE file_hash = %s",
-                (file_hash,),
+                """
+                SELECT ingest_id, ingest_complete FROM ingested_files
+                WHERE evidence_id = %s AND file_hash = %s AND source_type = %s AND parser_version = %s
+                """,
+                unit_key,
             )
             row = cur.fetchone()
-            already_ingested = bool(row is not None and row[0])
- 
-        if already_ingested:
-            # Nothing was modified, so there is nothing to commit. Hand the
-            # caller a unit that refuses writes and stop.
-            yield IngestUnit(conn, run_id, file_path, file_hash, already_ingested=True)
-            # psycopg2 opened an implicit transaction for the SELECT above and
-            # will hold it until something ends it. Re-running against a large
-            # backup takes this branch once per already-ingested file, so
-            # without this the connection sits idle-in-transaction for the whole
-            # sweep -- pinning the xmin horizon and blocking autovacuum on these
-            # tables. rollback() rather than commit() because there is nothing
-            # to keep.
-            conn.rollback()
+
+        if row is not None and row[1]:
+            ingest_id = row[0]
+            yield IngestUnit(conn, ctx, file_path, file_hash, ingest_id, already_ingested=True)
+            # A dedup hit still records that this run saw the unit (R7). It is
+            # a no-op when the run is already listed, so re-running the same
+            # run does not churn rows.
+            with conn.cursor() as cur:
+                _label_run(cur, ctx, ingest_id)
+            conn.commit()
             return
- 
+
         with conn.cursor() as cur:
-            # Upsert-and-lock. Returns the row's completion state either way.
-            # For a row that is already complete every column keeps its
-            # original value: a finished ingest is immutable audit data and
-            # must not be re-stamped with a later run's id or path.
+            # Upsert-and-lock. Returns the row's id and completion state either
+            # way. For a row that is already complete every column keeps its
+            # original value: a finished ingest is immutable audit data.
             cur.execute(
                 """
                 INSERT INTO ingested_files
-                    (file_hash, run_id, file_path, file_name, source_type, raw_payload)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (file_hash) DO UPDATE SET
-                    run_id      = CASE WHEN ingested_files.ingest_complete
-                                       THEN ingested_files.run_id      ELSE EXCLUDED.run_id      END,
-                    file_path   = CASE WHEN ingested_files.ingest_complete
-                                       THEN ingested_files.file_path   ELSE EXCLUDED.file_path   END,
-                    file_name   = CASE WHEN ingested_files.ingest_complete
-                                       THEN ingested_files.file_name   ELSE EXCLUDED.file_name   END,
-                    source_type = CASE WHEN ingested_files.ingest_complete
-                                       THEN ingested_files.source_type ELSE EXCLUDED.source_type END,
-                    raw_payload = CASE WHEN ingested_files.ingest_complete
-                                       THEN ingested_files.raw_payload ELSE EXCLUDED.raw_payload END,
-                    ingested_at = CASE WHEN ingested_files.ingest_complete
-                                       THEN ingested_files.ingested_at ELSE now()                END
-                RETURNING ingest_complete
+                    (evidence_id, derivative_id, file_hash, source_type, parser_version,
+                     file_path, file_name, payload_kind, raw_payload, produced_by_runs)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, ARRAY[%s::uuid])
+                ON CONFLICT (evidence_id, file_hash, source_type, parser_version) DO UPDATE SET
+                    derivative_id = CASE WHEN ingested_files.ingest_complete
+                                         THEN ingested_files.derivative_id ELSE EXCLUDED.derivative_id END,
+                    file_path     = CASE WHEN ingested_files.ingest_complete
+                                         THEN ingested_files.file_path     ELSE EXCLUDED.file_path     END,
+                    file_name     = CASE WHEN ingested_files.ingest_complete
+                                         THEN ingested_files.file_name     ELSE EXCLUDED.file_name     END,
+                    payload_kind  = CASE WHEN ingested_files.ingest_complete
+                                         THEN ingested_files.payload_kind  ELSE EXCLUDED.payload_kind  END,
+                    raw_payload   = CASE WHEN ingested_files.ingest_complete
+                                         THEN ingested_files.raw_payload   ELSE EXCLUDED.raw_payload   END,
+                    ingested_at   = CASE WHEN ingested_files.ingest_complete
+                                         THEN ingested_files.ingested_at   ELSE now()                  END
+                RETURNING ingest_id, ingest_complete
                 """,
                 (
+                    ctx.evidence_id,
+                    ctx.derivative_id,
                     file_hash,
-                    run_id,
+                    source_type,
+                    parser_version,
                     str(file_path),
                     file_path.name,
-                    source_type,
+                    payload_kind,
                     psycopg2.extras.Json(raw_payload if raw_payload is not None else {}),
+                    ctx.run_id,
                 ),
             )
-            already_ingested = bool(cur.fetchone()[0])
- 
+            ingest_id, complete = cur.fetchone()
+            already_ingested = bool(complete)
+
             if not already_ingested:
                 # Reclaim an abandoned unit. A no-op for a row we just
                 # inserted; for a stranded one it clears partial records so
-                # this run's write is the only contribution.
-                cur.execute("DELETE FROM forensic_records WHERE file_hash = %s", (file_hash,))
- 
-        unit = IngestUnit(conn, run_id, file_path, file_hash, already_ingested)
+                # this attempt's write is the only contribution.
+                cur.execute("DELETE FROM forensic_records WHERE ingest_id = %s", (ingest_id,))
+
+        unit = IngestUnit(conn, ctx, file_path, file_hash, ingest_id, already_ingested)
         yield unit
- 
-        if already_ingested:
-            # Another process completed this file between the unlocked read
-            # above and the upsert. Nothing was written and nothing should be;
-            # release the row lock rather than holding it until the caller's
-            # next commit, which may be many files later.
-            conn.rollback()
-        else:
-            with conn.cursor() as cur:
+
+        with conn.cursor() as cur:
+            if not already_ingested:
                 cur.execute(
                     """
                     UPDATE ingested_files
                     SET ingest_complete = TRUE,
                         record_count    = %s,
                         completed_at    = now()
-                    WHERE file_hash = %s
+                    WHERE ingest_id = %s
                     """,
-                    (unit.records_written, file_hash),
+                    (unit.records_written, ingest_id),
                 )
-            conn.commit()
- 
+            # Fresh, reclaimed, or completed by another process between the
+            # unlocked read and the upsert: either way this run saw the unit.
+            _label_run(cur, ctx, ingest_id)
+        conn.commit()
+
     except BaseException:
         # BaseException, not Exception: a KeyboardInterrupt or SystemExit
         # between the ledger row and the records is precisely the interruption
@@ -299,35 +383,32 @@ def ingest(
         # through with the transaction open.
         conn.rollback()
         raise
- 
- 
-def write_record(conn, run_id: str, file_hash: str, record: NormalizedRecord) -> None:
+
+
+def write_record(conn, ingest_id: int, evidence_id: str, record: NormalizedRecord) -> None:
     """
     Insert one validated NormalizedRecord into forensic_records.
- 
+
     Takes a NormalizedRecord *instance*, not a dict — that's the enforcement
     point. There's no code path here that accepts an un-validated row; the
     Pydantic model has to construct successfully before this function can
-    even be called. This is the class of bug the original crash-report
-    extractor had (a field silently drifting from what the report expected)
-    pushed as early as it can go — construction time, not report-render time.
- 
+    even be called.
+
     Does NOT commit. The caller owns the transaction boundary, normally by
-    being inside an `ingest()` unit. This function used to commit per call,
-    which made a row-by-row extractor pay a commit per row and, worse, made
-    a file's records durable independently of its ledger row.
+    being inside an `ingest()` unit, which also supplies ingest_id and
+    evidence_id so a record can only ever attach to the unit it came from.
     """
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO forensic_records
-                (file_hash, run_id, incident_id, source_type, event_time,
+                (ingest_id, evidence_id, incident_id, source_type, event_time,
                  bug_type, process_name, pid, bundle_id, fields)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
-                file_hash,
-                run_id,
+                ingest_id,
+                evidence_id,
                 record.incident_id,
                 record.source_type.value,
                 record.event_time,
@@ -338,37 +419,33 @@ def write_record(conn, run_id: str, file_hash: str, record: NormalizedRecord) ->
                 psycopg2.extras.Json(record.fields),
             ),
         )
- 
- 
-def write_records(
-    conn, run_id: str, file_hash: str, records: list[NormalizedRecord]
-) -> int:
+
+
+def write_records(conn, ingest_id: int, evidence_id: str, records: list[NormalizedRecord]) -> int:
     """
     Bulk form — same validation guarantee as write_record, one round trip for
-    the whole batch instead of one per row. Extractors processing a
-    high-volume source (gcloud logs, SMS attachments) should call this rather
-    than looping write_record, or every row pays its own network round trip.
- 
+    the whole batch instead of one per row.
+
     Does NOT commit; see write_record.
- 
+
     Returns the number of records written.
     """
     if not records:
         return 0
- 
+
     with conn.cursor() as cur:
         psycopg2.extras.execute_values(
             cur,
             """
             INSERT INTO forensic_records
-                (file_hash, run_id, incident_id, source_type, event_time,
+                (ingest_id, evidence_id, incident_id, source_type, event_time,
                  bug_type, process_name, pid, bundle_id, fields)
             VALUES %s
             """,
             [
                 (
-                    file_hash,
-                    run_id,
+                    ingest_id,
+                    evidence_id,
                     r.incident_id,
                     r.source_type.value,
                     r.event_time,
@@ -382,16 +459,14 @@ def write_records(
             ],
         )
     return len(records)
- 
- 
+
+
 def incomplete_ingests(conn) -> list[tuple[str, str]]:
     """Ledger rows that were started and never finished: (file_hash, file_path).
- 
-    Expected to be empty in a healthy database. Non-empty means either a hard
-    kill mid-unit, or rows the 0002 migration could not classify — files that
-    predate this fix and have no records, which may be genuinely empty or may
-    be the ones the old code lost. Either way the next run retries them; this
-    exists so an operator can see them rather than infer them.
+
+    Expected to be empty in a healthy database. Non-empty means a hard kill
+    mid-unit. The next run retries them; this exists so an operator can see
+    them rather than infer them.
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -399,7 +474,7 @@ def incomplete_ingests(conn) -> list[tuple[str, str]]:
             SELECT file_hash, file_path
             FROM ingested_files
             WHERE NOT ingest_complete
-            ORDER BY ingested_at
+            ORDER BY ingested_at, ingest_id
             """
         )
         return [(row[0], row[1]) for row in cur.fetchall()]

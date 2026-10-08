@@ -50,21 +50,30 @@ def sqlite_supports_upsert_returning() -> bool:
     return sqlite3.sqlite_version_info >= MIN_SQLITE_VERSION
 
 
-# The subset of 0001_init.sql + 0002_ingest_completion.sql that the writers
-# touch, translated to SQLite types. Kept minimal on purpose: adding unused
+# The subset of the migrations (0001 to 0004) that the writers and readers touch,
+# translated to SQLite types. The evidence tables are left out: their foreign
+# keys are certified on the real-Postgres test leg (R33), not here. Kept minimal on purpose: adding unused
 # columns here would imply coverage that does not exist.
 SCHEMA = """
 CREATE TABLE ingested_files (
-    file_hash       TEXT PRIMARY KEY,
-    run_id          TEXT NOT NULL,
-    file_path       TEXT NOT NULL,
-    file_name       TEXT NOT NULL,
-    source_type     TEXT NOT NULL,
-    ingested_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    raw_payload     TEXT NOT NULL,
-    ingest_complete INTEGER NOT NULL DEFAULT 0,
-    record_count    INTEGER,
-    completed_at    TEXT,
+    ingest_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    evidence_id      TEXT NOT NULL,
+    derivative_id    TEXT NOT NULL,
+    file_hash        TEXT NOT NULL,
+    source_type      TEXT NOT NULL,
+    parser_version   INTEGER NOT NULL CHECK (parser_version >= 1),
+    file_path        TEXT NOT NULL,
+    file_name        TEXT NOT NULL,
+    payload_kind     TEXT NOT NULL CHECK (payload_kind IN ('full', 'summary', 'none')),
+    raw_payload      TEXT NOT NULL,
+    -- uuid[] in Postgres; a JSON array of strings here (see _translate).
+    produced_by_runs TEXT NOT NULL DEFAULT '[]',
+    ingested_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ingest_complete  INTEGER NOT NULL DEFAULT 0,
+    record_count     INTEGER,
+    completed_at     TEXT,
+    UNIQUE (evidence_id, file_hash, source_type, parser_version),
+    UNIQUE (ingest_id, evidence_id),
     CHECK (
         (ingest_complete = 1 AND record_count IS NOT NULL AND completed_at IS NOT NULL)
         OR
@@ -74,8 +83,8 @@ CREATE TABLE ingested_files (
 
 CREATE TABLE forensic_records (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    file_hash       TEXT NOT NULL REFERENCES ingested_files(file_hash),
-    run_id          TEXT NOT NULL,
+    ingest_id       INTEGER NOT NULL,
+    evidence_id     TEXT NOT NULL,
     incident_id     TEXT,
     source_type     TEXT NOT NULL,
     event_time      TEXT,
@@ -83,7 +92,31 @@ CREATE TABLE forensic_records (
     process_name    TEXT,
     pid             INTEGER,
     bundle_id       TEXT,
-    fields          TEXT NOT NULL DEFAULT '{}'
+    fields          TEXT NOT NULL DEFAULT '{}',
+    -- Same composite key as 0003: a record's evidence must be its unit's.
+    FOREIGN KEY (ingest_id, evidence_id) REFERENCES ingested_files(ingest_id, evidence_id)
+);
+
+-- 0004's read views, same selection rules in SQLite's dialect.
+CREATE VIEW forensic_records_history AS
+SELECT f.id, f.ingest_id, f.evidence_id, i.derivative_id, i.file_hash, i.parser_version,
+       f.incident_id, f.source_type, f.event_time, f.bug_type, f.process_name,
+       f.pid, f.bundle_id, f.fields
+FROM forensic_records f
+JOIN ingested_files i ON i.ingest_id = f.ingest_id
+WHERE i.ingest_complete = 1;
+
+CREATE VIEW current_forensic_records AS
+SELECT h.*
+FROM forensic_records_history h
+JOIN ingested_files i ON i.ingest_id = h.ingest_id
+WHERE NOT EXISTS (
+    SELECT 1 FROM ingested_files newer
+    WHERE newer.evidence_id = i.evidence_id
+      AND newer.file_hash = i.file_hash
+      AND newer.source_type = i.source_type
+      AND newer.parser_version > i.parser_version
+      AND newer.ingest_complete = 1
 );
 """
 
@@ -96,6 +129,21 @@ def _translate(sql: str) -> str:
     # SQLite has no boolean type; ingest_complete is INTEGER here.
     sql = re.sub(r"=\s*TRUE\b", "= 1", sql)
     sql = re.sub(r"\bNOT ingest_complete\b", "ingest_complete = 0", sql)
+    # produced_by_runs is uuid[] in Postgres and a JSON array here. These are
+    # the three array expressions the writers emit, rewritten one-for-one so
+    # parameter order is unchanged.
+    sql = re.sub(r"ARRAY\[\?::uuid\]", "json_array(?)", sql)
+    sql = re.sub(
+        r"array_append\(produced_by_runs, \?::uuid\)",
+        "json_insert(produced_by_runs, '$[#]', ?)",
+        sql,
+    )
+    sql = re.sub(
+        r"NOT \(\?::uuid = ANY\(produced_by_runs\)\)",
+        "NOT EXISTS (SELECT 1 FROM json_each(produced_by_runs) WHERE value = ?)",
+        sql,
+    )
+    sql = sql.replace("::uuid", "")
     sql = re.sub(r"\bWHEN ingested_files\.ingest_complete\b", "WHEN ingested_files.ingest_complete = 1", sql)
     return sql
 
@@ -219,11 +267,14 @@ class PgDouble:
         self._conn.row_factory = sqlite3.Row
         try:
             rows = self._conn.execute(
-                "SELECT * FROM ingested_files ORDER BY file_hash"
+                "SELECT * FROM ingested_files ORDER BY file_hash, ingest_id"
             ).fetchall()
-            return [dict(row) for row in rows]
+            out = [dict(row) for row in rows]
         finally:
             self._conn.row_factory = None
+        for row in out:
+            row["produced_by_runs"] = json.loads(row["produced_by_runs"])
+        return out
 
     def records(self) -> list[dict[str, Any]]:
         self._conn.row_factory = sqlite3.Row
@@ -237,5 +288,7 @@ class PgDouble:
         if file_hash is None:
             return self._conn.execute("SELECT COUNT(*) FROM forensic_records").fetchone()[0]
         return self._conn.execute(
-            "SELECT COUNT(*) FROM forensic_records WHERE file_hash = ?", (file_hash,)
+            "SELECT COUNT(*) FROM forensic_records f JOIN ingested_files i USING (ingest_id) "
+            "WHERE i.file_hash = ?",
+            (file_hash,),
         ).fetchone()[0]

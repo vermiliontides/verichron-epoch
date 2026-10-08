@@ -2,6 +2,7 @@
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
+import * as os from "node:os";
 import { spawn } from "node:child_process";
 import {
   discoverBackups,
@@ -105,14 +106,23 @@ async function run(cfg: Config): Promise<void> {
     await fsp.mkdir(path.join(cfg.workspace, d), { recursive: true });
   }
 
-  let iocSet: CheckParams;
+  let iocs: IocSnapshot;
   try {
     await ensureIOCs(cfg);
-    iocSet = await hashIocSet(cfg);
+    iocs = await snapshotIocs(cfg);
   } catch (err) {
     throw new Error(`iocs: ${err instanceof Error ? err.message : err}`);
   }
-  console.log(`[mvt-runner] IOC set ${iocSet.ioc_set_hash.slice(0, 12)} (${iocSet.ioc_file_count} file(s))`);
+  console.log(`[mvt-runner] IOC set ${iocs.params.ioc_set_hash.slice(0, 12)} (${iocs.params.ioc_file_count} file(s))`);
+  try {
+    await runBackups(cfg, mvtTool, iocs);
+  } finally {
+    await fsp.rm(iocs.dataFolder, { recursive: true, force: true });
+  }
+}
+
+async function runBackups(cfg: Config, mvtTool: ToolVersion, iocs: IocSnapshot): Promise<void> {
+  const iocSet = iocs.params;
 
   let backups: Backup[];
   try {
@@ -327,7 +337,7 @@ async function run(cfg: Config): Promise<void> {
       // check-backup is rewriting them.
       await fsp.rm(resMarker, { force: true });
       try {
-        await checkBackup(cfg, decDir, resDir, logPath);
+        await checkBackup(cfg, decDir, resDir, logPath, iocs.dataFolder);
       } catch (err) {
         console.error(`  [check] error: ${err instanceof Error ? err.message : err}`);
         failedBackups.add(name);
@@ -368,10 +378,10 @@ function indicatorsDir(cfg: Config): string {
  * at the runner-managed home, and MVT_STIX2 is never passed through, so the
  * indicators check-backup loads are exactly the hashed folder.
  */
-function mvtEnv(cfg: Config): NodeJS.ProcessEnv {
+function mvtEnv(cfg: Config, dataFolder: string = path.join(cfg.mvtHome, "data")): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
-    MVT_DATA_FOLDER: path.join(cfg.mvtHome, "data"),
+    MVT_DATA_FOLDER: dataFolder,
     MVT_CONFIG_FOLDER: path.join(cfg.mvtHome, "config"),
   };
   delete env.MVT_STIX2;
@@ -417,14 +427,31 @@ async function mvtToolVersion(cfg: Config): Promise<ToolVersion> {
   return { name: "mvt-ios", version };
 }
 
+/** A private, fixed copy of the IOC set, and its identity. */
+interface IocSnapshot {
+  /** Used as MVT_DATA_FOLDER for check-backup; holds indicators/. Removed when the run ends. */
+  dataFolder: string;
+  params: CheckParams;
+}
+
 /**
- * The IOC set check-backup will load, identified the same way evidence is:
- * the content root of a canonical manifest of the indicators folder.
+ * Copies the managed indicators into a folder only this run uses, and
+ * identifies the copy the same way evidence is identified (the content root
+ * of a canonical manifest). check-backup reads the copy, never the shared
+ * folder, so a refresh by another runner mid-run can't make this run check
+ * against files other than the ones it hashed and records.
  */
-async function hashIocSet(cfg: Config): Promise<CheckParams> {
-  const result = await hashTree(indicatorsDir(cfg));
-  if (result.fileCount === 0) throw new Error(`no IOC files in ${indicatorsDir(cfg)}`);
-  return { ioc_set_hash: result.contentRoot, ioc_file_count: result.fileCount };
+async function snapshotIocs(cfg: Config): Promise<IocSnapshot> {
+  const dataFolder = await fsp.mkdtemp(path.join(os.tmpdir(), "verichron-iocs-"));
+  try {
+    await fsp.cp(indicatorsDir(cfg), path.join(dataFolder, "indicators"), { recursive: true });
+    const result = await hashTree(path.join(dataFolder, "indicators"));
+    if (result.fileCount === 0) throw new Error(`no IOC files in ${indicatorsDir(cfg)}`);
+    return { dataFolder, params: { ioc_set_hash: result.contentRoot, ioc_file_count: result.fileCount } };
+  } catch (err) {
+    await fsp.rm(dataFolder, { recursive: true, force: true });
+    throw err;
+  }
 }
 
 async function ensureIOCs(cfg: Config): Promise<void> {
@@ -525,14 +552,20 @@ async function decryptBackup(cfg: Config, src: string, dest: string, password: s
   await runCaptured(cfg.mvtBin, ["decrypt-backup", "-p", password, "-d", dest, src], mvtEnv(cfg));
 }
 
-async function checkBackup(cfg: Config, decryptedDir: string, resultsDir: string, logPath: string): Promise<void> {
+async function checkBackup(
+  cfg: Config,
+  decryptedDir: string,
+  resultsDir: string,
+  logPath: string,
+  iocDataFolder: string
+): Promise<void> {
   await fsp.mkdir(resultsDir, { recursive: true });
   const logStream = fs.createWriteStream(logPath);
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(cfg.mvtBin, ["check-backup", "--output", resultsDir, decryptedDir], {
       stdio: ["inherit", "pipe", "pipe"],
-      env: mvtEnv(cfg),
+      env: mvtEnv(cfg, iocDataFolder),
     });
 
     child.stdout.on("data", (chunk) => {

@@ -43,8 +43,11 @@ export async function repairDecrypted(cfg: Config, decDir: string): Promise<Repa
 
     console.log(`  [repair]  malformed DB detected: ${path.relative(decDir, p)}`);
     try {
-      const { applyWarnings, preservedPath } = await sqliteRecoverInPlace(cfg.sqliteBin, p);
-      preserved.push(path.relative(decDir, preservedPath));
+      // Recorded the moment the copy exists, so a later failure (rename,
+      // side-file cleanup) can't leave a preserved original unaccounted for.
+      const { applyWarnings } = await sqliteRecoverInPlace(cfg.sqliteBin, p, (preservedPath) =>
+        preserved.push(path.relative(decDir, preservedPath))
+      );
       const okNow = await sqliteQuickCheck(cfg.sqliteBin, p);
       if (okNow) {
         console.log(
@@ -141,8 +144,9 @@ function summarizeSqliteWarnings(stderr: string): string {
 
 async function sqliteRecoverInPlace(
   sqliteBin: string,
-  dbPath: string
-): Promise<{ applyWarnings: string; preservedPath: string }> {
+  dbPath: string,
+  onPreserved: (preservedPath: string) => void
+): Promise<{ applyWarnings: string }> {
   const recoverResult = await runProcess(sqliteBin, [dbPath, ".recover"]);
   if (recoverResult.stdout.trim() === "") {
     throw new Error(
@@ -164,11 +168,12 @@ async function sqliteRecoverInPlace(
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const corruptBackupPath = `${dbPath}.corrupt-${timestamp}`;
   await fsp.copyFile(dbPath, corruptBackupPath);
+  onPreserved(corruptBackupPath);
 
   await fsp.rename(repairedPath, dbPath);
 
   await fsp.rm(`${dbPath}-wal`, { force: true });
   await fsp.rm(`${dbPath}-shm`, { force: true });
 
-  return { applyWarnings: summarizeSqliteWarnings(applyResult.stderr), preservedPath: corruptBackupPath };
+  return { applyWarnings: summarizeSqliteWarnings(applyResult.stderr) };
 }

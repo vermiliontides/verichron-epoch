@@ -11,7 +11,7 @@ there's no more authoritative source to prefer.
 | Input | Source type | One record per | Payload |
 |---|---|---|---|
 | `alerts.json` | `mvt_ioc_detection` | alert, timed or not | `full` |
-| `timeline.csv` + `info.json` | `timestamp_anomaly` | timeline event dated more than one day after the backup was taken | `summary` |
+| `timeline.csv` + `backup_info.json` | `timestamp_anomaly` | timeline event dated more than one day after the backup was taken | `summary` |
 
 ## `mvt_ioc_detection` fields
 
@@ -35,7 +35,7 @@ the report's correlation window.
 ## `timestamp_anomaly`
 
 No single mvt module checks a timestamp against when the backup was taken, so
-this stage does. The backup date comes from `info.json`'s `Last Backup Date`. An
+this stage does. The backup date comes from `backup_info.json`'s `Last Backup Date`. An
 event more than a day past it (the grace period absorbs clock and timezone
 differences) is recorded with its plugin, description and offset from the
 backup date.

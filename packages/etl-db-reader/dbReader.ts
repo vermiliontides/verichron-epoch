@@ -129,23 +129,24 @@ export async function getRunEvidence(client: Db, runId: string): Promise<string 
 }
 
 /**
- * Where a run's mvt results are now: the current path of the `mvt_results`
- * derivative the run's stages read, or null if they read none. The report is
- * written beside those results. Registration updates a derivative's path when
- * its workspace moves, so this follows a moved workspace; the run's
- * `backup_source` keeps the path it started from.
+ * Where the decrypted backup a run processed is now: the current path of the
+ * run's decrypted derivative, or null if the run has no registered evidence
+ * (it predates EPOCH-404) or doesn't exist. Registration updates a
+ * derivative's path when its workspace moves, so this follows a moved
+ * workspace; the run's `backup_source` keeps the path it started from.
+ *
+ * The run's report is written to the results path the orchestrator derives
+ * from this path (`deriveResultsPath`), whether or not mvt results were
+ * registered: a failed check-backup still gets a report.
  */
-export async function getRunResultsPath(client: Db, runId: string): Promise<string | null> {
+export async function getRunDecryptedPath(client: Db, runId: string): Promise<string | null> {
   const result = await client.query<{ path: string }>(
-    `SELECT DISTINCT d.path
-       FROM pipeline_stage_status s
-       JOIN evidence_derivatives d ON d.derivative_id = s.derivative_id
-      WHERE s.run_id = $1 AND d.kind = 'mvt_results'`,
+    `SELECT d.path
+       FROM pipeline_runs r
+       JOIN evidence_derivatives d ON d.derivative_id = r.derivative_id
+      WHERE r.run_id = $1 AND d.kind = 'decrypted'`,
     [runId]
   );
-  if (result.rows.length > 1) {
-    throw new Error(`run ${runId} read more than one mvt results derivative`);
-  }
   return result.rows[0]?.path ?? null;
 }
 

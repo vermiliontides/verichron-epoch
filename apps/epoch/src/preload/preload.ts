@@ -65,7 +65,7 @@ const dbApi = {
   openReport: (runId: string): Promise<boolean> => ipcRenderer.invoke('epoch:openReport', runId),
 
   // Stage 3: runs the orchestrator (creates pipeline_runs/stage rows for
-  // everything mvt-runner has decrypted in `workspace`). See main.ts's
+  // everything the processor has decrypted in `workspace`). See main.ts's
   // epoch:startAnalysis handler for why this doesn't need a list of which
   // backups succeeded -- orchestrator discovers that itself.
   startAnalysis: (workspace: string): Promise<{ started: boolean }> =>

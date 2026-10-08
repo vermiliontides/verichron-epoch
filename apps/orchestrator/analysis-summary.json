@@ -6,7 +6,7 @@
       "error": "not a valid path (looks like a CLI flag): \"--workspace\""
     },
     {
-      "backupPath": "/Users/sleepycat/mvt-workspace",
+      "backupPath": "/Users/sleepycat/verichron-workspace",
       "status": "failed",
       "error": "missing Manifest.db/Info.plist — not a decrypted backup root"
     }

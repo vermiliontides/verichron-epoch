@@ -19,17 +19,17 @@ export interface DecryptionOptions {
 
 /**
  * NOTE (EPOCH-103 review): the password captured here (used as
- * BACKUP_PASSWORD for idevicebackup2) and the password mvt-runner later
+ * BACKUP_PASSWORD for idevicebackup2) and the password the processor later
  * prompts for during `mvt-ios decrypt-backup` are deliberately NOT threaded
  * together, even though they happen to be the same secret in the normal
- * flow. This process (Electron main, device-pull IPC) and mvt-runner
+ * flow. This process (Electron main, device-pull IPC) and the processor
  * (a separately spawned CLI subprocess) have no shared credential channel,
  * and EPOCH-102 already treats this password as something that should live
  * in memory for the shortest possible window -- caching it across that
  * process boundary just to save a second keystroke would extend its
  * lifetime for a marginal convenience gain. The person re-enters the
- * password once more when mvt-runner's decrypt-backup prompt reaches them
- * (see apps/mvt-runner/src/main.ts's password retry loop). If this
+ * password once more when the processor's decrypt-backup prompt reaches them
+ * (see apps/processor/src/main.ts's password retry loop). If this
  * double-entry becomes a real UX complaint, the fix is a short-lived,
  * explicitly-scoped handoff (not a shared module-level cache) -- revisit
  * deliberately, don't just wire it through.

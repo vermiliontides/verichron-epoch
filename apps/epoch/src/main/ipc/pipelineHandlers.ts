@@ -300,14 +300,14 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
  
   ipcMain.handle('epoch:startPipeline', async (_event, source: string, options?: StartPipelineOptions) => {
     if (runningMvtProcess) {
-      throw new Error('mvt-runner is already running -- wait for it to finish before starting another.');
+      throw new Error('The processor is already running -- wait for it to finish before starting another.');
     }
     if (!source || !source.trim()) {
       throw new Error('A source directory is required.');
     }
  
-    const workspacePath = options?.workspace?.trim() || path.join(os.homedir(), 'mvt-workspace');
-    const args = ['--filter', '@verichron/mvt-runner', 'dev', '--', '--source', source];
+    const workspacePath = options?.workspace?.trim() || path.join(os.homedir(), 'verichron-workspace');
+    const args = ['--filter', '@verichron/processor', 'dev', '--', '--source', source];
     args.push('--workspace', workspacePath);
     if (options?.forceDecrypt) args.push('--force-decrypt');
     if (options?.refreshIOCs) args.push('--refresh-iocs');

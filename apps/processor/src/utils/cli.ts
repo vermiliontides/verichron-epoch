@@ -38,7 +38,7 @@ export function parseFlags(): Config {
     args,
     options: {
       source: { type: "string", default: "" },
-      workspace: { type: "string", default: path.join(home, "mvt-workspace") },
+      workspace: { type: "string", default: path.join(home, "verichron-workspace") },
       "mvt-bin": { type: "string", default: DEFAULT_MVT_BIN },
       "mvt-home": { type: "string", default: defaultMvtHome() },
       "sqlite-bin": { type: "string", default: "sqlite3" },
@@ -90,7 +90,7 @@ export function parseFlags(): Config {
 
 /**
  * VERICHRON_MVT_HOME, else <XDG_DATA_HOME or ~/.local/share>/verichron/mvt.
- * Owned by mvt-runner: mvt-ios's MVT_DATA_FOLDER and MVT_CONFIG_FOLDER point
+ * Owned by the processor: mvt-ios's MVT_DATA_FOLDER and MVT_CONFIG_FOLDER point
  * inside it, so the IOC set it records is the one mvt-ios loads.
  */
 function defaultMvtHome(): string {
@@ -100,11 +100,11 @@ function defaultMvtHome(): string {
 }
 
 function printUsage() {
-  console.error(`Usage: mvt-runner --source <dir> [options]
+  console.error(`Usage: processor --source <dir> [options]
 
 Options:
   --source <dir>          directory containing backup subdirectories (required)
-  --workspace <dir>        workspace directory for evidence/decrypted/results (default: ./mvt-workspace)
+  --workspace <dir>        workspace directory for evidence/decrypted/results (default: ./verichron-workspace)
   --mvt-bin <path>         path to mvt-ios binary (default: <repo-root>/tools/mvt/.venv/bin/mvt-ios,
                            the pinned environment "mise run setup" creates)
   --mvt-home <dir>         mvt-ios data/config home; IOCs are kept and hashed here only

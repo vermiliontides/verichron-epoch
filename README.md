@@ -15,7 +15,7 @@ misattributes or over-claims evidence, and it always says what it did not do.
 ## How it fits together
 
 ```
-device / backup ──► mvt-runner ──► orchestrator ──► stages ──► PostgreSQL ──► report, desktop app
+device / backup ──► processor ──► orchestrator ──► stages ──► PostgreSQL ──► report, desktop app
                     hash, decrypt,   register evidence,  extract,
                     repair, IOC scan run stages in order  write facts
 ```
@@ -43,7 +43,7 @@ Each package has a short README covering only what is specific to it.
 | Path | What it is | Language |
 |---|---|---|
 | `apps/epoch` | Electron desktop app | TypeScript |
-| `apps/mvt-runner` | Hashes, decrypts, repairs and IOC-scans backups (drives `mvt-ios`) | TypeScript |
+| `apps/processor` | Processes evidence: hashes and verifies backups, then produces derivatives (decrypt, repair, IOC scan with `mvt-ios`) | TypeScript |
 | `apps/orchestrator` | Registers evidence and runs the pipeline stages | TypeScript |
 | `apps/extractors/*` | Stages that turn tool output into facts (`crash`, `ileapp_bridge`, `mvt_iocs`) | Python |
 | `apps/analysis` | LLM stage that proposes leads | Python |

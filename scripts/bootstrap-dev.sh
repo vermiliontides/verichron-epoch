@@ -14,7 +14,7 @@
 #
 # Environments it creates:
 #   .venv/           the uv workspace (our Python code), Python from .python-version
-#   tools/mvt/.venv     mvt-ios, pinned; run by mvt-runner
+#   tools/mvt/.venv     mvt-ios, pinned; run by the processor
 #   tools/ileapp/.venv  iLEAPP's runtime, pinned; run by the iLEAPP bridge
 #   node_modules/    the pnpm workspace
 

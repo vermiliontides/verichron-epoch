@@ -50,7 +50,7 @@ const REPAIRED: DecryptParams = {
 const IOCS_A: CheckParams = { ioc_set_hash: 'a'.repeat(64), ioc_file_count: 14 };
 const IOCS_B: CheckParams = { ioc_set_hash: 'b'.repeat(64), ioc_file_count: 15 };
 
-/** The markers mvt-runner writes once each derivative is done (EPOCH-404, EPOCH-406). */
+/** The markers the processor writes once each derivative is done (EPOCH-404, EPOCH-406). */
 const decryptMarker = (root: string, params: DecryptParams = REPAIRED) => renderDecryptMarker(root, MVT, params);
 const checkMarker = (root: string, params: CheckParams = IOCS_A) => renderCheckMarker(root, MVT, params);
 
@@ -119,7 +119,7 @@ function infoPlist(udid: string, name: string): string {
 </dict></plist>`;
 }
 
-/** A workspace as mvt-runner leaves it: decrypted backup, results, and the
+/** A workspace as the processor leaves it: decrypted backup, results, and the
  * EPOCH-401 evidence files (content-addressed manifest + sidecar). */
 function makeWorkspace(
   name: string,
@@ -137,7 +137,7 @@ function makeWorkspace(
   writeFileSync(path.join(backupPath, 'Manifest.db'), '');
   writeFileSync(path.join(backupPath, 'Info.plist'), infoPlist(UDID, 'Alice &amp; Bob&apos;s iPhone'));
   const contentRoot = createHash('sha256').update(manifest).digest('hex');
-  // Provenance markers, as mvt-runner writes them once each derivative is done.
+  // Provenance markers, as the processor writes them once each derivative is done.
   writeFileSync(path.join(backupPath, DECRYPT_MARKER), decryptMarker(contentRoot));
   if (results) {
     mkdirSync(resultsPath, { recursive: true });
@@ -160,7 +160,7 @@ function makeWorkspace(
       total_bytes: 0,
       source_path: sourcePath,
       hashed_at: '2026-10-08T00:00:00.000Z',
-      tool: { name: 'mvt-runner', version: '0.1.0' },
+      tool: { name: 'processor', version: '0.1.0' },
     })
   );
   return { workspace, backupPath, resultsPath, sidecarPath, contentRoot };

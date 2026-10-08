@@ -19,6 +19,7 @@ never silently deleted.
 | Lab requirements (network enforcement, signing, audit artifacts) come from practicing examiners, not from us alone | Only they and their auditors can answer them | EPOCH-440 |
 | The two builds are named **Lab Edition** and **Personal Edition**. "Personal" was chosen over "Home" | "Personal" states whose device and data the edition is for; "Home" describes a place and implies examining other household members' devices | Linear projects "Verichron Epoch: Lab Edition 1.0" and "Personal Edition 1.0" |
 | The Personal Edition empowers its user: it keeps the core's full capability, and adds restrictions only where the law requires them | The product serves the person examining their own device; it does not assume a paternal role | Personal Edition 1.0 |
+| The workflow vocabulary is **acquire → process → extract (ETL) → analyze → report**. The component that verifies evidence and produces derivatives is the **processor** (formerly mvt-runner); the orchestrator coordinates extract, analyze and report | One accurate name per step, in the terms examiners use. "mvt-runner" named one tool and a mechanism. "Transformer" was rejected: in forensics it implies altering evidence, in ETL terms the extractors already transform, and it is a homonym of the model architecture | EPOCH-462 |
 
 ## AI
 
@@ -42,8 +43,8 @@ never silently deleted.
 | Decision | Why | Where |
 |---|---|---|
 | A derivative's identity is (evidence, kind, parent, provenance); its path is only a last-known location | A moved workspace resumes; a new tool version, repair outcome or IOC set never overwrites old provenance | EPOCH-404, 406 |
-| Completion markers record the evidence they were made from and their provenance. mvt-runner withdraws a marker before redoing work, and registration refuses any mismatch | A changed backup must never have its old decrypt filed under the new evidence | EPOCH-404 |
-| mvt-runner owns mvt's data and config folders, refuses `MVT_STIX2`, and checks each run against a private, hashed copy of the IOCs | The recorded IOC set must be exactly the one used | EPOCH-406 |
+| Completion markers record the evidence they were made from and their provenance. The processor withdraws a marker before redoing work, and registration refuses any mismatch | A changed backup must never have its old decrypt filed under the new evidence | EPOCH-404 |
+| The processor owns mvt's data and config folders, refuses `MVT_STIX2`, and checks each run against a private, hashed copy of the IOCs | The recorded IOC set must be exactly the one used | EPOCH-406 |
 | iLEAPP's output becomes its own derivative (parent: the decrypt), in `<workspace>/ileapp/<label>/` | Its files are iLEAPP's output, not the decrypt's (R7); a shared directory mixed backups together | EPOCH-416 |
 
 ## Runs and completeness

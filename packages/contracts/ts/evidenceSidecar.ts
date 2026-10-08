@@ -2,7 +2,7 @@
  * Zod mirror of evidence-sidecar.schema.json (package root).
  *
  * Keep the two in step: the field-name parity test in
- * apps/mvt-runner/src/utils/manifest.test.ts compares this object's keys
+ * apps/processor/src/utils/manifest.test.ts compares this object's keys
  * against the JSON Schema's `properties`, and
  * packages/contracts/python/test_contract_sync.py validates the example
  * sidecar against the JSON Schema itself.

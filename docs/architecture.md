@@ -9,7 +9,7 @@ through it. Identity and provenance are explained in
 
 ```mermaid
 flowchart LR
-  A[Encrypted backup] --> B[mvt-runner]
+  A[Encrypted backup] --> B[processor]
   B -->|evidence/ sidecar + manifest| W[(Workspace)]
   B -->|decrypted/ + results/ with markers| W
   W --> C[orchestrator]
@@ -20,23 +20,30 @@ flowchart LR
   D --> E[desktop app]
 ```
 
+Evidence moves through five steps: **acquire → process → extract (ETL) →
+analyze → report**. The orchestrator coordinates the last three.
+
 1. **Acquire.** The desktop app pulls an encrypted backup from a connected
    device (or the examiner supplies one).
-2. **Prepare (`mvt-runner`).** For each backup it:
+2. **Process (`processor`).** For each backup it:
    - hashes every file into a canonical manifest, which gives the evidence its
      identity (`content_root`);
    - decrypts it with `mvt-ios`, then repairs malformed SQLite databases;
    - runs `mvt-ios check-backup` against a hashed copy of the IOC set.
 
-   Each finished output carries a marker recording what produced it.
-3. **Register and run (`orchestrator`).** For each decrypted backup it verifies
-   the evidence and markers, registers the evidence, its device and derivatives,
-   decides whether a run is needed, then runs the stages in `stage.json` order as
-   subprocesses, passing each one its identity.
-4. **Extract (stages).** Each stage reads one derivative and writes facts through
-   the one writer, `ingest()`, one atomic unit per source file.
-5. **Read.** The report and the desktop app read facts through database views,
-   so both languages apply the same selection rules (R27).
+   Each output is a **derivative**: a separate product of the evidence, which
+   itself is never altered. Each carries a marker recording what produced it.
+3. **Extract (ETL, `apps/extractors/*`).** The orchestrator verifies the
+   evidence and markers, registers the evidence, its device and derivatives, and
+   decides whether a run is needed. It then runs the stages in `stage.json` order
+   as subprocesses, passing each one its identity. Each extraction stage reads
+   one derivative, normalizes it, and loads facts through the one writer,
+   `ingest()`, one atomic unit per source file.
+4. **Analyze (`apps/analysis`).** The LLM stage proposes leads from the facts;
+   leads are never evidence.
+5. **Report (`apps/reporting`, the desktop app).** The report and the app read
+   facts through database views, so both languages apply the same selection
+   rules (R27).
 
 ## Components
 
@@ -45,20 +52,20 @@ Each concern has exactly one owner (R2).
 | Component | Owns | Does not |
 |---|---|---|
 | `apps/epoch` | Device pull, starting runs, showing runs, records, IOCs and reports | Decide run state or write facts |
-| `apps/mvt-runner` | Hashing evidence, decrypt, repair, IOC set, `mvt-ios` invocation, completion markers | Touch the database |
+| `apps/processor` | Hashing evidence, decrypt, repair, IOC set, `mvt-ios` invocation, completion markers | Touch the database |
 | `apps/orchestrator` | Evidence registration, run creation, stage order, run and stage state | Parse evidence |
 | Stages (`apps/extractors/*`, `apps/analysis`, `apps/reporting`) | Turning one derivative's files into facts, or rendering the report | Choose their own identity (R16) or commit transactions (R15) |
 | `packages/etl-db-writer` | `ingest()`, the ledger, migrations | Parse anything (R15) |
 | `packages/etl-db-reader` | Named, read-only questions for the app (R24) | Write |
 | `packages/contracts` | Schemas, record types, marker formats, path helpers | Policy (R3) |
 
-Languages split by role: TypeScript runs the control plane (app, mvt-runner,
+Languages split by role: TypeScript runs the control plane (app, processor,
 orchestrator); Python parses, writes facts and renders the report. They meet
 only at process boundaries (a stage is a subprocess) and in the database.
 
 ## The workspace
 
-mvt-runner creates one workspace per batch of backups. Each backup is a
+The processor creates one workspace per batch of backups. Each backup is a
 *label* (its directory name).
 
 ```
@@ -69,7 +76,7 @@ mvt-runner creates one workspace per batch of backups. Each backup is a
   decrypted/<label>/                       decrypted backup + .mvt_decrypted_ok marker
   results/<label>/                         mvt-ios output + .mvt_check_ok marker
   logs/<label>.log                         check-backup output
-  summary.json, summary.md                 mvt-runner's run summary
+  summary.json, summary.md                 the processor's run summary
 ```
 
 Today the orchestrator and app find these directories by layout. A workspace
@@ -114,7 +121,7 @@ These are settled but not yet built; this page will change when they land.
 | Change | Ticket |
 |---|---|
 | iLEAPP output becomes its own registered derivative | EPOCH-416 |
-| The app reads typed events from mvt-runner and the orchestrator instead of scraping logs | EPOCH-443, EPOCH-445 |
+| The app reads typed events from the processor and the orchestrator instead of scraping logs | EPOCH-443, EPOCH-445 |
 | A workspace manifest replaces path inference | EPOCH-427 |
 | Secrets travel by environment, never on the command line | EPOCH-423 |
 | The TypeScript fact writer is removed; Python is the only writer | EPOCH-452 |

@@ -12,7 +12,7 @@ field is Faker-generated.
 Does not encrypt or scan its own output -- for that, run the real
 pipeline against it: idevicebackup2 (real device backup + encryption) is
 Stage 0 in production, but for a synthetic backup you can skip straight
-to mvt-runner's decrypt/scan step by pointing --source at a directory
+to the processor's decrypt/scan step by pointing --source at a directory
 containing this output, or feed it directly to an extractor's --backup-path.
 
 Usage:

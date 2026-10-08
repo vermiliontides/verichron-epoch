@@ -1,12 +1,12 @@
 name: TS Tests
 
-# EPOCH-401: first TypeScript test job in the repo. Scoped to mvt-runner and
+# EPOCH-401: first TypeScript test job in the repo. Scoped to the processor and
 # its workspace dependencies (the `...` filter) so the Electron app's install
 # isn't pulled into every run. Widen the filter as other packages gain tests.
 #
 # Linux only, by decision (2026-10-07): the macOS-specific inputs the evidence
 # manifest must be invariant to (NFD filenames, `\` separators) are simulated
-# in apps/mvt-runner/src/utils/manifest.test.ts rather than run on a macOS
+# in apps/processor/src/utils/manifest.test.ts rather than run on a macOS
 # runner.
 
 on:
@@ -15,7 +15,8 @@ on:
   pull_request:
 
 jobs:
-  mvt-runner:
+  typescript:
+    name: TypeScript
     runs-on: ubuntu-latest
     env:
       # The etl-db-reader tests create and drop their own throwaway database
@@ -46,17 +47,17 @@ jobs:
           version: 2026.10.4
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --filter "@verichron/mvt-runner..." --filter "@verichron/etl-db-writer..." --filter "@verichron/etl-db-reader..." --filter "@verichron/orchestrator..."
+        run: pnpm install --frozen-lockfile --filter "@verichron/processor..." --filter "@verichron/etl-db-writer..." --filter "@verichron/etl-db-reader..." --filter "@verichron/orchestrator..."
 
-      # mvt-runner resolves @verichron/contracts through its built dist/.
+      # The processor resolves @verichron/contracts through its built dist/.
       - name: Build contracts
         run: pnpm --filter @verichron/contracts build
 
       - name: Typecheck
-        run: pnpm --filter @verichron/mvt-runner typecheck
+        run: pnpm --filter @verichron/processor typecheck
 
       - name: Test
-        run: pnpm --filter @verichron/mvt-runner test
+        run: pnpm --filter @verichron/processor test
 
       - name: Typecheck etl-db-writer
         run: pnpm --filter @verichron/etl-db-writer typecheck

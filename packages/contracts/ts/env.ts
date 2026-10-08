@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 /**
  * Repo-root .env, loaded once per process. Every Node entrypoint in this
- * monorepo (Electron main, orchestrator, mvt-runner) should call this
+ * monorepo (Electron main, orchestrator, processor) should call this
  * instead of independently guessing a path -- apps/epoch/src/main/main.ts
  * previously did `loadEnv({ path: '../../../.env' })`, which dotenv
  * resolves relative to process.cwd(), not this file's location, so it

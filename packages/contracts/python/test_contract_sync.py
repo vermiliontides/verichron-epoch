@@ -254,7 +254,7 @@ def test_load_schema_returns_an_independent_copy():
 
 # --------------------------------------------------------------------------
 # Evidence sidecar (EPOCH-401). The Zod half of this check, plus Zod/JSON
-# Schema field parity, lives in apps/mvt-runner/src/utils/manifest.test.ts.
+# Schema field parity, lives in apps/processor/src/utils/manifest.test.ts.
 # --------------------------------------------------------------------------
 
 SIDECAR_SCHEMA = CONTRACTS_DIR / "evidence-sidecar.schema.json"

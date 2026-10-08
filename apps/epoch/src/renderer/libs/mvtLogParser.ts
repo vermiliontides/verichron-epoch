@@ -1,12 +1,12 @@
-// Translates mvt-runner's raw stdout/stderr lines into structured
+// Translates the processor's raw stdout/stderr lines into structured
 // per-backup progress, so the UI can show a plain-English status next to
 // (not instead of) the raw CLI output. Pure and tolerant by design: an
 // unrecognized line is a no-op, never a thrown error -- this only drives a
 // friendlier display, the raw technical log underneath remains the source
 // of truth for anything this doesn't catch.
 //
-// Depends on mvt-runner's log format staying banner/prefix-based
-// (`=== <name> ===`, `  [stage]  <detail>`) -- see apps/mvt-runner/src/main.ts's
+// Depends on the processor's log format staying banner/prefix-based
+// (`=== <name> ===`, `  [stage]  <detail>`) -- see apps/processor/src/main.ts's
 // run() loop, which is what actually produces these lines.
 
 export type StageName = 'hash' | 'decrypt' | 'repair' | 'check';
@@ -40,7 +40,7 @@ function emptyStages(): Record<StageName, StageState> {
 }
 
 // Seeds progress for a fresh run from the labels the user actually
-// selected -- not by parsing mvt-runner's own "found N backup(s)" banner.
+// selected -- not by parsing the processor's own "found N backup(s)" banner.
 // That text duplicates data the UI already has authoritatively (the exact
 // same selection just sent via --only), and parsing it would just be one
 // more place a log-format change could silently break the UI.

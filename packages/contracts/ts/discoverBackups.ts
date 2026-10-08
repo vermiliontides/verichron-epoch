@@ -7,7 +7,7 @@ import path from 'path';
 // mvt-ios). These are the same directory in the simple case, but idevice-
 // backup2 output is commonly one level deeper: <source>/<label>/<UDID>/Manifest.db
 //
-// Shared between apps/mvt-runner (CLI --only filtering) and apps/epoch
+// Shared between apps/processor (CLI --only filtering) and apps/epoch
 // (the workspace picker UI needs the same discovered set, not a
 // reimplementation, so Stage 1's backup list and the CLI's actual
 // processing set never drift apart).

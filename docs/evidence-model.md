@@ -6,7 +6,7 @@ stays traceable to its source. The components named here are described in
 
 ## Evidence
 
-**Evidence is identified by its content, not its location (R6).** mvt-runner
+**Evidence is identified by its content, not its location (R6).** The processor
 hashes every file of a backup into a *canonical manifest*:
 
 - one line per file: `<sha256>  <path>`;
@@ -51,14 +51,14 @@ A derivative's identity is **(evidence, kind, parent, provenance)**:
   derivative**. A derivative's provenance is never rewritten; only its path, its
   last-known location, is updated.
 
-**Completion markers.** mvt-runner writes `.mvt_decrypted_ok` and `.mvt_check_ok`
+**Completion markers.** The processor writes `.mvt_decrypted_ok` and `.mvt_check_ok`
 only once a derivative is finished. Each records the evidence `content_root` it
 was made from and its provenance. Registration refuses a derivative whose marker
 is missing, malformed, or names different evidence. That's how a backup that
 changed under the same label can never have its old decrypt filed under the new
 evidence.
 
-**IOC sets.** mvt-runner runs mvt-ios only against IOC files it manages. Each run
+**IOC sets.** The processor runs mvt-ios only against IOC files it manages. Each run
 checks against a private copy of them, and the hash of that copy is what the
 results record, so a refresh during a run can't change what was recorded.
 

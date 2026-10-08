@@ -1,3 +1,4 @@
+import type { ForensicRecordQuery } from '@verichron/etl-db-reader';
 import { contextBridge, ipcRenderer } from 'electron';
 import type { Backup } from '@verichron/contracts';
 import type { AnalysisRunStatus, ReportResult } from '../shared/types/window';
@@ -55,10 +56,10 @@ const dbApi = {
   },
   getPipelineRuns: () => ipcRenderer.invoke('epoch:getPipelineRuns'),
   getStageStatus: (runId: string) => ipcRenderer.invoke('epoch:getStageStatus', runId),
-  getForensicRecords: (runId: string, sourceType?: string) =>
-    ipcRenderer.invoke('epoch:getForensicRecords', runId, sourceType),
+  getForensicRecords: (runId: string, query?: ForensicRecordQuery) =>
+    ipcRenderer.invoke('epoch:getForensicRecords', runId, query),
   getCorrelationPivots: (runId: string) => ipcRenderer.invoke('epoch:getCorrelationPivots', runId),
-  getCorrelatedContext: (runId: string, eventTime: string, excludeId: number, windowMinutes?: number) =>
+  getCorrelatedContext: (runId: string, eventTime: string, excludeId: string, windowMinutes?: number) =>
     ipcRenderer.invoke('epoch:getCorrelatedContext', runId, eventTime, excludeId, windowMinutes),
   getReport: (backupSource: string): Promise<ReportResult> => ipcRenderer.invoke('epoch:getReport', backupSource),
   openReport: (backupSource: string): Promise<boolean> => ipcRenderer.invoke('epoch:openReport', backupSource),

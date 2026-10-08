@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
-import type { ForensicRecordRow } from '@verichron/db-reader';
+import type { ForensicRecordRow } from '@verichron/etl-db-reader';
 import { Badge } from '../components/ui/Badge';
 import { DataTable, type DataTableColumn } from '../components/ui/DataTable';
 
 interface RecordsViewProps {
   selectedRun: boolean;
   records: ForensicRecordRow[];
+  /** Records loaded so far for the run's evidence (all source types). */
+  loadedCount: number;
+  /** Every record for the run's evidence, from the reader (R25). */
+  totalCount: number;
   availableSourceTypes: string[];
   sourceTypeFilter: string | null;
   onFilterChange: (sourceType: string | null) => void;
@@ -70,6 +74,8 @@ function buildColumns(): DataTableColumn<ForensicRecordRow>[] {
 export function RecordsView({
   selectedRun,
   records,
+  loadedCount,
+  totalCount,
   availableSourceTypes,
   sourceTypeFilter,
   onFilterChange,
@@ -80,6 +86,15 @@ export function RecordsView({
   return (
     <div className="flex-1 overflow-auto p-8">
       <h2 className="font-display text-display text-accent mb-6">Forensic Records</h2>
+
+      {selectedRun && loadedCount < totalCount && (
+        // A capped list must say so (R25). Filters below apply only to the
+        // loaded rows until the server-side grid lands (EPOCH-411).
+        <p className="text-label text-muted-foreground mb-4">
+          Showing the first {loadedCount.toLocaleString()} of {totalCount.toLocaleString()} records for this
+          evidence. Filters apply to the loaded records only.
+        </p>
+      )}
 
       {!selectedRun ? (
         <p className="text-muted-foreground text-sm">Select an investigation first.</p>

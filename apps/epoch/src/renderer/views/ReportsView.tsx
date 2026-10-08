@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { PipelineRunRow } from '@verichron/db-reader';
+import type { PipelineRunRow } from '@verichron/etl-db-reader';
 import type { ReportResult } from '../../shared/types/window';
 import { Button } from '../components/ui/Button';
 import { reportsApi } from '../api/reports';

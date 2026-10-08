@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Quick read-only summary of pipeline_runs / pipeline_stage_status /
-ingested_files / forensic_records for a given run, or the most recent run
-if none is given. Meant for smoketesting: confirms what actually landed in
+Quick read-only summary of one run (pipeline_runs, pipeline_stage_status)
+and of the evidence it processed (ingested_files, current facts), for a
+given run or the most recent one. Facts are shown per evidence, never per
+run (R7). Meant for smoketesting: confirms what actually landed in
 Postgres after an orchestrator or single-extractor invocation, without
 hand-writing SQL each time.
 
@@ -19,7 +20,6 @@ import argparse
 import os
 import sys
 
-from jsonschema.cli import parser
 import psycopg2
 import psycopg2.extras
 from runtime_env import load_root_env, resolve_database_url
@@ -34,7 +34,7 @@ def most_recent_run_id(cur) -> str | None:
     return row["run_id"] if row else None
 
 
-def print_run(cur, run_id: str) -> None:
+def print_run(cur, run_id: str, evidence_override: str | None = None) -> None:
     cur.execute("SELECT * FROM pipeline_runs WHERE run_id = %s", (run_id,))
     run = cur.fetchone()
     if not run:
@@ -58,39 +58,49 @@ def print_run(cur, run_id: str) -> None:
         err = f" -- {s['error_message']}" if s["error_message"] else ""
         print(f"  {s['stage_name']:16} {s['status']:10}{err}")
 
-    print(f"\n=== ingested_files: {run_id} ===")
+    evidence_id = evidence_override or (run["evidence_id"] if run else None)
+    if evidence_id is None:
+        print(
+            "\n(no evidence for this run: pipeline_runs.evidence_id is NULL until EPOCH-404's "
+            "pre-flight registration, so pass --evidence-id to see facts)"
+        )
+        return
+
+    print(f"\n=== ingested_files: evidence {evidence_id} ===")
     cur.execute(
-        "SELECT source_type, file_name, ingest_complete, record_count, completed_at "
-        "FROM ingested_files WHERE run_id = %s ORDER BY ingested_at",
-        (run_id,),
+        "SELECT source_type, file_name, parser_version, payload_kind, ingest_complete, "
+        "record_count, %s = ANY(produced_by_runs) AS seen_by_run "
+        "FROM ingested_files WHERE evidence_id = %s ORDER BY ingested_at, ingest_id",
+        (run_id, evidence_id),
     )
     files = cur.fetchall()
     if not files:
-        print("  (no ingested_files rows for this run)")
+        print("  (no ingested_files rows for this evidence)")
     incomplete = [f for f in files if not f["ingest_complete"]]
     for f in files:
         state = "complete" if f["ingest_complete"] else "INCOMPLETE"
         count = f["record_count"] if f["record_count"] is not None else "-"
-        print(f"  [{state:10}] {f['source_type']:20} {f['file_name']}  records={count}")
+        seen = "this run" if f["seen_by_run"] else "other runs"
+        print(
+            f"  [{state:10}] {f['source_type']:20} v{f['parser_version']} {f['payload_kind']:7} "
+            f"{f['file_name']}  records={count}  ({seen})"
+        )
     if incomplete:
         print(
-            f"\n  WARNING: {len(incomplete)} file(s) never completed ingest. Per the "
-            "ingested_files_completion_consistent check constraint, this means "
-            "record_count/completed_at are NULL for these rows -- the ingest either "
-            "crashed mid-transaction or the stage never finished."
+            f"\n  WARNING: {len(incomplete)} file(s) never completed ingest. Their records are "
+            "excluded from every read (current_forensic_records) until a retry completes them."
         )
 
-    print(f"\n=== forensic_records by source_type: {run_id} ===")
+    print(f"\n=== current facts by source_type: evidence {evidence_id} ===")
     cur.execute(
         """
-        SELECT f.source_type, COUNT(r.*) AS record_count
-        FROM ingested_files f
-        LEFT JOIN forensic_records r ON r.file_hash = f.file_hash
-        WHERE f.run_id = %s
-        GROUP BY f.source_type
-        ORDER BY f.source_type
+        SELECT source_type, COUNT(*) AS record_count
+        FROM current_forensic_records
+        WHERE evidence_id = %s
+        GROUP BY source_type
+        ORDER BY source_type
         """,
-        (run_id,),
+        (evidence_id,),
     )
     for row in cur.fetchall():
         print(f"  {row['source_type']:20} {row['record_count']} record(s)")
@@ -101,6 +111,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     load_root_env()
     parser.add_argument("--db-url", default=resolve_database_url())
+    parser.add_argument("--run-id", default=None, help="defaults to the most recent run")
+    parser.add_argument(
+        "--evidence-id", default=None, help="defaults to the run's pipeline_runs.evidence_id"
+    )
     args = parser.parse_args()
 
     conn = psycopg2.connect(args.db_url)
@@ -111,7 +125,7 @@ def main() -> None:
             if run_id is None:
                 print("No rows in pipeline_runs yet.")
                 sys.exit(0)
-            print_run(cur, run_id)
+            print_run(cur, run_id, args.evidence_id)
     finally:
         conn.close()
 

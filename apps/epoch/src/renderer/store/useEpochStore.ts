@@ -9,6 +9,8 @@ interface EpochState {
   selectedRun: PipelineRunRow | null;
   stages: StageStatusRow[];
   records: ForensicRecordRow[];
+  /** Every record for the run's evidence; `records` may be only the first page (R25). */
+  recordsTotal: number;
   recordsLoaded: boolean;
   sourceTypeFilter: string | null;
   loading: boolean;
@@ -24,7 +26,7 @@ interface EpochState {
   setRuns: (runs: PipelineRunRow[]) => void;
   setSelectedRun: (run: PipelineRunRow | null) => void;
   setStages: (stages: StageStatusRow[]) => void;
-  setRecords: (records: ForensicRecordRow[]) => void;
+  setRecords: (records: ForensicRecordRow[], total: number) => void;
   setRecordsLoaded: (loaded: boolean) => void;
   setSourceTypeFilter: (filter: string | null) => void;
   setLoading: (loading: boolean) => void;
@@ -43,6 +45,7 @@ export const useEpochStore = create<EpochState>((set) => ({
   selectedRun: null,
   stages: [],
   records: [],
+  recordsTotal: 0,
   recordsLoaded: false,
   sourceTypeFilter: null,
   loading: true,
@@ -57,7 +60,7 @@ export const useEpochStore = create<EpochState>((set) => ({
   setRuns: (runs) => set({ runs }),
   setSelectedRun: (selectedRun) => set({ selectedRun }),
   setStages: (stages) => set({ stages }),
-  setRecords: (records) => set({ records }),
+  setRecords: (records, recordsTotal) => set({ records, recordsTotal }),
   setRecordsLoaded: (recordsLoaded) => set({ recordsLoaded }),
   setSourceTypeFilter: (sourceTypeFilter) => set({ sourceTypeFilter }),
   setLoading: (loading) => set({ loading }),
@@ -70,6 +73,7 @@ export const useEpochStore = create<EpochState>((set) => ({
   resetRunState: () =>
     set({
       records: [],
+      recordsTotal: 0,
       recordsLoaded: false,
       sourceTypeFilter: null,
       report: null,

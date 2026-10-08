@@ -144,7 +144,11 @@ function readDevice(candidates: string[]): { udid: string; name: string } {
   const keys = readPlistStrings(plistPath);
   const udid = keys.get('Unique Identifier') || keys.get('Target Identifier');
   if (!udid) {
-    throw new RegistrationError(`${plistPath} has no "Unique Identifier" or "Target Identifier"`);
+    // "GUID" is deliberately not accepted: in an iTunes/Finder backup it is
+    // an iTunes-assigned backup GUID, not the device's UDID, so keying the
+    // device by it would file the evidence under the wrong identity.
+    const guidNote = keys.has('GUID') ? ' ("GUID" is the backup\'s iTunes GUID, not the device UDID)' : '';
+    throw new RegistrationError(`${plistPath} has no "Unique Identifier" or "Target Identifier"${guidNote}`);
   }
   return { udid, name: keys.get('Device Name') || keys.get('Display Name') || 'Unknown device' };
 }

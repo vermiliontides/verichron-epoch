@@ -13,8 +13,10 @@ CI it fails, because a regression test that silently skips is no test at all.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -39,8 +41,9 @@ def db(request):
 
 
 @pytest.fixture(scope="module")
-def ileapp_output(tmp_path_factory):
-    """One real iLEAPP run over a synthetic backup, shared by both backends."""
+def ileapp_run(tmp_path_factory):
+    """One real iLEAPP run over a synthetic backup, shared by both backends:
+    (the output directory, the generator that made the backup)."""
     if not ILEAPP_PYTHON.exists():
         message = f"iLEAPP's environment is missing ({ILEAPP_PYTHON}); run `mise run setup`"
         if os.environ.get("CI"):
@@ -56,22 +59,68 @@ def ileapp_output(tmp_path_factory):
 
     result = run_ileapp_extraction(str(generator.backup_dir), str(root / "out"))
     assert result["status"] == "success", result.get("error")
-    return root / "out"
+    return root / "out", generator
 
 
-def test_ileapp_produces_ingestable_results_from_a_backup(db, ileapp_output):
-    artifacts = list_supported_artifacts(ileapp_output)
-    assert artifacts, "iLEAPP produced no artifact the bridge can ingest"
-    for artifact in artifacts:
-        relative = artifact.relative_to(ileapp_output).parts
-        assert "data" not in relative[1:2] and "media" not in relative[1:2], (
-            f"{artifact} is iLEAPP's copy of the input, not a result"
-        )
-
+def _ingest_all(db, output) -> int:
     ctx = IngestContext(evidence_id=EVIDENCE_ID, derivative_id=DERIVATIVE_ID, run_id=RUN_ID, parser_version=1)
     written = 0
-    for artifact in artifacts:
+    for artifact in list_supported_artifacts(output):
         result = process_artifact_file(db, ctx, artifact)
         assert result.failed == 0, result.failures
         written += result.succeeded
-    assert written > 0, "no ileapp_record rows were written"
+    return written
+
+
+def _stored_records(db) -> list[tuple[dict, object]]:
+    """(fields, event_time) of every stored ileapp_record, from either backend."""
+    cur = db.cursor()
+    cur.execute("SELECT fields, event_time FROM forensic_records WHERE source_type = 'ileapp_record'")
+    rows = cur.fetchall()
+    return [(json.loads(f) if isinstance(f, str) else f, t) for f, t in rows]
+
+
+def _as_utc(value) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
+    return value.astimezone(timezone.utc)
+
+
+def test_ileapp_produces_ingestable_results_from_a_backup(db, ileapp_run):
+    output, _ = ileapp_run
+    artifacts = list_supported_artifacts(output)
+    assert artifacts, "iLEAPP produced no artifact the bridge can ingest"
+    for artifact in artifacts:
+        relative = artifact.relative_to(output).parts
+        assert "data" not in relative[1:2] and "media" not in relative[1:2], (
+            f"{artifact} is iLEAPP's copy of the input, not a result"
+        )
+    assert _ingest_all(db, output) > 0, "no ileapp_record rows were written"
+
+
+def test_generated_device_activity_reaches_the_records(db, ileapp_run):
+    """Backup metadata alone must not satisfy the end-to-end test: a Safari visit
+    the generator planted has to come back out of iLEAPP and into the records."""
+    output, generator = ileapp_run
+    _ingest_all(db, output)
+    url, title, _ = generator.safari_visits[0]
+
+    matches = [fields for fields, _ in _stored_records(db) if url in (fields or {}).values()]
+    assert matches, f"the generated Safari visit to {url} is not in the stored records"
+    assert any(title in fields.values() for fields in matches)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="EPOCH-461: the bridge does not recognize iLEAPP's 'Visit Timestamp' column; it will read "
+    "iLEAPP's declared datetime column instead. Remove this marker when EPOCH-461 lands.",
+)
+def test_generated_visit_keeps_its_time(db, ileapp_run):
+    output, generator = ileapp_run
+    _ingest_all(db, output)
+    url, _, unix_seconds = generator.safari_visits[0]
+
+    times = [_as_utc(t) for fields, t in _stored_records(db) if url in (fields or {}).values()]
+    assert datetime.fromtimestamp(unix_seconds, timezone.utc) in times

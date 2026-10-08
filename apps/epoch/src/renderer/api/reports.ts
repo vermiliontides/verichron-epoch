@@ -1,4 +1,4 @@
 export const reportsApi = {
-  getReport: (backupSource: string) => window.epoch.getReport(backupSource),
-  openReport: (backupSource: string) => window.epoch.openReport(backupSource),
+  getReport: (runId: string) => window.epoch.getReport(runId),
+  openReport: (runId: string) => window.epoch.openReport(runId),
 };

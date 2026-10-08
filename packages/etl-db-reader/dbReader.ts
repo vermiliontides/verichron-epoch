@@ -129,6 +129,27 @@ export async function getRunEvidence(client: Db, runId: string): Promise<string 
 }
 
 /**
+ * Where a run's mvt results are now: the current path of the `mvt_results`
+ * derivative the run's stages read, or null if they read none. The report is
+ * written beside those results. Registration updates a derivative's path when
+ * its workspace moves, so this follows a moved workspace; the run's
+ * `backup_source` keeps the path it started from.
+ */
+export async function getRunResultsPath(client: Db, runId: string): Promise<string | null> {
+  const result = await client.query<{ path: string }>(
+    `SELECT DISTINCT d.path
+       FROM pipeline_stage_status s
+       JOIN evidence_derivatives d ON d.derivative_id = s.derivative_id
+      WHERE s.run_id = $1 AND d.kind = 'mvt_results'`,
+    [runId]
+  );
+  if (result.rows.length > 1) {
+    throw new Error(`run ${runId} read more than one mvt results derivative`);
+  }
+  return result.rows[0]?.path ?? null;
+}
+
+/**
  * Canonical pipeline stage sequence, per the CREATE TABLE comment in
  * 0001_init.sql. The schema has no stage_order column -- stage sequence is
  * currently only encoded here, in application code. If this list drifts

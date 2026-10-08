@@ -25,12 +25,17 @@ import plistlib
 from datetime import datetime, timedelta
 from faker import Faker
 import random
+import tempfile
 import os
 from pathlib import Path
 import json
 from typing import List, Dict
 
 fake = Faker()
+
+# Seconds between the Unix epoch and Apple's Cocoa epoch (2001-01-01 UTC).
+COCOA_EPOCH_OFFSET = 978307200
+
 
 class RealisticBackupGenerator:
     """Generate coordinated synthetic iPhone backup with encryption support"""
@@ -40,6 +45,8 @@ class RealisticBackupGenerator:
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         self.udid = udid
         self.manifest_entries = {}
+        # (url, title, unix_seconds) for every generated Safari visit.
+        self.safari_visits = []
         self.backup_timestamp = int(datetime.now().timestamp())
         
         self.contacts = self._generate_contact_pool(count=25)
@@ -331,39 +338,60 @@ class RealisticBackupGenerator:
         self.add_file('HomeDomain', 'Library/Safari/History.db', db_bytes)
     
     def _build_safari_db(self, visit_count=200) -> bytes:
-        db_path = Path('/tmp/History.db')
-        if db_path.exists():
-            db_path.unlink()
-        
-        conn = sqlite3.connect(str(db_path))
-        c = conn.cursor()
-        
-        c.execute('''CREATE TABLE history_visits
-                     (id INTEGER PRIMARY KEY,
-                      url TEXT,
-                      title TEXT,
-                      visit_time REAL,
-                      visit_count INTEGER)''')
-        
-        now_ts = datetime.now().timestamp()
-        
-        for _ in range(visit_count):
-            visit_time = now_ts - random.randint(0, 86400*30)
-            
-            c.execute('''INSERT INTO history_visits
-                         (url, title, visit_time, visit_count)
-                         VALUES (?, ?, ?, ?)''',
-                      (fake.url(),
-                       fake.sentence(nb_words=4),
-                       visit_time,
-                       random.randint(1, 5)))
-        
-        conn.commit()
-        conn.close()
-        
-        content = db_path.read_bytes()
-        db_path.unlink()
-        return content
+        """Safari's History.db with the real iOS schema: history_items (one row
+        per URL) and history_visits (one row per visit, joined by history_item),
+        with visit_time in Cocoa seconds (since 2001-01-01 UTC). iLEAPP's
+        safariHistory plugin reads exactly this shape.
+
+        Each generated visit is also kept in self.safari_visits as
+        (url, title, unix_seconds), so tests can look for it in the output."""
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / 'History.db'
+            conn = sqlite3.connect(str(db_path))
+            c = conn.cursor()
+            c.execute('''CREATE TABLE history_items
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          url TEXT NOT NULL UNIQUE,
+                          domain_expansion TEXT NULL,
+                          visit_count INTEGER NOT NULL,
+                          daily_visit_counts BLOB NOT NULL,
+                          weekly_visit_counts BLOB NULL,
+                          autocomplete_triggers BLOB NULL,
+                          should_recompute_derived_visit_counts INTEGER NOT NULL,
+                          visit_count_score INTEGER NOT NULL,
+                          status_code INTEGER NOT NULL DEFAULT 0)''')
+            c.execute('''CREATE TABLE history_visits
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          history_item INTEGER NOT NULL REFERENCES history_items(id) ON DELETE CASCADE,
+                          visit_time REAL NOT NULL,
+                          title TEXT NULL,
+                          load_successful BOOLEAN NOT NULL DEFAULT 1,
+                          http_non_get BOOLEAN NOT NULL DEFAULT 0,
+                          synthesized BOOLEAN NOT NULL DEFAULT 0,
+                          redirect_source INTEGER NULL UNIQUE REFERENCES history_visits(id) ON DELETE CASCADE,
+                          redirect_destination INTEGER NULL UNIQUE REFERENCES history_visits(id) ON DELETE CASCADE,
+                          origin INTEGER NOT NULL DEFAULT 0,
+                          generation INTEGER NOT NULL DEFAULT 0,
+                          attributes INTEGER NOT NULL DEFAULT 0,
+                          score INTEGER NOT NULL DEFAULT 0)''')
+
+            now_ts = int(datetime.now().timestamp())
+            for _ in range(visit_count):
+                url = fake.unique.url()
+                title = fake.sentence(nb_words=4)
+                unix_seconds = now_ts - random.randint(0, 86400 * 30)
+                c.execute('''INSERT INTO history_items
+                             (url, visit_count, daily_visit_counts,
+                              should_recompute_derived_visit_counts, visit_count_score)
+                             VALUES (?, 1, x'', 0, 100)''', (url,))
+                c.execute('''INSERT INTO history_visits (history_item, visit_time, title)
+                             VALUES (?, ?, ?)''',
+                          (c.lastrowid, unix_seconds - COCOA_EPOCH_OFFSET, title))
+                self.safari_visits.append((url, title, unix_seconds))
+
+            conn.commit()
+            conn.close()
+            return db_path.read_bytes()
     
     def create_manifests(self):
         manifest = {

@@ -61,8 +61,8 @@ const dbApi = {
   getCorrelationPivots: (runId: string) => ipcRenderer.invoke('epoch:getCorrelationPivots', runId),
   getCorrelatedContext: (runId: string, eventTime: string, excludeId: string, windowMinutes?: number) =>
     ipcRenderer.invoke('epoch:getCorrelatedContext', runId, eventTime, excludeId, windowMinutes),
-  getReport: (backupSource: string): Promise<ReportResult> => ipcRenderer.invoke('epoch:getReport', backupSource),
-  openReport: (backupSource: string): Promise<boolean> => ipcRenderer.invoke('epoch:openReport', backupSource),
+  getReport: (runId: string): Promise<ReportResult> => ipcRenderer.invoke('epoch:getReport', runId),
+  openReport: (runId: string): Promise<boolean> => ipcRenderer.invoke('epoch:openReport', runId),
 
   // Stage 3: runs the orchestrator (creates pipeline_runs/stage rows for
   // everything mvt-runner has decrypted in `workspace`). See main.ts's

@@ -419,7 +419,12 @@ describe('stages and the completeness predicate', live, () => {
     for (const stuck of ['pending', 'running']) {
       await db.query(`UPDATE pipeline_stage_status SET status = $1 WHERE run_id = $2`, [stuck, result.runId]);
       assert.equal(await getRunState(db, result.runId!), 'incomplete', `a stage left ${stuck} by a killed process`);
-      assert.equal(await hasCompleteRunFor(db, result.evidenceId!, derivative.rows[0].derivative_id, []), false);
+      const registration = {
+        evidenceId: result.evidenceId!,
+        decryptedDerivativeId: derivative.rows[0].derivative_id,
+        resultsDerivativeId: null,
+      };
+      assert.equal(await hasCompleteRunFor(db, registration, []), false);
     }
   });
 

@@ -16,7 +16,9 @@
     "prebuild": "pnpm run build:contracts",
     "build": "tsc",
     "pretypecheck": "pnpm run build:contracts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "pretest": "pnpm run build:contracts",
+    "test": "tsx --test '*.test.ts'"
   },
   "dependencies": {
     "@verichron/contracts": "workspace:*"
@@ -26,6 +28,7 @@
     "dotenv": "catalog:",
     "@types/pg": "catalog:",
     "pg": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "tsx": "catalog:"
   }
 }

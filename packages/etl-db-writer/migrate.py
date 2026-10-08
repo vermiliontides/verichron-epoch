@@ -45,50 +45,114 @@ def ensure_migrations_table(conn) -> None:
     conn.commit()
 
 
+def _relation(name: str) -> str:
+    return f"SELECT to_regclass('{name}') IS NOT NULL"
+
+
+def _column(table: str, column: str) -> str:
+    return (
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+        f"WHERE table_name = '{table}' AND column_name = '{column}')"
+    )
+
+
+#: For each migration, two checks: `started` is true once its FIRST object
+#: exists, `finished` once its LAST statement has run. Used only by
+#: bootstrap_if_needed(); add an entry with every new migration, and keep
+#: `finished` pointed at whatever that file creates last.
+APPLIED_MARKERS: dict[str, tuple[str, str]] = {
+    "0001_init.sql": (
+        _relation("pipeline_runs"),
+        _relation("idx_forensic_fields_gin"),
+    ),
+    "0002_ingest_completion.sql": (
+        _column("ingested_files", "ingest_complete"),
+        _relation("idx_ingested_files_incomplete"),
+    ),
+    "0003_evidence_schema.sql": (
+        _relation("devices"),
+        f"SELECT ({_relation('idx_forensic_fields_gin')}) AND ({_column('forensic_records', 'ingest_id')})",
+    ),
+}
+
+
+class PartialMigrationError(RuntimeError):
+    """A migration applied outside this script stopped part-way."""
+
+
 def bootstrap_if_needed(conn) -> None:
     """
-    Handles the one case that would otherwise break this script on day one:
-    a dev environment where 0001_init.sql was already applied by
-    docker-entrypoint-initdb.d (container's first boot) but schema_migrations
-    has no record of it, because that hook doesn't know this script exists.
+    Backfills the ledger for migrations that were applied by something other
+    than this script.
 
-    Without this, the first real `migrate.py` run would try to CREATE TABLE
-    pipeline_runs again and fail on "relation already exists" — not because
-    anything is wrong, just because two different mechanisms applied the
-    same file. Detect that case and backfill the ledger instead of re-running.
+    infra/docker-compose.yml mounts migrations/ into docker-entrypoint-initdb.d,
+    so a brand-new dev volume runs EVERY .sql file at first boot, while
+    schema_migrations stays empty because that hook doesn't know this script
+    exists. Without this, the first `migrate.py` run would re-apply those files
+    and fail on "relation already exists".
+
+    initdb runs each file with psql outside a transaction, so a first boot that
+    stops mid-file leaves a migration half-applied. Each migration therefore
+    has two markers (APPLIED_MARKERS): it is recorded only when its LAST
+    statement's effect is present, and a migration that started but did not
+    finish raises PartialMigrationError instead of being reported as up to
+    date. A missing marker entry fails loudly, so a new migration can't skip
+    this check.
     """
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_name = 'pipeline_runs'
-            )
-            """
-        )
-        pipeline_runs_exists = cur.fetchone()[0]
-
-    if not pipeline_runs_exists:
-        return
-
     with conn.cursor() as cur:
         cur.execute("SELECT filename FROM schema_migrations")
         applied = {row[0] for row in cur.fetchall()}
 
-    if "0001_init.sql" in applied:
+    paths = sorted(MIGRATIONS_DIR.glob("*.sql"))
+    missing = [path.name for path in paths if path.name not in APPLIED_MARKERS]
+    if missing:
+        raise RuntimeError(
+            f"{', '.join(missing)} has no entry in APPLIED_MARKERS; add one so a database "
+            "initialized by docker-entrypoint-initdb.d can be reconciled"
+        )
+
+    def holds(sql: str) -> bool:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            return bool(cur.fetchone()[0])
+
+    # Migrations apply in order, so the newest one that STARTED is the one
+    # that matters: if it finished, every earlier one did too, even when a
+    # later migration has since dropped an earlier one's marker objects (0003
+    # rebuilds the tables 0001 and 0002 created). Judging each file on its own
+    # markers would blame the wrong file after an interrupted 0003.
+    newest_started = None
+    for index, path in enumerate(paths):
+        if holds(APPLIED_MARKERS[path.name][0]):
+            newest_started = index
+    if newest_started is None:
+        conn.commit()
         return
 
-    with conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO schema_migrations (filename) VALUES (%s) ON CONFLICT DO NOTHING",
-            ("0001_init.sql",),
+    newest = paths[newest_started]
+    if not holds(APPLIED_MARKERS[newest.name][1]):
+        conn.rollback()
+        raise PartialMigrationError(
+            f"{newest.name} was only partly applied outside this script (probably an "
+            "interrupted docker-entrypoint-initdb.d first boot). Its first objects exist "
+            "but its last statement never ran, so the schema is inconsistent. Recreate the "
+            "database volume and start again; a first boot that stopped part-way holds no "
+            "evidence."
+        )
+
+    for path in paths[: newest_started + 1]:
+        if path.name in applied:
+            continue
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO schema_migrations (filename) VALUES (%s) ON CONFLICT DO NOTHING",
+                (path.name,),
+            )
+        print(
+            f"[migrate] detected {path.name} already applied outside this script "
+            "(docker-entrypoint-initdb.d) -- recording it instead of re-running it"
         )
     conn.commit()
-    print(
-        "[migrate] detected 0001_init.sql already applied via "
-        "docker-entrypoint-initdb.d — backfilling schema_migrations instead "
-        "of re-running it"
-    )
 
 
 def pending_migrations(conn) -> list[Path]:
@@ -123,7 +187,11 @@ def main() -> None:
 
     try:
         ensure_migrations_table(conn)
-        bootstrap_if_needed(conn)
+        try:
+            bootstrap_if_needed(conn)
+        except PartialMigrationError as e:
+            print(f"[migrate] {e}", file=sys.stderr)
+            sys.exit(1)
 
         pending = pending_migrations(conn)
         if not pending:

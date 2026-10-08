@@ -25,5 +25,6 @@ export {
   writeRecords,
   incompleteIngests,
   MAX_RECORDS_PER_STATEMENT,
+  PAYLOAD_KINDS,
 } from "./dbWriter.js";
-export type { IngestParams, IngestOutcome } from "./dbWriter.js";
+export type { IngestContext, IngestParams, IngestOutcome, PayloadKind } from "./dbWriter.js";

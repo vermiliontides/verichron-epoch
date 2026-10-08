@@ -73,7 +73,8 @@ never silently deleted.
 
 | Decision | Why | Where |
 |---|---|---|
-| Numeric timestamps need a declared epoch, or must fall between 2007-06-29 and now + 1 day; otherwise null. An unparseable time column gives null, never another column's value | A plausible but wrong date is worse than none | EPOCH-419 |
+| The iLEAPP bridge reads results only from `_lava_artifacts.db`, guided by its manifest `_lava_data.lava`: one ingest unit per artifact table, original column headers, and `event_time` from the artifact's declared `datetime` column. Exports, the HTML report and iLEAPP's input copies (`data/`, `media/`) are never read | `_lava_artifacts.db` is iLEAPP's complete, typed output; its plugins already convert each source's time format to UTC, so guessing again could only add errors | EPOCH-461 |
+| Numeric timestamps need a declared epoch, or must fall between 2007-06-29 and now + 1 day; otherwise null. An unparseable time column gives null, never another column's value. *Amended 2026-10-08:* for iLEAPP this no longer applies, because its plugins declare time columns (EPOCH-461); whether the window remains as a reported check on iLEAPP's values is decided there | A plausible but wrong date is worse than none | EPOCH-419, 461 |
 | mvt's indicator types are kept verbatim as explicit fields, not mapped to our own enum | An enum with an "unknown" fallback loses information | EPOCH-446 |
 | The report states which fact types it doesn't show, with counts | "Not shown" must not read as "not found" | EPOCH-448 |
 | The report summarizes iLEAPP output per artifact (counts and time range) and doesn't list rows | Output can reach 100k+ rows; rows belong in the app | EPOCH-434 |

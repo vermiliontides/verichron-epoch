@@ -1,76 +1,64 @@
-# Verichron Epoch: MVT Runner Service (`apps/mvt-runner`)
+# mvt-runner (`@verichron/mvt-runner`)
 
-`apps/mvt-runner` is a specialized micro-service application within the Verichron Epoch monorepo dedicated to driving Mobile Verification Toolkit (`mvt-ios`) commands. It acts as an idempotent execution wrapper that runs artifact extraction scans, cryptographic hashing, decryption, SQLite database repair, and indicator-of-compromise (IOC) matching against local iOS backups.
+Prepares iOS backups for the pipeline. For each backup it:
 
-## Core Capabilities
+1. hashes it into its evidence identity;
+2. decrypts it with `mvt-ios`;
+3. repairs malformed SQLite databases;
+4. runs `mvt-ios check-backup` against a hashed copy of the IOC set.
 
-* **MVT Execution Wrapper:** Programmatically invokes `mvt-ios` processes to scan iOS backups for signs of compromise.
+It writes only to the workspace and never touches the database. The workspace
+layout and the role this plays are described in
+[docs/architecture.md](../../docs/architecture.md), and the identity and markers
+in [docs/evidence-model.md](../../docs/evidence-model.md).
 
-
-* **Idempotent Pipeline:** Manages independent force flags (`--force`, `--force-decrypt`) to skip completed hashing, decryption, or check stages safely.
-* **SQLite Recovery Engine:** Cheaply identifies SQLite databases via magic bytes and automatically runs `.recover` in place on malformed files while preserving corrupt originals.
-
-
-* **Result Structuring & Reporting:** Feeds raw scanner output back into the pipeline and compiles automated aggregate Markdown summaries of detected warnings and indicator matches.
-
-
-
-## Directory Layout
-
-* `src/main.ts`: Core orchestration engine handling backup discovery, change hashing, decryption, repair, analysis, and summary reporting.
-
-
-* `dist/`: Compiled JavaScript output (generated after build).
-
-## Setup & Development
-
-### Build and Compilation
-
-Compile the TypeScript source into the distribution directory:
+## Run
 
 ```bash
-npm install && npm run build
-
+pnpm --filter @verichron/mvt-runner dev -- --source <dir-of-backups> --workspace <workspace>
 ```
 
-### Execution and Usage
+It prompts for the backup password on stdin. The desktop app relays that prompt
+to its UI.
 
-Execute the runner via Node.js or `tsx` without a build step:
+| Option | Meaning |
+|---|---|
+| `--source <dir>` | Directory containing encrypted backups (required) |
+| `--workspace <dir>` | Output workspace (default `~/mvt-workspace`) |
+| `--mvt-bin <path>` | `mvt-ios` binary (found automatically in common venv locations) |
+| `--mvt-home <dir>` | mvt's data and config home, where the IOC set lives (default `$VERICHRON_MVT_HOME` or `~/.local/share/verichron/mvt`) |
+| `--sqlite-bin <path>` | `sqlite3` for the repair pass |
+| `--force` | Re-run `check-backup` even if current |
+| `--force-decrypt` | Re-decrypt, then repair and check again |
+| `--verify` | Re-read every byte when hashing, ignoring the stat cache |
+| `--refresh-iocs`, `--ioc-max-age <dur>` | Refresh the IOC set (default: when older than 168h) |
+| `--only <names>` | Process only these backup labels |
+| `--different-passwords` | Prompt per backup instead of reusing one password |
+
+Each step is skipped when its output is current. Current means the output's
+marker names this backup's content root, this mvt-ios version and, for results,
+this IOC set. Anything else is redone from scratch. `MVT_STIX2` is refused,
+because the recorded IOC set must be exactly the one used.
+
+## Source
+
+| File | Responsibility |
+|---|---|
+| `src/main.ts` | The per-backup loop: hash → decrypt → repair → check, plus markers and summary |
+| `src/utils/manifest.ts` | Canonical manifest, `content_root`, stat cache |
+| `src/utils/repair.ts` | SQLite quick-check and `.recover`, returning repair provenance |
+| `src/utils/resolver.ts` | Finding `mvt-ios`; reading the `sqlite3` version |
+| `src/utils/prompt.ts` | Password prompt |
+| `src/utils/summary.ts` | `summary.md` |
+
+## Test
 
 ```bash
-node dist/main.js --source ./backups --workspace ./mvt-workspace
-# or
-npx tsx src/main.ts --source ./backups --workspace ./mvt-workspace
-
+pnpm --filter @verichron/mvt-runner test
 ```
 
-### Key CLI Options
+The tests drive the real CLI against stub `mvt-ios` and `sqlite3` executables.
 
-* `--source <dir>`: Directory containing backup subdirectories (required).
-
-
-* `--workspace <dir>`: Workspace directory for hashes, decrypted files, and results (default: `~/mvt-workspace`).
-
-
-* `--mvt-bin <path>`: Explicit path to the `mvt-ios` binary (auto-discovers standard local virtual environments if omitted).
-
-
-* `--mvt-home <dir>`: mvt-ios's data and config home (default: `$VERICHRON_MVT_HOME`, else `~/.local/share/verichron/mvt`). IOCs are downloaded to and loaded from `<mvt-home>/data/indicators` only; `MVT_STIX2` is refused, so the IOC set recorded with each result set is exactly what `check-backup` used.
-
-
-* `--sqlite-bin <path>`: Path to the `sqlite3` binary used for repairing malformed databases.
-
-
-* `--force`: Re-run backup checks even if already completed..
-
-
-* `--force-decrypt`: Force re-decryption, cascading repairs and checks.
-
-## Provenance (EPOCH-406)
-
-Each finished derivative carries a marker that registration copies into `evidence_derivatives` (see `packages/contracts/ts/derivativeMarker.ts`):
-
-* `decrypted/<label>/.mvt_decrypted_ok`: the evidence `content_root`, the mvt-ios version, and the SQLite repair outcome (sqlite3 version, databases scanned and repaired, files not fully recovered, originals preserved as `.corrupt-<timestamp>`, or why repair was skipped). Written only after decrypt and repair both finish.
-* `results/<label>/.mvt_check_ok`: the evidence `content_root`, the mvt-ios version, and the IOC set's hash and file count.
-
-Results are re-checked when the backup, the mvt-ios version or the IOC set changes. Registration files the new results as a new derivative, and the old one keeps its provenance.
+**Known issues:** the backup password is passed to `mvt-ios` on the command line
+(EPOCH-423). The app reads this tool's progress by parsing its log lines
+(EPOCH-445).

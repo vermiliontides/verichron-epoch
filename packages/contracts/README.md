@@ -1,34 +1,27 @@
-# Contracts Package (`packages/contracts`)
+# Contracts (`@verichron/contracts`, `verichron-contracts`)
 
-> **Canonical location.** `packages/contracts/normalized-record.schema.json` is the single source of truth for the Verichron Epoch data envelope.
+The shapes that cross language and process boundaries, defined once. TypeScript
+and Python mirror the JSON schemas, and CI checks that the mirrors match.
 
-This package is the boundary definition for data flowing across our polyglot architecture. Everything lives flat in this one directory -- the canonical schema, both language mirrors, the Python runtime adapter, and their tests -- so there is one place to look and one place for CI to check for drift.
+| File | Defines |
+|---|---|
+| `normalized-record.schema.json` | **The canonical fact envelope** and the `source_type` list |
+| `stage-manifest.schema.json` | `stage.json` |
+| `evidence-sidecar.schema.json` | `evidence/<label>/sidecar.json` |
+| [`EXTRACTOR_CONTRACT.md`](EXTRACTOR_CONTRACT.md) | What every pipeline stage must do |
+| `ts/` | Zod mirrors and TS helpers: `normalizedRecord`, `sourceType`, `evidenceSidecar`, `derivativeMarker` (completion markers and provenance key), `deriveEvidencePath`, `deriveResultsPath`, `discoverBackups`, `contractVersion`, `env` |
+| `python/` | Pydantic mirror (`normalized_record`, `source_type`), the schema `adapter`, and `test_contract_sync.py` |
 
----
+## Changing a contract
 
-## Directory Structure
+- **New `source_type`:** edit `normalized-record.schema.json`, then run
+  `pnpm sync:contracts`, which regenerates the enum blocks in both mirrors. CI
+  runs `pnpm check:contracts` and the sync tests.
+- **Any schema change** changes `contractVersion()`, the hash every run records
+  (R35).
+- Build the TS package with `pnpm build:contracts`; other packages import it
+  from `dist/`.
 
-```text
-packages/contracts/
-├── __init__.py                       # marks this as a Python package
-├── normalized-record.schema.json     # the canonical JSON schema (source of truth)
-├── normalized_record.py              # Python / Pydantic mirror (source_type enum is generated)
-├── normalizedRecord.ts               # TypeScript / Zod mirror (source_type enum is generated)
-├── adapter.py                        # Python runtime validation against the canonical schema
-├── index.ts                          # TypeScript package entry point
-├── conftest.py                       # pytest sys.path setup for this directory
-├── test_contract_sync.py             # guards the mirrors against drifting from the schema
-├── EXTRACTOR_CONTRACT.md             # what every extractor must do before writing a record
-├── package.json                      # workspace package manifest
-└── tsconfig.json                     # TypeScript compiler configuration
-```
-
-## Keeping the mirrors in sync
-
-Add a new `source_type` to `normalized-record.schema.json` first, then run:
-
-```bash
-python3 scripts/sync_contracts.py --write
-```
-
-CI runs `python3 scripts/sync_contracts.py --check` and fails the build if either mirror has drifted from the schema.
+**Known issues:** the TS record type's fields aren't checked against the schema,
+and stale compiled `ts/normalizedRecord.js` / `.d.ts` files are committed
+(EPOCH-451).

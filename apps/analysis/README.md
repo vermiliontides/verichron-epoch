@@ -1,35 +1,31 @@
-# Verichron Epoch: LLM Triage Application (`apps/analysis`)
+# Analysis stage (`apps/analysis`)
 
-`apps/analysis` is the intelligent triage and analysis service within the Verichron Epoch ecosystem. It acts as the automated analysis layer wired into the core orchestrator pipeline, using large language model (LLM) capabilities to evaluate forensic extraction data, assess indicators of compromise (IOCs), and streamline threat investigation.
+A pipeline stage (order 80) that asks a local LLM, through Ollama, to flag
+suspicious entries in mvt's JSON output.
 
-## Core Capabilities
+- It reads the **mvt results** derivative.
+- It sends chunks of each JSON file to the model, which answers `SAFE` or lists
+  suspicious rows.
+- Flagged rows become `llm_flagged_anomaly` records.
 
-* **Automated Triage Integration:** Directly interfaces with the monorepo's core orchestrator pipeline to process extracted device data.
+These findings are **leads, not evidence**: they belong in a separate,
+examiner-reviewed section of the report and never mix with extracted facts
+([decision](../../docs/decisions.md#ai)).
 
+## Run
 
-* **IOC-Centric Evaluation:** Analyzes restructured forensic logs andss enriched 15-minute event windows around indicators of compromise.
+It runs as part of the pipeline; see the
+[stage contract](../../packages/contracts/EXTRACTOR_CONTRACT.md). It needs Ollama
+on `http://localhost:11434` with the configured model pulled.
 
+`forensics_benchmark.py` is a developer script that compares two models on a
+hand-written chunk. The evaluation set (EPOCH-441) replaces it.
 
-* **LLM-Driven Insights:** Synthesizes complex SQLite-backed extractions and forensic artifacts into concise, actionable intelligence for investigators.
+**Known issues:**
 
-## Architecture & Tech Stack
-
-* **Python Integration:** Operates closely with the repository's Python-based forensic extractors and data pipelines (`libs/` and root configurations).
-
-
-* **Pipeline Connection:** Wired directly into the orchestrator pipeline (`packages/`) to receive and process stream data post-extraction.
-
-
-* **Environment Configuration:** Relies on environment parameters configured via the root `.env` template and shared workspace infrastructure.
-
-## Setup & Development
-
-Because `apps/analysis` is part of the Verichron Epoch monorepo, its execution and dependencies align with the overarching workspace patterns:
-
-1. **Environment Setup:** Ensure root `.env` variables (including LLM API keys and database parameters) are populated from `.env.example`.
-
-
-2. **Dependency Resolution:** Managed via the project's dependency managers (`uv` for Python components and workspace tools).
-
-
-3. **Orchestrator Execution:** Typically initialized and invoked via the core orchestrator pipeline rather than run as a standalone isolated service.
+| Issue | Ticket |
+|---|---|
+| Findings from a different model or prompt dedup against earlier ones | EPOCH-426 |
+| Writes its checkpoint and a second report into the mvt results directory | EPOCH-449 |
+| No tests | EPOCH-450 |
+| The model isn't pinned by digest | EPOCH-439 |

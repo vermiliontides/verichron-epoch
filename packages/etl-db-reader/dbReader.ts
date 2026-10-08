@@ -44,6 +44,7 @@
  * apps/reporting/generate_report.py can't disagree about them (R27).
  */
 
+import { deriveResultsPath } from '@verichron/contracts';
 import type { Client, Pool, PoolClient } from 'pg';
 
 type Db = Client | PoolClient | Pool;
@@ -136,7 +137,7 @@ export async function getRunEvidence(client: Db, runId: string): Promise<string 
  * location of a run's outputs; registration updates it when its workspace
  * moves.
  */
-export async function getRunResultsPath(client: Db, runId: string): Promise<string | null> {
+async function runResultsDerivativePath(client: Db, runId: string): Promise<string | null> {
   const result = await client.query<{ path: string }>(
     `SELECT DISTINCT d.path
        FROM pipeline_stage_status s
@@ -159,11 +160,11 @@ export async function getRunResultsPath(client: Db, runId: string): Promise<stri
  *
  * The orchestrator derives a run's results path, where it writes the report,
  * from this path (`deriveResultsPath`), whether or not mvt results were
- * registered; prefer `getRunResultsPath` and fall back to this. A decrypt
+ * registered; prefer the run's results derivative and fall back to this. A decrypt
  * can be shared by several results sets in different workspaces, and its one
  * path is wherever it was last registered.
  */
-export async function getRunDecryptedPath(client: Db, runId: string): Promise<string | null> {
+async function runDecryptedPath(client: Db, runId: string): Promise<string | null> {
   const result = await client.query<{ path: string }>(
     `SELECT d.path
        FROM pipeline_runs r
@@ -172,6 +173,30 @@ export async function getRunDecryptedPath(client: Db, runId: string): Promise<st
     [runId]
   );
   return result.rows[0]?.path ?? null;
+}
+
+/**
+ * Where a run's results are now: the directory the orchestrator pointed every
+ * stage at as `--results-path`, and where the reporting stage wrote the run's
+ * report. Null if the run has no registered evidence or no derivable results
+ * location.
+ *
+ * - The `mvt_results` derivative the run read comes first. It is specific to
+ *   the run's results set (IOC set and mvt version).
+ * - Otherwise (check-backup failed, so no results were registered) the path is
+ *   derived from the run's decrypt with `deriveResultsPath`, as the
+ *   orchestrator derived it. A decrypt can be shared by results sets in several
+ *   workspaces and points wherever it was last registered, so it is only the
+ *   fallback.
+ *
+ * Both come from the database, where registration keeps a derivative's path
+ * current when its workspace moves; the run's `backup_source` goes stale.
+ */
+export async function getRunResultsLocation(client: Db, runId: string): Promise<string | null> {
+  const results = await runResultsDerivativePath(client, runId);
+  if (results) return results;
+  const decrypted = await runDecryptedPath(client, runId);
+  return decrypted ? (deriveResultsPath(decrypted) ?? null) : null;
 }
 
 /**

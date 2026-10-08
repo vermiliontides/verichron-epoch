@@ -25,8 +25,7 @@ import {
   getCorrelationPivots,
   getForensicRecords,
   getRunEvidence,
-  getRunDecryptedPath,
-  getRunResultsPath,
+  getRunResultsLocation,
   type ForensicRecordQuery,
   type ForensicRecordRow,
   type RecordSortKey,
@@ -312,10 +311,10 @@ describe('evidence-scoped helpers', live, () => {
   });
 });
 
-describe('getRunDecryptedPath', live, () => {
+describe('getRunResultsLocation', live, () => {
   before(async () => {
-    // A run over EVIDENCE whose check-backup failed: no mvt results were
-    // registered and no stage read any, but the run still has its decrypt.
+    // A run whose check-backup failed: no mvt results were registered and no
+    // stage read any, but the run has its decrypt.
     await db.query(
       `INSERT INTO evidence_derivatives (derivative_id, evidence_id, kind, path, tool, params, provenance_key)
        VALUES ($1, $2, 'decrypted', '/old/ws/decrypted/a', '{"name": "mvt-ios", "version": "0"}',
@@ -332,33 +331,7 @@ describe('getRunDecryptedPath', live, () => {
        VALUES ($1, 'crash', 'succeeded', $2), ($1, 'reporting', 'succeeded', $2)`,
       [FAILED_CHECK_RUN, DECRYPT]
     );
-    // A run from before evidence registration (EPOCH-404).
-    await db.query(
-      `INSERT INTO pipeline_runs (run_id, backup_source, contract_version, tool_versions)
-       VALUES ($1, '/legacy/decrypted/a', 'test', '{}')`,
-      [UNREGISTERED_RUN]
-    );
-  });
 
-  it('returns the decrypt even when no mvt results were registered', async () => {
-    assert.equal(await getRunDecryptedPath(db, FAILED_CHECK_RUN), '/old/ws/decrypted/a');
-  });
-
-  it('follows the decrypt to where its workspace moved, not the run backup_source', async () => {
-    // What registration does when the same decrypt is found at a new location.
-    await db.query(`UPDATE evidence_derivatives SET path = '/new/ws/decrypted/a' WHERE derivative_id = $1`, [DECRYPT]);
-    assert.equal(await getRunDecryptedPath(db, FAILED_CHECK_RUN), '/new/ws/decrypted/a');
-  });
-
-  it('is null for a run without registered evidence, and for an unknown run', async () => {
-    assert.equal(await getRunDecryptedPath(db, UNREGISTERED_RUN), null);
-    assert.equal(await getRunDecryptedPath(db, '66666666-6666-6666-6666-666666666666'), null);
-  });
-});
-
-
-describe('getRunResultsPath', live, () => {
-  before(async () => {
     // Run A in workspace A read results made with IOC set A. The same backup,
     // decrypted identically, was then registered from workspace B with another
     // IOC set: the shared decrypt now points at B, run A's results still at A.
@@ -383,14 +356,33 @@ describe('getRunResultsPath', live, () => {
        VALUES ($1, 'crash', 'succeeded', $2), ($1, 'mvt_iocs', 'succeeded', $3), ($1, 'reporting', 'succeeded', $2)`,
       [RUN_A, SHARED_DECRYPT, RESULTS_A]
     );
+
+    // A run from before evidence registration (EPOCH-404).
+    await db.query(
+      `INSERT INTO pipeline_runs (run_id, backup_source, contract_version, tool_versions)
+       VALUES ($1, '/legacy/decrypted/a', 'test', '{}')`,
+      [UNREGISTERED_RUN]
+    );
   });
 
-  it("returns the run's own results, not the shared decrypt's latest workspace", async () => {
-    assert.equal(await getRunResultsPath(db, RUN_A), '/ws-a/results/a');
-    assert.equal(await getRunDecryptedPath(db, RUN_A), '/ws-b/decrypted/a');
+  it("uses the mvt results the run read, not the shared decrypt's latest workspace", async () => {
+    assert.equal(await getRunResultsLocation(db, RUN_A), '/ws-a/results/a');
   });
 
-  it('is null for a run that read no mvt results, which falls back to its decrypt', async () => {
-    assert.equal(await getRunResultsPath(db, FAILED_CHECK_RUN), null);
+  it('derives the location from the decrypt when check-backup failed and no results were registered', async () => {
+    assert.equal(await getRunResultsLocation(db, FAILED_CHECK_RUN), '/old/ws/results/a');
+  });
+
+  it('follows a moved workspace, not the run backup_source', async () => {
+    // What registration does when the same decrypt is found at a new location.
+    await db.query(`UPDATE evidence_derivatives SET path = '/new/ws/decrypted/a' WHERE derivative_id = $1`, [DECRYPT]);
+    assert.equal(await getRunResultsLocation(db, FAILED_CHECK_RUN), '/new/ws/results/a');
+    await db.query(`UPDATE evidence_derivatives SET path = '/moved/results/a' WHERE derivative_id = $1`, [RESULTS_A]);
+    assert.equal(await getRunResultsLocation(db, RUN_A), '/moved/results/a');
+  });
+
+  it('is null for a run without registered evidence, and for an unknown run', async () => {
+    assert.equal(await getRunResultsLocation(db, UNREGISTERED_RUN), null);
+    assert.equal(await getRunResultsLocation(db, '66666666-6666-6666-6666-666666666666'), null);
   });
 });

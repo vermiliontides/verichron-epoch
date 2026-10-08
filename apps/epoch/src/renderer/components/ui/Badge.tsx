@@ -16,10 +16,10 @@ const badgeVariants = cva(
         succeeded: 'bg-accent/15 text-accent',
         failed: 'bg-danger/20 text-danger font-semibold',
         skipped: 'bg-muted-foreground/8 text-muted-foreground',
-        // pipeline_runs has no status column -- this is the derived
-        // two-state phase (finished_at set or not), not a success claim.
-        in_progress: 'bg-flag/15 text-flag',
-        finished: 'bg-accent/15 text-accent',
+        // A run's state from the run_completeness view (EPOCH-404): the one
+        // completeness predicate. 'running' is shared with the stage values.
+        complete: 'bg-accent/15 text-accent',
+        incomplete: 'bg-danger/20 text-danger font-semibold',
       },
     },
     defaultVariants: {

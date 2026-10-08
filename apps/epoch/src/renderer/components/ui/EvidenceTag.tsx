@@ -1,14 +1,16 @@
 import React from 'react';
-import type { PipelineRunRow } from '../../../../../../packages/etl-db-reader/dist';
+import type { PipelineRunRow } from '@verichron/etl-db-reader';
 import { Badge } from './Badge';
 import { Tooltip, TooltipTrigger, TooltipContent } from './Tooltip';
 
 interface EvidenceTagProps {
   run: PipelineRunRow;
-  phase: 'in_progress' | 'finished';
 }
 
-export function EvidenceTag({ run, phase }: EvidenceTagProps) {
+/** Labels for run_completeness states (EPOCH-404); the state is never derived here. */
+const RUN_STATE_LABEL: Record<PipelineRunRow['state'], string> = { running: 'in progress', incomplete: 'incomplete', complete: 'complete' };
+
+export function EvidenceTag({ run }: EvidenceTagProps) {
   return (
     <div className="flex items-center gap-4 px-6 py-3 shadow-elevation-1 text-xs">
       <Tooltip>
@@ -25,9 +27,7 @@ export function EvidenceTag({ run, phase }: EvidenceTagProps) {
       <span className="font-mono text-muted-foreground">
         {new Date(run.started_at).toLocaleString()}
       </span>
-      <Badge variant={phase === 'finished' ? 'accent' : 'flag'}>
-        {phase === 'finished' ? 'finished' : 'in progress'}
-      </Badge>
+      <Badge variant={run.state}>{RUN_STATE_LABEL[run.state]}</Badge>
     </div>
   );
 }

@@ -28,6 +28,11 @@
       "type": "boolean",
       "description": "If true, the orchestrator treats a missing --results-path as a hard failure for this stage BEFORE spawning it, with a clear 'results path required but not derivable from --backup-path' error -- instead of the subprocess failing later with a less obvious missing-argument or file-not-found error. Set true only for stages reading mvt-ios's own output (results/<n>/), not the decrypted backup itself."
     },
+    "parserVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Required for any stage that writes facts through ingest(); omit for stages that don't (e.g. reporting). An incrementing integer, never text or semver, so 'latest' sorts numerically. This is the ONE place a stage's parser version is declared (EPOCH-404, R2): the orchestrator passes it to the stage as --parser-version, and the writer stamps it on every unit. Bump it whenever parsing or normalization changes what the stage writes; a bump re-ingests every file as a new unit beside the old rows (R8)."
+    },
     "enabled": {
       "type": "boolean",
       "description": "Set false to keep a stage's directory (and its stage.json) in the repo without the orchestrator running it -- e.g. a stubbed-out extractor that isn't ready yet. Preferred over deleting or renaming the directory, since the directory and its stage.json are also what CI / extractor-contract tests key off of."

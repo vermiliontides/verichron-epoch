@@ -3,7 +3,6 @@ import * as path from "node:path";
 import { Client } from "pg";
 import { parseCliConfig, resolvePythonBin } from "./cli.js";
 import { discoverStages } from "./discovery.js";
-import { hasSucceededRun } from "./db.js";
 import { runPipelineForBackup } from "./pipeline.js";
 
 async function main() {
@@ -11,7 +10,7 @@ async function main() {
   const pythonBin = await resolvePythonBin();
   const stages = await discoverStages();
   
-  if (stages.length === 0) {
+  if (stages.enabled.length === 0) {
     console.error("[orchestrator] no enabled stages discovered under apps/extractors/ or apps/reporting/ — nothing to run.");
     process.exit(1);
   }
@@ -35,15 +34,17 @@ async function main() {
   }> = [];
 
   for (const backupPath of cfg.backupPaths) {
-    if (await hasSucceededRun(client, backupPath)) {
-      analysisResults.push({ backupPath, status: "skipped" });
-      continue;
-    }
     try {
+      // Registration and the evidence-keyed resume check happen inside, before
+      // any run is created (EPOCH-404).
       const result = await runPipelineForBackup(client, backupPath, cfg.dbUrl, pythonBin, stages);
-      
+      if (result.skipped) {
+        analysisResults.push({ backupPath, status: "skipped" });
+        continue;
+      }
+
       if (!result.success) failedBackups += 1;
-      
+
       analysisResults.push({
         backupPath,
         status: result.success ? "succeeded" : "failed",

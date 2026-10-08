@@ -6,7 +6,9 @@
   "scripts": {
     "build": "tsc",
     "investigate": "tsx src/main.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "pretest": "pnpm --filter @verichron/contracts build",
+    "test": "tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@verichron/contracts": "workspace:*",

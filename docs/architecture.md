@@ -11,7 +11,7 @@ through it. Identity and provenance are explained in
 flowchart LR
   A[Encrypted backup] --> B[processor]
   B -->|evidence/ sidecar + manifest| W[(Workspace)]
-  B -->|decrypted/ + results/ with markers| W
+  B -->|decrypted/ + results/ + ileapp/ with markers| W
   W --> C[orchestrator]
   C -->|register evidence| D[(PostgreSQL)]
   C -->|spawn in order| S[stages]
@@ -29,16 +29,18 @@ analyze → report**. The orchestrator coordinates the last three.
    - hashes every file into a canonical manifest, which gives the evidence its
      identity (`content_root`);
    - decrypts it with `mvt-ios`, then repairs malformed SQLite databases;
-   - runs `mvt-ios check-backup` against a hashed copy of the IOC set.
+   - runs `mvt-ios check-backup` against a hashed copy of the IOC set;
+   - runs iLEAPP over the decrypt.
 
    Each output is a **derivative**: a separate product of the evidence, which
    itself is never altered. Each carries a marker recording what produced it.
 3. **Extract (ETL, `apps/extractors/*`).** The orchestrator verifies the
    evidence and markers, registers the evidence, its device and derivatives, and
    decides whether a run is needed. It then runs the stages in `stage.json` order
-   as subprocesses, passing each one its identity. Each extraction stage reads
-   one derivative, normalizes it, and loads facts through the one writer,
-   `ingest()`, one atomic unit per source file.
+   as subprocesses, passing each one its identity and the derivative it declares
+   it reads. Each extraction stage reads that derivative, normalizes it, and
+   loads facts through the one writer, `ingest()`, one atomic unit per source
+   file.
 4. **Analyze (`apps/analysis`).** The LLM stage proposes leads from the facts;
    leads are never evidence.
 5. **Report (`apps/reporting`, the desktop app).** The report and the app read
@@ -52,7 +54,7 @@ Each concern has exactly one owner (R2).
 | Component | Owns | Does not |
 |---|---|---|
 | `apps/epoch` | Device pull, starting runs, showing runs, records, IOCs and reports | Decide run state or write facts |
-| `apps/processor` | Hashing evidence, decrypt, repair, IOC set, `mvt-ios` invocation, completion markers | Touch the database |
+| `apps/processor` | Hashing evidence, decrypt, repair, IOC set, `mvt-ios` and iLEAPP invocation, completion markers | Touch the database |
 | `apps/orchestrator` | Evidence registration, run creation, stage order, run and stage state | Parse evidence |
 | Stages (`apps/extractors/*`, `apps/analysis`, `apps/reporting`) | Turning one derivative's files into facts, or rendering the report | Choose their own identity (R16) or commit transactions (R15) |
 | `packages/etl-db-writer` | `ingest()`, the ledger, migrations | Parse anything (R15) |
@@ -75,7 +77,9 @@ The processor creates one workspace per batch of backups. Each backup is a
   evidence/<label>/fingerprints.json       stat cache that makes re-hashing cheap
   decrypted/<label>/                       decrypted backup + .mvt_decrypted_ok marker
   results/<label>/                         mvt-ios output + .mvt_check_ok marker
+  ileapp/<label>/                          iLEAPP's report + .ileapp_ok marker
   logs/<label>.log                         check-backup output
+  logs/<label>.ileapp.log                  iLEAPP output
   summary.json, summary.md                 the processor's run summary
 ```
 
@@ -102,7 +106,7 @@ The contract is in
 | Stage | Order | Reads | Writes |
 |---|---|---|---|
 | `crash` | 10 | decrypted backup | `crash_report` |
-| `ileapp_bridge` | 20 | decrypted backup, via iLEAPP | `ileapp_record` |
+| `ileapp_bridge` | 20 | iLEAPP output | `ileapp_record` |
 | `mvt_iocs` | 70 | mvt results | `mvt_ioc_detection`, `timestamp_anomaly` |
 | `analysis` | 80 | mvt results, via a local LLM | `llm_flagged_anomaly` (leads) |
 | `reporting` | 1000 | the database | the investigation report |
@@ -120,7 +124,6 @@ These are settled but not yet built; this page will change when they land.
 
 | Change | Ticket |
 |---|---|
-| iLEAPP output becomes its own registered derivative | EPOCH-416 |
 | The app reads typed events from the processor and the orchestrator instead of scraping logs | EPOCH-443, EPOCH-445 |
 | A workspace manifest replaces path inference | EPOCH-427 |
 | Secrets travel by environment, never on the command line | EPOCH-423 |

@@ -3,7 +3,7 @@
   "entrypoint": "main.py",
   "runtime": "python",
   "order": 20,
-  "requiresResultsPath": false,
+  "reads": "ileapp_output",
   "parserVersion": 2,
   "enabled": true
 }

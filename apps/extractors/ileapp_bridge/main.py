@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Extractor entrypoint for the iLEAPP bridge using the shared Postgres contract."""
+"""The iLEAPP bridge: ingests the iLEAPP output the processor produced.
+
+The processor runs iLEAPP over each decrypt and leaves its report at
+<workspace>/ileapp/<label>/, marked complete with .ileapp_ok; the orchestrator
+registers it as an `ileapp_output` derivative and passes its directory here as
+--derivative-path (EPOCH-416). This stage only reads that directory: it never
+runs iLEAPP, and never looks anywhere else for output.
+"""
 
 from __future__ import annotations
 
@@ -16,12 +23,9 @@ from db_writer import IngestContext, add_context_args, context_from_args, incomp
 from etl_run import ETLRunResult
 from normalized_record import NormalizedRecord, SourceType
 
-# Local bridge imports
 try:
-    from .bridge import run_ileapp_extraction
     from .normalizer import list_supported_artifacts, parse_artifact_file
 except ImportError:
-    from bridge import run_ileapp_extraction
     from normalizer import list_supported_artifacts, parse_artifact_file
 
 import psycopg2
@@ -31,7 +35,7 @@ def _coerce_str(value: Any) -> str | None:
     if value is None:
         return None
     s = str(value).strip()
-    return s if s else Nones
+    return s if s else None
 
 def _coerce_int(value: Any) -> int | None:
     if value is None:
@@ -233,41 +237,21 @@ def process_output_directory(db_url: str, ctx: IngestContext, output_dir: str) -
         conn.close()
 
 
-def run_pipeline(artifact_path: str, output_dir: str, db_url: str, ctx: IngestContext) -> ETLRunResult:
-    # ctx is required: a made-up run_id used to be generated here when none
-    # was passed, which labeled facts with a run that doesn't exist.
-    out_path = Path(output_dir)
-
-    extraction = run_ileapp_extraction(artifact_path, str(out_path))
-    if extraction.get("status") != "success":
-        raise RuntimeError(extraction.get("error") or "iLEAPP extraction failed without a detailed error")
-
-    result = process_output_directory(db_url, ctx, str(out_path))
-    print(f"[+] Persisted {result.succeeded} iLEAPP record(s) to Postgres for run {ctx.run_id}.")
-    return result
-
-
 def main() -> int:
-    fatal_if_missing_venv()
-    parser = argparse.ArgumentParser(description="Run the iLEAPP bridge using the repo's shared Postgres extractor contract")
+    parser = argparse.ArgumentParser(description="Ingest the iLEAPP output the processor produced for one backup")
     add_context_args(parser)
-    parser.add_argument("--backup-path", required=True, help="Decrypted iPhone backup or extraction directory")
+    parser.add_argument("--backup-path", required=True, help="the decrypted backup the output was made from")
     parser.add_argument("--db-url", required=True, help="Postgres connection string")
-    parser.add_argument("--output", "--output-dir", dest="output_dir", default="./ileapp_raw_output", help="Directory for raw iLEAPP output")
-    parser.add_argument("--clean", action="store_true", help="Remove any existing staging directory before extraction")
-    parser.add_argument("--results-path", dest="results_path", default=None, help="Unused compatibility flag for the shared extractor contract")
-
+    parser.add_argument("--results-path", default=None, help="unused; passed to every stage")
     args = parser.parse_args()
 
     try:
-        if args.clean and Path(args.output_dir).exists():
-            import shutil
-            shutil.rmtree(args.output_dir)
-        result = run_pipeline(args.backup_path, args.output_dir, args.db_url, context_from_args(args))
+        result = process_output_directory(args.db_url, context_from_args(args), args.derivative_path)
     except Exception as exc:
-        print(f"[ileapp] extraction pipeline failed: {exc}", file=sys.stderr)
+        print(f"[ileapp] ingest failed: {exc}", file=sys.stderr)
         return 1
 
+    print(f"[+] Persisted {result.succeeded} iLEAPP record(s) to Postgres for run {args.run_id}.")
     result.print_summary("ileapp")
     return result.exit_code
 

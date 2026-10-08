@@ -3,7 +3,7 @@
   "entrypoint": "main.py",
   "runtime": "python",
   "order": 10,
-  "requiresResultsPath": false,
+  "reads": "decrypted",
   "parserVersion": 1,
   "enabled": true
 }

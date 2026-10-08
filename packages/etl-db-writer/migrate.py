@@ -56,6 +56,10 @@ def _column(table: str, column: str) -> str:
     )
 
 
+def _constraint(name: str) -> str:
+    return f"SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '{name}')"
+
+
 #: For each migration, two checks: `started` is true once its FIRST object
 #: exists, `finished` once its LAST statement has run. Used only by
 #: bootstrap_if_needed(); add an entry with every new migration, and keep
@@ -88,6 +92,10 @@ APPLIED_MARKERS: dict[str, tuple[str, str]] = {
     "0007_derivative_provenance.sql": (
         _column("evidence_derivatives", "provenance_key"),
         _column("pipeline_stage_status", "derivative_id"),
+    ),
+    "0008_ileapp_output_derivative.sql": (
+        _constraint("evidence_derivatives_kind_known"),
+        _constraint("evidence_derivatives_kind_known"),
     ),
 }
 

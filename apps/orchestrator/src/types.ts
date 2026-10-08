@@ -1,8 +1,11 @@
+import type { DerivativeKind } from "@verichron/contracts";
+
 export interface StageManifest {
   entrypoint: string;
   runtime: "python" | "node";
   order: number;
-  requiresResultsPath: boolean;
+  /** The derivative this stage reads; the orchestrator passes its id and path (EPOCH-416). */
+  reads: DerivativeKind;
   /** Declared by every stage that writes facts; passed as --parser-version (EPOCH-404). */
   parserVersion?: number;
   enabled: boolean;
@@ -23,6 +26,7 @@ export interface StageSet {
 export interface RunConfig {
   backupPath: string;
   resultsPath?: string;
+  ileappPath?: string;
   dbUrl: string;
   pythonBin: string;
 }

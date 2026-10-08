@@ -4,8 +4,9 @@ VER-16's symptom was iLEAPP discovering zero plugins and producing no output.
 The cause was the environment: iLEAPP's dependencies were not installed, so
 every plugin failed to import. They now live in iLEAPP's own pinned
 environment, tools/ileapp (EPOCH-458). This test runs the real iLEAPP from that
-environment, as the bridge does, against a synthetic backup in the real
-iTunes/Finder layout, and requires that results reach the database.
+environment against a synthetic backup in the real iTunes/Finder layout, with
+the arguments the processor uses (apps/processor/src/utils/ileapp.ts, EPOCH-416),
+and requires that the bridge's ingest of that output reaches the database.
 
 It needs tools/ileapp (`mise run setup`). Locally it is skipped without it; in
 CI it fails, because a regression test that silently skips is no test at all.
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,12 +24,15 @@ from pathlib import Path
 import pytest
 
 from db_writer import IngestContext
-from ileapp_bridge.bridge import ILEAPP_PYTHON, run_ileapp_extraction
 from ileapp_bridge.main import process_artifact_file
 from ileapp_bridge.normalizer import list_supported_artifacts
 from testing.pg_real import BACKENDS, open_db
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+REPO_ROOT = Path(__file__).resolve().parents[3]
+ILEAPP_DIR = REPO_ROOT / "tools" / "ileapp" / "iLEAPP"
+ILEAPP_PYTHON = REPO_ROOT / "tools" / "ileapp" / ".venv" / "bin" / "python"
+
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 from synthetic_backup_generator import RealisticBackupGenerator  # noqa: E402
 
 RUN_ID = "cccccccc-0000-0000-0000-000000000000"
@@ -43,7 +48,7 @@ def db(request):
 @pytest.fixture(scope="module")
 def ileapp_run(tmp_path_factory):
     """One real iLEAPP run over a synthetic backup, shared by both backends:
-    (the output directory, the generator that made the backup)."""
+    (iLEAPP's report directory, the generator that made the backup)."""
     if not ILEAPP_PYTHON.exists():
         message = f"iLEAPP's environment is missing ({ILEAPP_PYTHON}); run `mise run setup`"
         if os.environ.get("CI"):
@@ -57,9 +62,18 @@ def ileapp_run(tmp_path_factory):
     generator.create_info_plist()
     generator.create_status_plist()
 
-    result = run_ileapp_extraction(str(generator.backup_dir), str(root / "out"))
-    assert result["status"] == "success", result.get("error")
-    return root / "out", generator
+    # As the processor runs it: the report is exactly <parent>/<label>.
+    parent, label = root / "ileapp", "BK1"
+    parent.mkdir()
+    subprocess.run(
+        [
+            str(ILEAPP_PYTHON), str(ILEAPP_DIR / "ileapp.py"),
+            "-t", "itunes", "-i", str(generator.backup_dir),
+            "-o", str(parent), "--custom_output_folder", label,
+        ],
+        cwd=ILEAPP_DIR, check=True, capture_output=True, timeout=1800,
+    )
+    return parent / label, generator
 
 
 def _ingest_all(db, output) -> int:
@@ -93,8 +107,7 @@ def test_ileapp_produces_ingestable_results_from_a_backup(db, ileapp_run):
     artifacts = list_supported_artifacts(output)
     assert artifacts, "iLEAPP produced no artifact the bridge can ingest"
     for artifact in artifacts:
-        relative = artifact.relative_to(output).parts
-        assert "data" not in relative[1:2] and "media" not in relative[1:2], (
+        assert artifact.relative_to(output).parts[0] not in ("data", "media"), (
             f"{artifact} is iLEAPP's copy of the input, not a result"
         )
     assert _ingest_all(db, output) > 0, "no ileapp_record rows were written"

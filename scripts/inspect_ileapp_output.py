@@ -12,9 +12,8 @@ this diagnostic changes with it automatically.
 Usage (with iLEAPP's own interpreter, which provides ijson; EPOCH-458):
     tools/ileapp/.venv/bin/python scripts/inspect_ileapp_output.py <ileapp_output_dir>
 
-<ileapp_output_dir> is the -o target you pass to ileapp_bridge/main.py's
---output flag -- e.g. the iLEAPP_Output_<timestamp>/ directory iLEAPP itself
-creates, or its parent if you want every run under it scanned.
+<ileapp_output_dir> is one backup's iLEAPP report, as the processor writes it:
+<workspace>/ileapp/<label>/ (EPOCH-416).
 """
 
 from __future__ import annotations
@@ -105,7 +104,7 @@ def probe_unknown_file(path: Path, full_structure: bool = False) -> None:
     else:
         print("    -> no recognized signature (not SQLite/zip/gzip/JSON-looking). Could be a custom")
         print("       binary format, pickle, msgpack, or similar -- check the iLEAPP source for how")
-        print("       it writes this file (search the vendored apps/extractors/ileapp_bridge/iLEAPP/")
+        print("       it writes this file (search the vendored tools/ileapp/iLEAPP/")
         print("       checkout for the string 'lava' to find the writer).")
 
 

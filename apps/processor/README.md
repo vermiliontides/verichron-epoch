@@ -5,7 +5,10 @@ Prepares iOS backups for the pipeline. For each backup it:
 1. hashes it into its evidence identity;
 2. decrypts it with `mvt-ios`;
 3. repairs malformed SQLite databases;
-4. runs `mvt-ios check-backup` against a hashed copy of the IOC set.
+4. runs `mvt-ios check-backup` against a hashed copy of the IOC set;
+5. runs iLEAPP over the decrypt, into `ileapp/<label>/`.
+
+A failed check does not stop iLEAPP, which reads the decrypt, not the results.
 
 It writes only to the workspace and never touches the database. The workspace
 layout and the role this plays are described in
@@ -28,23 +31,30 @@ to its UI.
 | `--mvt-bin <path>` | `mvt-ios` binary (default `tools/mvt/.venv/bin/mvt-ios`, the pinned environment `mise run setup` creates; never searched for elsewhere) |
 | `--mvt-home <dir>` | mvt's data and config home, where the IOC set lives (default `$VERICHRON_MVT_HOME` or `~/.local/share/verichron/mvt`) |
 | `--sqlite-bin <path>` | `sqlite3` for the repair pass |
-| `--force` | Re-run `check-backup` even if current |
-| `--force-decrypt` | Re-decrypt, then repair and check again |
+| `--ileapp-dir <dir>` | The iLEAPP checkout to run (default `tools/ileapp/iLEAPP`, the submodule) |
+| `--ileapp-python <path>` | iLEAPP's interpreter (default `tools/ileapp/.venv/bin/python`, the pinned environment `mise run setup` creates) |
+| `--ileapp-timeout <dur>` | Stop iLEAPP, and everything it started, after this long (default `30m`) |
+| `--force` | Re-run `check-backup` and iLEAPP even if current |
+| `--force-decrypt` | Re-decrypt, then repair, check and run iLEAPP again |
 | `--verify` | Re-read every byte when hashing, ignoring the stat cache |
 | `--refresh-iocs`, `--ioc-max-age <dur>` | Refresh the IOC set (default: when older than 168h) |
 | `--only <names>` | Process only these backup labels |
 | `--different-passwords` | Prompt per backup instead of reusing one password |
 
 Each step is skipped when its output is current. Current means the output's
-marker names this backup's content root, this mvt-ios version and, for results,
-this IOC set. Anything else is redone from scratch. `MVT_STIX2` is refused,
-because the recorded IOC set must be exactly the one used.
+marker names this backup's content root and the tool that would make it now:
+this mvt-ios version and, for results, this IOC set; for iLEAPP output, this
+iLEAPP commit. Anything else is redone from scratch. `MVT_STIX2` is refused,
+because the recorded IOC set must be exactly the one used. An iLEAPP checkout
+with local changes is refused, because its commit would not describe the code
+that ran.
 
 ## Source
 
 | File | Responsibility |
 |---|---|
-| `src/main.ts` | The per-backup loop: hash → decrypt → repair → check, plus markers and summary |
+| `src/main.ts` | The per-backup loop: hash → decrypt → repair → check → iLEAPP, plus markers and summary |
+| `src/utils/ileapp.ts` | iLEAPP's commit, its input type, and running it with a timeout |
 | `src/utils/manifest.ts` | Canonical manifest, `content_root`, stat cache |
 | `src/utils/repair.ts` | SQLite quick-check and `.recover`, returning repair provenance |
 | `src/utils/resolver.ts` | Reading the `sqlite3` version |
@@ -57,7 +67,8 @@ because the recorded IOC set must be exactly the one used.
 pnpm --filter @verichron/processor test
 ```
 
-The tests drive the real CLI against stub `mvt-ios` and `sqlite3` executables.
+The tests drive the real CLI against stub `mvt-ios`, `sqlite3` and iLEAPP
+executables.
 
 **Known issues:** the backup password is passed to `mvt-ios` on the command line
 (EPOCH-423). The app reads this tool's progress by parsing its log lines

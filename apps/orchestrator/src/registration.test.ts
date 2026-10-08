@@ -22,8 +22,10 @@ import pg from 'pg';
 import {
   CHECK_MARKER,
   DECRYPT_MARKER,
+  ILEAPP_MARKER,
   renderCheckMarker,
   renderDecryptMarker,
+  renderIleappMarker,
   type CheckParams,
   type DecryptParams,
 } from '@verichron/contracts';
@@ -49,10 +51,12 @@ const REPAIRED: DecryptParams = {
 };
 const IOCS_A: CheckParams = { ioc_set_hash: 'a'.repeat(64), ioc_file_count: 14 };
 const IOCS_B: CheckParams = { ioc_set_hash: 'b'.repeat(64), ioc_file_count: 15 };
+const ILEAPP = { name: 'iLEAPP', version: '24ba13daf37d8ef3c63c959768e31aae8e630c03' };
 
 /** The markers the processor writes once each derivative is done (EPOCH-404, EPOCH-406). */
 const decryptMarker = (root: string, params: DecryptParams = REPAIRED) => renderDecryptMarker(root, MVT, params);
 const checkMarker = (root: string, params: CheckParams = IOCS_A) => renderCheckMarker(root, MVT, params);
+const ileappMarker = (root: string, tool = ILEAPP) => renderIleappMarker(root, tool, { input_type: 'itunes' });
 
 let admin: pg.Client;
 let db: pg.Client;
@@ -106,6 +110,7 @@ interface Workspace {
   workspace: string;
   backupPath: string;
   resultsPath: string;
+  ileappPath: string;
   sidecarPath: string;
   contentRoot: string;
 }
@@ -119,8 +124,8 @@ function infoPlist(udid: string, name: string): string {
 </dict></plist>`;
 }
 
-/** A workspace as the processor leaves it: decrypted backup, results, and the
- * EPOCH-401 evidence files (content-addressed manifest + sidecar). */
+/** A workspace as the processor leaves it: decrypted backup, results, iLEAPP
+ * output, and the EPOCH-401 evidence files (content-addressed manifest + sidecar). */
 function makeWorkspace(
   name: string,
   {
@@ -128,11 +133,13 @@ function makeWorkspace(
     sourcePath = `/media/source/${name}`,
     label = 'BK1',
     results = true,
-  }: { manifest?: string; sourcePath?: string; label?: string; results?: boolean } = {}
+    ileapp = true,
+  }: { manifest?: string; sourcePath?: string; label?: string; results?: boolean; ileapp?: boolean } = {}
 ): Workspace {
   const workspace = path.join(tmp, name);
   const backupPath = path.join(workspace, 'decrypted', label);
   const resultsPath = path.join(workspace, 'results', label);
+  const ileappPath = path.join(workspace, 'ileapp', label);
   mkdirSync(backupPath, { recursive: true });
   writeFileSync(path.join(backupPath, 'Manifest.db'), '');
   writeFileSync(path.join(backupPath, 'Info.plist'), infoPlist(UDID, 'Alice &amp; Bob&apos;s iPhone'));
@@ -142,6 +149,10 @@ function makeWorkspace(
   if (results) {
     mkdirSync(resultsPath, { recursive: true });
     writeFileSync(path.join(resultsPath, CHECK_MARKER), checkMarker(contentRoot));
+  }
+  if (ileapp) {
+    mkdirSync(ileappPath, { recursive: true });
+    writeFileSync(path.join(ileappPath, ILEAPP_MARKER), ileappMarker(contentRoot));
   }
 
   const evidenceDir = path.join(workspace, 'evidence', label);
@@ -163,7 +174,7 @@ function makeWorkspace(
       tool: { name: 'processor', version: '0.1.0' },
     })
   );
-  return { workspace, backupPath, resultsPath, sidecarPath, contentRoot };
+  return { workspace, backupPath, resultsPath, ileappPath, sidecarPath, contentRoot };
 }
 
 /** A node stage that records the arguments it was given. */
@@ -177,7 +188,7 @@ function recordingStage(name: string, order: number, manifest: Partial<StageDefi
   return {
     name,
     dir,
-    manifest: { entrypoint: 'stage.mjs', runtime: 'node', order, requiresResultsPath: false, enabled: true, ...manifest },
+    manifest: { entrypoint: 'stage.mjs', runtime: 'node', order, reads: 'decrypted', enabled: true, ...manifest },
   };
 }
 
@@ -268,7 +279,9 @@ describe('pre-flight registration', live, () => {
     assert.equal(await count('pipeline_runs'), 1, 'no second run for complete evidence');
     const events = await db.query<{ kind: string }>(`SELECT kind FROM evidence_events ORDER BY event_id`);
     assert.deepEqual(events.rows.map((e) => e.kind), [
-      'registered', 'location_added', 'derivative_registered', 'derivative_registered', 'location_added',
+      'registered', 'location_added',
+      'derivative_registered', 'derivative_registered', 'derivative_registered',
+      'location_added',
     ]);
   });
 
@@ -285,7 +298,7 @@ describe('pre-flight registration', live, () => {
     const { rows } = await db.query<{ kind: string; path: string }>(
       `SELECT kind, path FROM evidence_derivatives ORDER BY kind`
     );
-    assert.equal(rows.length, 2, 'one decrypt and one results derivative, not new ones');
+    assert.deepEqual(rows.map((r) => r.kind), ['decrypted', 'ileapp_output', 'mvt_results'], 'the same derivatives, not new ones');
     assert.ok(rows.every((r) => r.path.startsWith(moved)), 'each derivative records its new location');
   });
 
@@ -335,6 +348,8 @@ describe('pre-flight registration', live, () => {
       rmSync(ws.resultsPath, { recursive: true });
       writeFileSync(ws.resultsPath, 'not a directory');
     }],
+    ['iLEAPP output made from an earlier version of the backup', (ws: Workspace) =>
+      writeFileSync(path.join(ws.ileappPath, ILEAPP_MARKER), ileappMarker('f'.repeat(64)))],
   ] as const) {
     it(`${label} is refused before any run`, async () => {
       const ws = makeWorkspace(`stale-${label.replace(/\W+/g, '-')}`);
@@ -350,14 +365,27 @@ describe('pre-flight registration', live, () => {
   it('results whose check never finished are not registered, and results stages stop before starting', async () => {
     const ws = makeWorkspace('unchecked');
     rmSync(path.join(ws.resultsPath, CHECK_MARKER));
-    const reader = recordingStage('needs-results', 10, { requiresResultsPath: true, parserVersion: 1 });
+    const reader = recordingStage('needs-results', 10, { reads: 'mvt_results', parserVersion: 1 });
     const result = await run(ws.backupPath, { enabled: [reader], disabled: [] });
     assert.equal(result.success, false);
-    const kinds = await db.query<{ kind: string }>(`SELECT kind FROM evidence_derivatives`);
-    assert.deepEqual(kinds.rows.map((r) => r.kind), ['decrypted']);
+    const kinds = await db.query<{ kind: string }>(`SELECT kind FROM evidence_derivatives ORDER BY kind`);
+    assert.deepEqual(kinds.rows.map((r) => r.kind), ['decrypted', 'ileapp_output']);
     const stage = await db.query(`SELECT status, error_message FROM pipeline_stage_status WHERE run_id = $1`, [result.runId]);
     assert.equal(stage.rows[0].status, 'failed');
-    assert.match(stage.rows[0].error_message, /no results directory was registered/);
+    assert.match(stage.rows[0].error_message, /reads mvt-ios results, but none is registered for this backup/);
+  });
+
+  it('iLEAPP output whose run never finished is not registered, and stages reading it stop before starting', async () => {
+    const ws = makeWorkspace('ileapp-unfinished');
+    rmSync(path.join(ws.ileappPath, ILEAPP_MARKER));
+    const reader = recordingStage('needs-ileapp', 10, { reads: 'ileapp_output', parserVersion: 1 });
+    const result = await run(ws.backupPath, { enabled: [reader], disabled: [] });
+    assert.equal(result.success, false);
+    const kinds = await db.query<{ kind: string }>(`SELECT kind FROM evidence_derivatives ORDER BY kind`);
+    assert.deepEqual(kinds.rows.map((r) => r.kind), ['decrypted', 'mvt_results']);
+    const stage = await db.query(`SELECT status, error_message FROM pipeline_stage_status WHERE run_id = $1`, [result.runId]);
+    assert.equal(stage.rows[0].status, 'failed');
+    assert.match(stage.rows[0].error_message, /reads iLEAPP output, but none is registered for this backup/);
   });
 
   it('stores no raw UDID anywhere', async () => {
@@ -381,12 +409,13 @@ describe('pre-flight registration', live, () => {
 });
 
 describe('stages and the completeness predicate', live, () => {
-  it('passes each stage its evidence, derivative and parser version', async () => {
+  it('passes each stage its evidence, the derivative it reads (id and path) and its parser version', async () => {
     const ws = makeWorkspace('args');
     const reader = recordingStage('reader', 10, { parserVersion: 3 });
-    const resultsReader = recordingStage('results-reader', 20, { parserVersion: 2, requiresResultsPath: true });
+    const resultsReader = recordingStage('results-reader', 20, { parserVersion: 2, reads: 'mvt_results' });
+    const ileappReader = recordingStage('ileapp-reader', 30, { parserVersion: 1, reads: 'ileapp_output' });
     const report = recordingStage('report', 1000);
-    const result = await run(ws.backupPath, { enabled: [reader, resultsReader, report], disabled: [] });
+    const result = await run(ws.backupPath, { enabled: [reader, resultsReader, ileappReader, report], disabled: [] });
     assert.equal(result.success, true, JSON.stringify(result));
 
     const { rows } = await db.query<{ kind: string; derivative_id: string }>(
@@ -400,6 +429,10 @@ describe('stages and the completeness predicate', live, () => {
     assert.equal(argsOf(reader)['--parser-version'], '3');
     assert.equal(argsOf(resultsReader)['--derivative-id'], byKind.mvt_results, 'results stages read the results derivative');
     assert.equal(argsOf(resultsReader)['--parser-version'], '2');
+    assert.equal(argsOf(ileappReader)['--derivative-id'], byKind.ileapp_output, 'iLEAPP stages read the iLEAPP output');
+    assert.equal(argsOf(reader)['--derivative-path'], ws.backupPath);
+    assert.equal(argsOf(resultsReader)['--derivative-path'], ws.resultsPath);
+    assert.equal(argsOf(ileappReader)['--derivative-path'], ws.ileappPath);
     assert.equal(argsOf(report)['--parser-version'], undefined, 'a stage that declares none is passed none');
   });
 
@@ -499,17 +532,49 @@ describe('stages and the completeness predicate', live, () => {
     const { rows } = await db.query(
       `SELECT kind, tool, params, provenance_key FROM evidence_derivatives ORDER BY kind`
     );
-    assert.deepEqual(rows.map((r) => [r.kind, r.tool]), [['decrypted', MVT], ['mvt_results', MVT]]);
+    assert.deepEqual(rows.map((r) => [r.kind, r.tool]), [['decrypted', MVT], ['ileapp_output', ILEAPP], ['mvt_results', MVT]]);
     assert.deepEqual(rows[0].params, REPAIRED, 'repair counts, failed files and preserved originals are queryable');
-    assert.deepEqual(rows[1].params, IOCS_A);
+    assert.deepEqual(rows[1].params, { input_type: 'itunes' });
+    assert.deepEqual(rows[2].params, IOCS_A);
     for (const r of rows) assert.match(r.provenance_key, /^[0-9a-f]{64}$/);
     const events = await db.query(`SELECT detail FROM evidence_events WHERE kind = 'derivative_registered' ORDER BY event_id`);
-    assert.deepEqual(events.rows.map((e) => e.detail.tool), [MVT, MVT]);
+    assert.deepEqual(events.rows.map((e) => e.detail.tool), [MVT, MVT, ILEAPP]);
+  });
+
+  it('registers iLEAPP output as a derivative of the decrypt it was made from', async () => {
+    const ws = makeWorkspace('ileapp-parent');
+    await run(ws.backupPath);
+    const { rows } = await db.query(
+      `SELECT o.path, o.parent_derivative_id = d.derivative_id AS from_decrypt, o.evidence_id = d.evidence_id AS same_evidence
+         FROM evidence_derivatives o JOIN evidence_derivatives d ON d.kind = 'decrypted'
+        WHERE o.kind = 'ileapp_output'`
+    );
+    assert.deepEqual(rows, [{ path: ws.ileappPath, from_decrypt: true, same_evidence: true }]);
+  });
+
+  it('iLEAPP output from a new iLEAPP commit is a new derivative, and stages reading it run again', async () => {
+    const ws = makeWorkspace('new-ileapp');
+    const reader = recordingStage('ileapp-reader', 10, { reads: 'ileapp_output', parserVersion: 1 });
+    const first = await run(ws.backupPath, { enabled: [reader], disabled: [] });
+    assert.equal(await getRunState(db, first.runId!), 'complete');
+    const firstOutput = argsOf(reader)['--derivative-id'];
+
+    const newer = { name: 'iLEAPP', version: 'c'.repeat(40) };
+    writeFileSync(path.join(ws.ileappPath, ILEAPP_MARKER), ileappMarker(ws.contentRoot, newer));
+    const second = await run(ws.backupPath, { enabled: [reader], disabled: [] });
+    assert.notEqual(second.skipped, true, 'the new output has not been read');
+    assert.notEqual(argsOf(reader)['--derivative-id'], firstOutput);
+
+    const { rows } = await db.query(
+      `SELECT derivative_id, tool FROM evidence_derivatives WHERE kind = 'ileapp_output' ORDER BY created_at`
+    );
+    assert.deepEqual(rows.map((r) => r.tool), [ILEAPP, newer], 'the old output keeps its own row and provenance');
+    assert.equal(rows[0].derivative_id, firstOutput);
   });
 
   it('results checked against a new IOC set are a new derivative, and results stages run again', async () => {
     const ws = makeWorkspace('new-iocs');
-    const reader = recordingStage('ioc-reader', 10, { requiresResultsPath: true, parserVersion: 1 });
+    const reader = recordingStage('ioc-reader', 10, { reads: 'mvt_results', parserVersion: 1 });
     const first = await run(ws.backupPath, { enabled: [reader], disabled: [] });
     assert.equal(await getRunState(db, first.runId!), 'complete');
     const firstResults = argsOf(reader)['--derivative-id'];
@@ -537,6 +602,7 @@ describe('stages and the completeness predicate', live, () => {
     const unrepaired: DecryptParams = { repair: { status: 'skipped', reason: 'sqlite3 not available (sqlite3)' } };
     writeFileSync(path.join(ws.backupPath, DECRYPT_MARKER), decryptMarker(ws.contentRoot, unrepaired));
     rmSync(ws.resultsPath, { recursive: true });
+    rmSync(ws.ileappPath, { recursive: true });
     const second = await run(ws.backupPath);
     assert.notEqual(second.skipped, true, 'a new decrypt is new input');
     const { rows } = await db.query(

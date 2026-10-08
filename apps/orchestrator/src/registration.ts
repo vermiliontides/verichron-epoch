@@ -14,8 +14,9 @@
  *   4. Read the device's UDID from Info.plist and key the device by
  *      HMAC-SHA256(UDID, per-install secret). The raw UDID is never stored.
  *   5. In one transaction: upsert the device, the evidence item (by
- *      content_root), the location and the derivatives, appending an
- *      evidence_events row for each thing that is new.
+ *      content_root), the location and the derivatives (the decrypt, and the
+ *      mvt results and iLEAPP output made from it, when complete), appending
+ *      an evidence_events row for each thing that is new.
  */
 
 import { createHash, createHmac, randomBytes } from 'node:crypto';
@@ -25,13 +26,14 @@ import * as path from 'node:path';
 import type { Client } from 'pg';
 
 import {
-  CHECK_MARKER,
   DECRYPT_MARKER,
   deriveEvidencePath,
   EvidenceSidecar,
   provenanceKey,
   readCheckMarker,
   readDecryptMarker,
+  readIleappMarker,
+  type DerivativeKind,
   type ToolVersion,
 } from '@verichron/contracts';
 
@@ -50,16 +52,25 @@ export interface Registration {
   deviceId: string;
   /** The decrypted backup this run reads. */
   decryptedDerivativeId: string;
-  /** mvt-ios's results for that decrypt, when the results directory exists. */
+  /** mvt-ios's results for that decrypt, when complete. */
   resultsDerivativeId: string | null;
+  /** iLEAPP's output for that decrypt, when complete (EPOCH-416). */
+  ileappDerivativeId: string | null;
 }
 
-/** The derivative a stage reads: the results set if it needs one, else the decrypt. */
-export function derivativeFor(
-  stage: StageDefinition,
-  registration: Pick<Registration, 'decryptedDerivativeId' | 'resultsDerivativeId'>
-): string | null {
-  return stage.manifest.requiresResultsPath ? registration.resultsDerivativeId : registration.decryptedDerivativeId;
+export type RegisteredDerivatives = Pick<
+  Registration,
+  'decryptedDerivativeId' | 'resultsDerivativeId' | 'ileappDerivativeId'
+>;
+
+/** The derivative a stage reads, as its stage.json declares; null when that one isn't registered. */
+export function derivativeFor(stage: StageDefinition, registration: RegisteredDerivatives): string | null {
+  const byKind: Record<DerivativeKind, string | null> = {
+    decrypted: registration.decryptedDerivativeId,
+    mvt_results: registration.resultsDerivativeId,
+    ileapp_output: registration.ileappDerivativeId,
+  };
+  return byKind[stage.manifest.reads];
 }
 
 /** What made a derivative, as its completion marker records it (EPOCH-406). */
@@ -73,6 +84,8 @@ export interface RegistrationInput {
   backupPath: string;
   /** <workspace>/results/<label>, if derivable. */
   resultsPath?: string;
+  /** <workspace>/ileapp/<label>, if derivable. */
+  ileappPath?: string;
   /** Recorded on locations and events; defaults to this machine's hostname. */
   host?: string;
   /** Per-install HMAC secret file; defaults to defaultSecretPath(). */
@@ -254,15 +267,16 @@ function verifySidecar(workspace: string, label: string): VerifiedSidecar {
  * left over from an earlier version of the backup under the same label is
  * refused, so its facts can't be filed under the new evidence.
  *
- * Returns each derivative's provenance from its marker, and the results
- * directory to register, or null when there are none yet (results-reading
- * stages then fail clearly before they start).
+ * Returns each derivative's provenance from its marker, and the results and
+ * iLEAPP directories to register, or null for one that isn't complete
+ * (stages that read it then fail clearly before they start).
  */
 function verifyDerivatives(
   decryptedPath: string,
   resultsPath: string | undefined,
+  ileappPath: string | undefined,
   contentRoot: string
-): { decrypt: Provenance; results: { path: string; provenance: Provenance } | null } {
+): { decrypt: Provenance; results: MadeFromDecrypt | null; ileapp: MadeFromDecrypt | null } {
   const decrypt = readDecryptMarker(decryptedPath);
   if (decrypt?.content_root !== contentRoot) {
     throw new RegistrationError(
@@ -274,25 +288,42 @@ function verifyDerivatives(
     );
   }
 
-  const decryptProvenance = { tool: decrypt.tool, params: decrypt.params };
+  return {
+    decrypt: { tool: decrypt.tool, params: decrypt.params },
+    results: madeFromDecrypt('the mvt results', resultsPath, readCheckMarker, contentRoot),
+    ileapp: madeFromDecrypt("iLEAPP's output", ileappPath, readIleappMarker, contentRoot),
+  };
+}
 
-  if (!resultsPath || !existsSync(resultsPath)) return { decrypt: decryptProvenance, results: null };
-  if (!statSync(resultsPath).isDirectory()) {
-    throw new RegistrationError(`the results path ${resultsPath} exists but is not a directory`);
+interface MadeFromDecrypt {
+  path: string;
+  provenance: Provenance;
+}
+
+/**
+ * A derivative the processor makes from the decrypt, if it is complete: null
+ * when its directory or completion marker is missing, refused when its
+ * marker names other evidence.
+ */
+function madeFromDecrypt(
+  what: string,
+  dir: string | undefined,
+  readMarker: (dir: string) => { content_root: string; tool: ToolVersion; params: unknown } | null,
+  contentRoot: string
+): MadeFromDecrypt | null {
+  if (!dir || !existsSync(dir)) return null;
+  if (!statSync(dir).isDirectory()) {
+    throw new RegistrationError(`${what} path ${dir} exists but is not a directory`);
   }
-  const check = readCheckMarker(resultsPath);
-  // check-backup hasn't completed: no results to register
-  if (!check) return { decrypt: decryptProvenance, results: null };
-  if (check.content_root !== contentRoot) {
+  const marker = readMarker(dir);
+  if (!marker) return null;
+  if (marker.content_root !== contentRoot) {
     throw new RegistrationError(
-      `the mvt results at ${resultsPath} were made from content root ${check.content_root.slice(0, 12)}…, ` +
+      `${what} at ${dir} were made from content root ${marker.content_root.slice(0, 12)}…, ` +
         `but the evidence sidecar names ${contentRoot.slice(0, 12)}…; re-run the processor`
     );
   }
-  return {
-    decrypt: decryptProvenance,
-    results: { path: path.resolve(resultsPath), provenance: { tool: check.tool, params: check.params } },
-  };
+  return { path: path.resolve(dir), provenance: { tool: marker.tool, params: marker.params } };
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +354,7 @@ async function appendEvent(
 async function upsertDerivative(
   client: Client,
   evidenceId: string,
-  kind: 'decrypted' | 'mvt_results',
+  kind: DerivativeKind,
   derivativePath: string,
   parentId: string | null,
   host: string,
@@ -361,7 +392,7 @@ export async function registerEvidence(client: Client, input: RegistrationInput)
   const device = readDevice([path.resolve(input.backupPath), sidecar.sourcePath]);
   const key = deviceKey(device.udid, loadDeviceSecret(input.secretPath));
   const decryptedPath = path.resolve(input.backupPath);
-  const derivatives = verifyDerivatives(decryptedPath, input.resultsPath, sidecar.contentRoot);
+  const derivatives = verifyDerivatives(decryptedPath, input.resultsPath, input.ileappPath, sidecar.contentRoot);
 
   await client.query('BEGIN');
   try {
@@ -430,9 +461,15 @@ export async function registerEvidence(client: Client, input: RegistrationInput)
           derivatives.results.provenance
         )
       : null;
+    const ileappDerivativeId = derivatives.ileapp
+      ? await upsertDerivative(
+          client, evidenceId, 'ileapp_output', derivatives.ileapp.path, decryptedDerivativeId, host,
+          derivatives.ileapp.provenance
+        )
+      : null;
 
     await client.query('COMMIT');
-    return { evidenceId, deviceId, decryptedDerivativeId, resultsDerivativeId };
+    return { evidenceId, deviceId, decryptedDerivativeId, resultsDerivativeId, ileappDerivativeId };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => undefined);
     throw err;

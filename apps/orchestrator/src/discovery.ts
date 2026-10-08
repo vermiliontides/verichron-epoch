@@ -1,6 +1,7 @@
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DerivativeKind } from "@verichron/contracts";
 import { StageDefinition, StageManifest, StageSet } from "./types.js"
 
 const __filename = fileURLToPath(import.meta.url);
@@ -11,14 +12,18 @@ const EXTRACTORS_DIR = path.join(REPO_ROOT, "apps", "extractors");
 const REPORTING_DIR = path.join(REPO_ROOT, "apps", "reporting");
 const ANALYSIS_DIR = path.join(REPO_ROOT, "apps", "analysis");
 
+/** Every key stage-manifest.schema.json allows; it sets additionalProperties: false. */
+const MANIFEST_KEYS = new Set(["$schema", "entrypoint", "runtime", "order", "reads", "parserVersion", "enabled"]);
+
 export function isStageManifest(value: unknown): value is StageManifest {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   return (
+    Object.keys(v).every((key) => MANIFEST_KEYS.has(key)) &&
     typeof v.entrypoint === "string" &&
     (v.runtime === "python" || v.runtime === "node") &&
     typeof v.order === "number" &&
-    typeof v.requiresResultsPath === "boolean" &&
+    DerivativeKind.safeParse(v.reads).success &&
     (v.parserVersion === undefined ||
       (typeof v.parserVersion === "number" && Number.isInteger(v.parserVersion) && v.parserVersion >= 1)) &&
     typeof v.enabled === "boolean"
@@ -44,8 +49,9 @@ async function loadStageFromDir(dir: string, name: string): Promise<StageDefinit
   if (!isStageManifest(parsed)) {
     throw new Error(
       `[orchestrator] ${manifestPath} does not match stage-manifest.schema.json ` +
-        `(need entrypoint: string, runtime: "python"|"node", order: number, ` +
-        `requiresResultsPath: boolean, enabled: boolean, optional parserVersion: integer >= 1).`
+        `(no other keys; need entrypoint: string, runtime: "python"|"node", order: number, ` +
+        `reads: ${DerivativeKind.options.map((k) => `"${k}"`).join("|")}, enabled: boolean, ` +
+        `optional parserVersion: integer >= 1).`
     );
   }
 

@@ -34,3 +34,27 @@ def test_backup_parser_reads_the_udid_not_the_guid(tmp_path):
     generator.create_manifests()
     info = BackupParser(generator.backup_dir).parse_backup_info()
     assert info["udid"] == UDID.upper()
+
+
+def test_files_are_stored_and_listed_as_in_a_real_backup(tmp_path):
+    """iLEAPP and mvt locate each file at <first two hex digits>/<full file ID> and
+    read its metadata from Manifest.db's `file` column (VER-16)."""
+    import sqlite3
+
+    generator = RealisticBackupGenerator(tmp_path, udid=UDID)
+    generator.create_contacts_db()
+    generator.create_manifests()
+
+    conn = sqlite3.connect(generator.backup_dir / "Manifest.db")
+    columns = [row[1] for row in conn.execute("PRAGMA table_info(Files)")]
+    assert columns == ["fileID", "domain", "relativePath", "flags", "file"]
+    rows = conn.execute("SELECT fileID, relativePath, file FROM Files WHERE flags = 1").fetchall()
+    conn.close()
+
+    assert rows
+    for file_id, relative_path, blob in rows:
+        stored = generator.backup_dir / file_id[:2] / file_id
+        assert stored.is_file(), f"{relative_path} is not stored at {file_id[:2]}/{file_id}"
+        metadata = plistlib.loads(blob)["$objects"][1]
+        assert metadata["Size"] == stored.stat().st_size
+        assert metadata["LastModified"] == generator.backup_timestamp

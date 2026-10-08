@@ -29,6 +29,22 @@ SUPPORTED_SUFFIXES = {".csv", ".tsv", ".db", ".sqlite"}
 # evidence; skip it at the source.
 EXCLUDED_TABLE_PREFIXES = ("_lava", "_artifact", "sqlite_")
 
+# Inside each iLEAPP_Output_* run directory, data/ and media/ hold iLEAPP's
+# working copies of the *input*: the backup's own databases and media, copied
+# out so its plugins can read them. They are evidence, not iLEAPP results;
+# ingesting them would file raw device tables (sms.db, History.db) as
+# ileapp_record facts (VER-16). The evidence itself is the decrypted backup.
+INPUT_COPY_DIRS = ("data", "media")
+
+
+def _is_input_copy(relative_parts: tuple[str, ...]) -> bool:
+    """True if a path (relative to the output directory) lies under data/ or
+    media/ of an iLEAPP run directory, or of the output directory itself."""
+    for i, part in enumerate(relative_parts[:-1]):
+        if part in INPUT_COPY_DIRS and (i == 0 or relative_parts[i - 1].startswith("iLEAPP_Output_")):
+            return True
+    return False
+
 # Column names, in priority order, that genuinely carry "when did this event
 # happen". Matched case-insensitively and exactly — not by substring.
 #
@@ -150,6 +166,7 @@ def list_supported_artifacts(output_dir: str | Path) -> list[Path]:
         if path.is_file()
         and path.suffix.lower() in SUPPORTED_SUFFIXES
         and not any(path.stem.lower().startswith(p) for p in EXCLUDED_TABLE_PREFIXES)
+        and not _is_input_copy(path.relative_to(out_path).parts)
     )
 
 

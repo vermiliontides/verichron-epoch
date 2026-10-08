@@ -355,3 +355,20 @@ def test_file_hash_is_deterministic_and_content_sensitive(tmp_path):
 
     test_file.write_text("id,value\n1,modified\n")
     assert compute_file_hash(test_file) != first
+
+
+def test_input_copies_under_data_and_media_are_not_artifacts(tmp_path):
+    """iLEAPP copies the backup's own databases into data/ (and media into
+    media/) of its run directory. Those are evidence, not iLEAPP results, and
+    must never be ingested as ileapp_record facts (VER-16)."""
+    run = tmp_path / "iLEAPP_Output_2026-10-08_Thursday_123713"
+    (run / "_TSV Exports").mkdir(parents=True)
+    (run / "_TSV Exports" / "iTunes Backup Information.tsv").write_text("property\tvalue\nName\tx\n")
+    for copy in ("data/private/var/mobile/Library/SMS/sms.db", "media/IMG_0001.sqlite"):
+        (run / copy).parent.mkdir(parents=True)
+        (run / copy).write_bytes(b"")
+
+    found = [p.relative_to(tmp_path).as_posix() for p in list_supported_artifacts(tmp_path)]
+    assert found == ["iLEAPP_Output_2026-10-08_Thursday_123713/_TSV Exports/iTunes Backup Information.tsv"]
+    # The same rule applies when given the run directory itself (EPOCH-416).
+    assert [p.name for p in list_supported_artifacts(run)] == ["iTunes Backup Information.tsv"]

@@ -1,23 +1,35 @@
+# Reporting stage (`apps/reporting`)
 
-# Verichron Epoch: Reports and Summary Layer (`apps/reporting`)
+The last pipeline stage (order 1000). It renders the investigation report,
+`investigation_report.md`, for the run's evidence:
 
-`apps/reporting` handles the generation, compilation, and presentation of forensic findings within the Verichron Epoch ecosystem. It aggregates enriched timelines, repaired SQLite database logs, and automated triage results into final investigator-ready summaries.
+| Section | Contents |
+|---|---|
+| Run completeness | Each stage's status |
+| Provenance | The derivatives this run read, and where the facts shown came from |
+| IOC detections and correlated activity | Everything within the correlation window around each detection |
+| Per-source-type sections | Crash reports today |
 
-## Core Capabilities
+Facts are read by evidence through `current_forensic_records`, so the report and
+the desktop app agree (R27). A run with no registered evidence gets a report that
+says so, never an empty one that reads as "nothing found".
 
-* **Forensic Report Generation:** Compiles structured outputs from the core orchestrator pipeline into readable formats.
+## Run
 
+It runs as part of the pipeline, writing to `<results-path>/investigation_report.md`.
+To run it by hand:
 
-* **IOC Window Highlighting:** Formats the 15-minute event window surrounding any detected indicator of compromise for immediate review.
+```bash
+uv run python apps/reporting/generate_report.py --run-id <run> --db-url <url> [--results-path <dir>] [--output <file>]
+```
 
+Its tests are in `scripts/test_evidence_reads.py`; they run against real
+PostgreSQL.
 
-* **Artifact & Remediation Export:** Displays records of repaired SQLite databases and raw forensic artifacts extracted via `mvt-ios` and `iLEAPP`.
+**Known issues:**
 
-
-
-## Architecture & Tech Stack
-
-* **Monorepo Integration:** Interfaces closely with the frontend desktop application (`apps/epoch`), the LLM triage application (`apps/analysis`), and the core orchestrator pipeline (`packages/`).
-
-
-* **Environment Setup:** Adheres to workspace-level configurations and Python/TypeScript environment management standards.
+| Issue | Ticket |
+|---|---|
+| Fact types without a section are left out silently | EPOCH-448 |
+| No section for iLEAPP records | EPOCH-434 |
+| The correlation window is defined here and in the reader | EPOCH-425 |

@@ -1,57 +1,55 @@
-Verichron Epoch
+# Verichron Epoch
 
-Verichron Epoch is an advanced iOS forensics platform designed for local exploration of mvt-ios backups. The platform integrates mvt-ios, iLEAPP, and automated SQLite database remediation to repair corruption resulting from extraction. To streamline investigations, extracted data is restructured into an enriched timeline analyzing activity in the 15-minute window surrounding an indicator of compromise (IOC).
+Verichron Epoch is a forensic workbench for iOS devices. It takes an encrypted
+iTunes/Finder backup, decrypts and verifies it, runs extractors and indicator
+(IOC) matching over it, and produces a report an examiner can defend: every fact
+is traceable to the exact evidence, tool version and IOC set that produced it.
 
-Dual Operational Modes
+It behaves like a careful lab technician, not a scanner: it never loses,
+misattributes or over-claims evidence, and it always says what it did not do.
 
-Verichron Epoch supports two distinct deployment modes to balance accessibility with strict security compliance:
+> **Status:** pre-release. The first target is an air-gapped **Lab build**
+> ([decision](docs/decisions.md#product-and-builds)). Open work is tracked in
+> Linear (project prefix `EPOCH-`).
 
-Consumer Mode ("Just Works"): Streamlined for standard onboarding, allowing dynamic tool acquisition and network features.
+## How it fits together
 
-Lab Mode (Air-Gapped & Secure): Engineered for secure, air-gapped forensic labs where internet access is restricted, ensuring evidence remains legally admissible and protected.
+```
+device / backup ──► mvt-runner ──► orchestrator ──► stages ──► PostgreSQL ──► report, desktop app
+                    hash, decrypt,   register evidence,  extract,
+                    repair, IOC scan run stages in order  write facts
+```
 
-Core Capabilities
+Read [docs/architecture.md](docs/architecture.md) for the full picture.
 
-iOS Backup Exploration: Facilitates deep, localized exploration of mvt-ios backups.
+## Documentation
 
-Database Remediation: Automatically repairs corrupted or damaged SQLite databases to ensure data integrity during analysis.
+| Read this | To learn |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | The components, how data flows, and where each piece lives |
+| [docs/evidence-model.md](docs/evidence-model.md) | How evidence, derivatives, runs and facts are identified and related |
+| [docs/rules.md](docs/rules.md) | The architecture rules (R1–R35) every change must respect |
+| [docs/decisions.md](docs/decisions.md) | Settled decisions and why they were made |
+| [docs/development.md](docs/development.md) | Setting up, running the pipeline, testing, CI |
+| [packages/contracts/EXTRACTOR_CONTRACT.md](packages/contracts/EXTRACTOR_CONTRACT.md) | What every pipeline stage must do |
+| [apps/epoch/DESIGN.md](apps/epoch/DESIGN.md) | The desktop app's visual design system |
+| [AGENTS.md](AGENTS.md) | How AI coding agents work in this repo |
 
-Targeted Timeframe Analysis: Restructures data to isolate and enrich events within a 15-minute window surrounding an indicator of compromise.
+Each package has a short README covering only what is specific to it.
 
-Pipeline Orchestration: Utilizes an orchestrator pipeline integrating directly with downstream analysis tools, including local LLM triage.
+## Repository map
 
-Repository Structure
-
-The project is structured as a monorepo using pnpm workspaces and uv for Python dependency management:
-
-apps/: Contains high-level applications, including the Electron desktop client (apps/epoch), the LLM triage application (apps/analysis), extractors, and MVT runner services.
-
-Note on UI/UX: Frontend applications within apps/epoch adhere to the UI/UX design tokens and visual hierarchy defined in DESIGN.md (elevation over flat borders, 4px spacing grid, and 3-tier type scales).
-
-libs/: Houses core forensic extractors and shared infrastructure modules managed via uv.
-
-packages/: Internal shared packages and core orchestrator pipeline components.
-
-infra/: Infrastructure configurations, including Docker and PostgreSQL environment setups.
-
-scripts/: Utility and build scripts for environment maintenance and package management.
-
-backups/ & ileapp_raw_output/: Directories dedicated to test data and raw integration outputs.
-
-Tool Acquisition Strategy & Air-Gapped Support
-
-Verichron Epoch bridges installation simplicity with strict offline security compliance through a dual-path tool acquisition strategy:
-
-Online Verified Downloads: For standard environments, the application checks a hosted release manifest and fetches checksum-verified binaries from GitHub releases into a user-local directory (userData/tools/idevicebackup2).
-
-Offline & Air-Gapped Fallback: For secure forensic labs, the application gracefully falls back to local source compilation (make install or WSL-managed builds) or manual system tool instructions (apt/brew), ensuring full offline functionality.
-
-Tech Stack & Environment
-
-The project relies on a hybrid stack bridging forensic data processing with local desktop and AI interfaces:
-
-Python (54.1%): Powers core forensic extraction, SQLite repairs, ETL parsers, and orchestrator pipelines, managed via uv (uv.lock, pyproject.toml).
-
-TypeScript (43.6%): Drives user interfaces, the Electron desktop application, and orchestration, managed via pnpm (pnpm-lock.yaml, pnpm-workspace.yaml).
-
-AI & Storage Infrastructure: Leverages PostgreSQL for persistent storage and Ollama for local pattern recognition and triage support.
+| Path | What it is | Language |
+|---|---|---|
+| `apps/epoch` | Electron desktop app | TypeScript |
+| `apps/mvt-runner` | Hashes, decrypts, repairs and IOC-scans backups (drives `mvt-ios`) | TypeScript |
+| `apps/orchestrator` | Registers evidence and runs the pipeline stages | TypeScript |
+| `apps/extractors/*` | Stages that turn tool output into facts (`crash`, `ileapp_bridge`, `mvt_iocs`) | Python |
+| `apps/analysis` | LLM stage that proposes leads | Python |
+| `apps/reporting` | Generates the investigation report | Python |
+| `packages/contracts` | Shared schemas and types (TS and Python) | both |
+| `packages/etl-db-writer` | The fact writer, migrations and `migrate.py` | Python |
+| `packages/etl-db-reader` | Read-only queries for the app | TypeScript |
+| `libs/*` | Python helpers: run tallies, runtime checks, test doubles | Python |
+| `scripts/` | Developer tools, generators and Python test suites | Python |
+| `infra/` | Local PostgreSQL via Docker Compose | — |

@@ -1,31 +1,20 @@
-# Verichron Epoch: Extractors Service (`apps/extractors`)
+# Extractors
 
-`apps/extractors` manages the specialized forensic data extraction and parsing pipelines for Verichron Epoch, integrating tools like `mvt-ios` and `iLEAPP` to process device artifacts.
+Pipeline stages that turn tool output into facts. Each subdirectory is one
+stage, discovered by the orchestrator through its `stage.json`, and each follows
+the [stage contract](../../packages/contracts/EXTRACTOR_CONTRACT.md).
 
-## Core Capabilities
+| Stage | Reads | Writes |
+|---|---|---|
+| [`crash`](crash/) | decrypted backup | `crash_report` |
+| [`ileapp_bridge`](ileapp_bridge/) | decrypted backup, via iLEAPP | `ileapp_record` |
+| [`mvt_iocs`](mvt_iocs/) | mvt results | `mvt_ioc_detection`, `timestamp_anomaly` |
 
-* **Forensic Parsing:** Executes extraction routines across local iOS backups and artifact dumps.
+To add an extractor:
 
-
-* **Database Remediation:** Automatically detects and repairs corrupted SQLite databases resulting from device extractions.
-
-
-* **Event Enrichment:** Restructures raw output into normalized, enriched timeline formats optimized for analyzing a 15-minute window around an indicator of compromise.
-
-
-
-## Architecture & Tech Stack
-
-* **Python Engine:** Built on the repository's Python-centric data processing stack.
-
-
-* **Pipeline Interoperability:** Connects with the core orchestrator (`packages/`) and LLM triage services (`apps/analysis`) to pass structured forensic output.
-
-
-
-## Setup & Execution
-
-1. **Environment Management:** Relies on the monorepo's Python dependency configuration (`uv` and root `pyproject.toml`).
-
-
-2. **Workflow Integration:** Executed automatically as part of the core orchestrator pipeline or invoked via backend service scripts.
+1. Create `apps/extractors/<name>/` with a `stage.json` and an entrypoint.
+2. Register any new `source_type` in `packages/contracts/normalized-record.schema.json`,
+   then run `pnpm sync:contracts`.
+3. For a Python stage, give it a `pyproject.toml` (the uv workspace already
+   includes `apps/extractors/*`) and add its package to the root
+   `pyproject.toml` dependencies.

@@ -1,5 +1,14 @@
-# Shared Libraries (`libs/`)
+# Python libraries (`libs/`)
 
-This directory houses domain-agnostic utilities and runtime helpers shared across Python extraction scripts, migration tools, and orchestration processes. 
+Small shared Python packages in the uv workspace. They hold mechanism, never
+policy (R3), and depend on nothing internal (R1).
 
-* **`runtime-env/`**: Contains execution guards (`runtime_env.py`) to verify that a repository-local `.venv` environment is active before any backend script or pipeline command runs.
+| Package | Module | Provides |
+|---|---|---|
+| `etl-run` | `etl_run` | `ETLRunResult`: a stage's per-item tally (`ok`, `fail`, `note`), its summary, and its exit code (non-zero if anything failed, R20) |
+| `verichron-runtime-env` | `runtime_env` | The repo-venv guard, loading the root `.env`, and resolving the database URL |
+| `testing` | `testing` | `PgDouble` (SQLite stand-in) and `PgReal` (real PostgreSQL via `TEST_DATABASE_URL`), with `open_db` for running one test body against both (R33) |
+
+**Known issues:** the database URL resolver falls back to a hard-coded dev
+credential (EPOCH-424). Extractors check their own environment, where the
+orchestrator should (R29).

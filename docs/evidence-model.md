@@ -1,0 +1,120 @@
+# Evidence model
+
+How Verichron Epoch identifies evidence, what it derives from it, and how a fact
+stays traceable to its source. The components named here are described in
+[architecture.md](architecture.md).
+
+## Evidence
+
+**Evidence is identified by its content, not its location (R6).** mvt-runner
+hashes every file of a backup into a *canonical manifest*:
+
+- one line per file: `<sha256>  <path>`;
+- paths are relative, NFC-normalized and `/`-separated;
+- lines are sorted by the path's UTF-8 bytes.
+
+The evidence's `content_root` is the sha256 of that manifest. The same backup
+mounted at two paths, or on two machines, is one piece of evidence with two
+*locations*. Renaming a file inside the backup changes the identity; moving the
+whole backup does not. Byte-identical files from two devices are still two
+pieces of evidence: nothing is deduplicated across evidence.
+
+The manifest is stored content-addressed (`manifests/<root>.sha256`) and never
+overwritten. The sidecar pointing at it is replaced atomically, and only once
+its manifest exists, so a crash can never leave a sidecar naming a missing
+manifest.
+
+**Devices.** A device is keyed by `HMAC-SHA256(UDID, per-install secret)`, with
+a user-editable label. The raw UDID is never stored, so the same phone matches
+across backups without its identifier leaking into the database, the UI or
+reports. The secret lives in `~/.config/verichron/device-key.secret` (mode 0600;
+a copy other users can read is refused). The UDID is read from `Info.plist`'s
+`Unique Identifier` / `Target Identifier`; `GUID` is an iTunes backup ID, not the
+UDID, and is refused.
+
+## Derivatives
+
+A *derivative* is something produced from evidence: today, the **decrypted**
+backup and the **mvt results** checked from it (whose parent is the decrypt).
+
+A derivative's identity is **(evidence, kind, parent, provenance)**:
+
+- **provenance** is the tool that made it and the parameters that shaped it, for
+  example:
+  - a decrypt records the mvt-ios version and the SQLite repair outcome (sqlite3
+    version, databases repaired, files not fully recovered, originals kept as
+    `.corrupt-<timestamp>`);
+  - a results set records the mvt-ios version and the hash of the IOC set it
+    was checked against;
+- `provenance_key` is the sha256 of that provenance in canonical form;
+- a different tool version, repair outcome or IOC set is therefore a **new
+  derivative**. A derivative's provenance is never rewritten; only its path, its
+  last-known location, is updated.
+
+**Completion markers.** mvt-runner writes `.mvt_decrypted_ok` and `.mvt_check_ok`
+only once a derivative is finished. Each records the evidence `content_root` it
+was made from and its provenance. Registration refuses a derivative whose marker
+is missing, malformed, or names different evidence. That's how a backup that
+changed under the same label can never have its old decrypt filed under the new
+evidence.
+
+**IOC sets.** mvt-runner runs mvt-ios only against IOC files it manages. Each run
+checks against a private copy of them, and the hash of that copy is what the
+results record, so a refresh during a run can't change what was recorded.
+
+## Runs
+
+A *run* is one invocation of the pipeline over one piece of evidence. **A run is
+an audit event; facts belong to evidence, not to runs (R7).**
+
+- Every rerun creates a new run; finished runs are never reopened.
+- Each stage's row records its status, times, the parser version it ran at and
+  the derivative it read.
+- **Completeness has one definition (R23):** the `run_completeness` view. A run
+  is `running` until it finishes; `incomplete` if any stage failed or was left
+  pending or running; otherwise `complete`. A `skipped` (disabled) stage never
+  makes a run incomplete. Nothing else may re-derive this.
+- **Resume.** Evidence is skipped only if a complete run already ran every stage
+  enabled now, at the parser version declared now, against the derivative it
+  would read now. A parser version bump, a newly enabled stage or a new results
+  set therefore gets a new run.
+
+## Facts and the ledger
+
+Every fact enters through one door, `ingest()` in `db_writer.py` (R13).
+
+- **The unit is one source file:** `(evidence, file_hash, source_type,
+  parser_version)` (R6). A file's ledger row, payload and records commit together
+  or not at all (R13, R14). A failed unit leaves no trace, so the next run
+  retries it.
+- **Identity comes from context (R16).** The orchestrator passes evidence,
+  derivative, run and parser version, and the writer stamps them. A stage never
+  supplies them.
+- **Each unit declares its payload** (R12): `full`, `summary` or `none`.
+- **Versions are append-only (R8).** Bumping a stage's `parserVersion` re-ingests
+  each file as a new unit beside the old one.
+
+Reads go through two views (R27):
+
+| View | Shows |
+|---|---|
+| `current_forensic_records` | Completed units only, at each file's latest completed parser version. An unfinished re-parse never hides finished facts |
+| `forensic_records_history` | Every completed unit at every version, opt-in |
+
+The report and the desktop app both read these views, so they can't disagree.
+
+## Time
+
+Timestamps are UTC and timezone-aware, or null; a time is never guessed (R11).
+A plausible but wrong date is worse than none, so ambiguous numeric timestamps
+are rejected rather than interpreted (EPOCH-419). Records without a time are
+counted and shown, never dropped.
+
+## What is not modelled yet
+
+| Gap | Ticket |
+|---|---|
+| Database-level immutability of completed facts, and one audited purge procedure | EPOCH-412 |
+| LLM findings versioned by model and prompt (today they dedup across models) | EPOCH-426 |
+| Detections from a superseded results set still read as current | EPOCH-428 |
+| iLEAPP's output as its own derivative | EPOCH-416 |

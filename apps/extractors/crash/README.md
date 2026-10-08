@@ -1,74 +1,44 @@
-# extractors/crash
+# crash stage
 
-Parses iOS `.ips` crash and analytics-telemetry files (SpringBoard crashes,
-watchdog kills, Siri/analytics reports — anything the OS writes as `.ips`)
-out of a decrypted backup and writes one `forensic_records` row per file.
+Parses iOS `.ips` crash and analytics files into `crash_report` facts, one per
+file. Order 10; it reads the **decrypted backup**. It follows the
+[stage contract](../../../packages/contracts/EXTRACTOR_CONTRACT.md).
 
-Ported from the original `deep_ips_report.py` prototype; the parsing logic
-(`parse_ips_file`, `extract_rich_telemetry`) is carried over close to
-unchanged — it was already solid. What changed is where state and output
-go: the prototype's own `crash_state.db` SQLite table is gone, replaced by
-the shared `ingested_files` table (Postgres, keyed on `file_hash`, via
-`extractors/db_writer.py`); its own Markdown rendering is gone too — that's
-`reporting/generate_report.py`'s job now, reading `forensic_records`.
+> **Open question (EPOCH-447):** the stage collects `*.ips` files from the
+> decrypted backup (`rglob("*.ips")`). An iTunes/Finder backup stores files under
+> hashed names without extensions, and probably holds no crash logs at all. If
+> that's confirmed, this stage finds nothing on real backups until crash reports
+> get their own source.
 
-## Expected input shape
+## Parsing
 
-`--backup-path` is searched recursively for `*.ips` files
-(`Path(backup_path).rglob("*.ips")`). No assumption is made about where
-under the decrypted backup they live — mvt-ios's `decrypt-backup`
-reconstructs the original relative paths, so this just walks the whole tree.
+`parse_ips_file` reads both `.ips` shapes: a metadata line followed by a JSON
+body, or a single JSON document. `extract_rich_telemetry` pulls out the useful
+fields. The whole parsed document is kept as the payload (`full`).
 
-## `fields` sub-shape
+Top-level columns:
 
-Everything without a dedicated top-level column on `forensic_records`:
+- `incident_id`
+- `event_time`, from `captureTime` or `date`; null if unparseable
+- `bug_type`, `process_name`, `pid`, `bundle_id`
+
+`fields` holds the rest:
 
 ```json
 {
-  "filename": "...",
-  "os_version": "...",
-  "hardware_model": "...",
-  "cpu_type": "...",
-  "bundle_version": "...",
-  "parent_proc": "...",
-  "parent_pid": 1,
-  "proc_launch": "...",
-  "proc_path": "...",
-  "proc_role": "...",
-  "time_awake_since_boot": 5000,
+  "filename": "...", "os_version": "...", "hardware_model": "...", "cpu_type": "...",
+  "bundle_version": "...", "parent_proc": "...", "parent_pid": 1, "proc_launch": "...",
+  "proc_path": "...", "proc_role": "...", "time_awake_since_boot": 5000,
   "exception": { "type": "...", "signal": "...", "code": "...", "subcode": "..." },
   "termination": { "namespace": "...", "code": 6, "by": "..." },
-  "faulting_thread": 0,
-  "is_simulated": false,
-  "is_non_fatal": false,
-  "asi": ["..."],
-  "vm_region_info": "..."
+  "faulting_thread": 0, "is_simulated": false, "is_non_fatal": false,
+  "asi": ["..."], "vm_region_info": "..."
 }
 ```
 
-Top-level columns populated: `incident_id`, `source_type` (always
-`crash_report`), `event_time` (parsed from `captureTime`/`date`; null if
-unparseable — a few timestamp formats are tried, see `parse_crash_time`),
-`bug_type`, `process_name`, `pid`, `bundle_id`.
+The field mapping was worked out from real samples. Apple publishes no format
+spec, so a new iOS version may leave some fields null rather than raise an error.
 
-## Partial-failure behavior
-
-Per-file, not all-or-nothing. A malformed/unparseable `.ips` file is
-skipped and logged to stderr; every other file in the backup still gets
-parsed and written. This is safe specifically because failure here can't
-produce a *misleading* row — a file either parses into a complete record or
-contributes nothing at all, there's no partial-record state in between. The
-extractor exits non-zero if any file failed (so the orchestrator marks the
-stage `failed` and the report surfaces it), but everything that did parse
-is still in `forensic_records` — re-running after a fix only reprocesses
-what previously failed, since successfully-ingested files are skipped via
-`ingested_files.file_hash`.
-
-## Known gap carried over from the prototype
-
-`extract_rich_telemetry`'s field mapping (e.g. `bug_type`, `hardware_model`)
-was reverse-engineered against real `.ips` samples during prototyping, not
-against Apple's format spec (there isn't a public one). If a newer iOS
-version's `.ips` shape drifts, fields may come back null rather than
-raising — spot-check a raw `.ips` file by hand if a report section looks
-sparse for files you know contain more.
+Failures are handled per file: an unparseable file is rolled back and retried on
+the next run, while the others commit. The atomicity tests are in
+`scripts/test_extractor_ingest_atomicity.py`.

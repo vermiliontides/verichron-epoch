@@ -129,15 +129,39 @@ export async function getRunEvidence(client: Db, runId: string): Promise<string 
 }
 
 /**
+ * Where the mvt results a run's stages read are now: the current path of that
+ * `mvt_results` derivative, or null if they read none (e.g. check-backup
+ * failed, so no results were registered). A results derivative is specific to
+ * one results set (IOC set and mvt version), so this is the most precise
+ * location of a run's outputs; registration updates it when its workspace
+ * moves.
+ */
+export async function getRunResultsPath(client: Db, runId: string): Promise<string | null> {
+  const result = await client.query<{ path: string }>(
+    `SELECT DISTINCT d.path
+       FROM pipeline_stage_status s
+       JOIN evidence_derivatives d ON d.derivative_id = s.derivative_id
+      WHERE s.run_id = $1 AND d.kind = 'mvt_results'`,
+    [runId]
+  );
+  if (result.rows.length > 1) {
+    throw new Error(`run ${runId} read more than one mvt results derivative`);
+  }
+  return result.rows[0]?.path ?? null;
+}
+
+/**
  * Where the decrypted backup a run processed is now: the current path of the
  * run's decrypted derivative, or null if the run has no registered evidence
  * (it predates EPOCH-404) or doesn't exist. Registration updates a
  * derivative's path when its workspace moves, so this follows a moved
  * workspace; the run's `backup_source` keeps the path it started from.
  *
- * The run's report is written to the results path the orchestrator derives
+ * The orchestrator derives a run's results path, where it writes the report,
  * from this path (`deriveResultsPath`), whether or not mvt results were
- * registered: a failed check-backup still gets a report.
+ * registered; prefer `getRunResultsPath` and fall back to this. A decrypt
+ * can be shared by several results sets in different workspaces, and its one
+ * path is wherever it was last registered.
  */
 export async function getRunDecryptedPath(client: Db, runId: string): Promise<string | null> {
   const result = await client.query<{ path: string }>(

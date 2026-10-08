@@ -549,7 +549,7 @@ def parse_args() -> argparse.Namespace:
     add_context_args(parser)
     parser.add_argument("--backup-path", default=None, help="Accepted for contract consistency with every other stage; unused here (--results-path is what this stage actually reads).")
     parser.add_argument("--db-url", required=True, help="Postgres connection string for writing flagged findings.")
-    parser.add_argument("--results-path", type=str, required=True, help="mvt-runner's results/<n>/ output directory to analyze (orchestrator passes this automatically).")
+    parser.add_argument("--results-path", type=str, required=True, help="the processor's results/<n>/ output directory to analyze (orchestrator passes this automatically).")
     parser.add_argument("--diff-baseline", type=str, default=None, help="Optional: an earlier results/<n>/ snapshot of the same device, to flag files that vanished or shrank between the two runs. Skipped entirely if omitted.")
     parser.add_argument("--model", type=str, default=DEFAULT_MODEL_NAME, help="Ollama model name to run.")
     parser.add_argument("--max-concurrent", type=int, default=DEFAULT_MAX_CONCURRENT_CHUNKS, help="Max concurrent request threads.")

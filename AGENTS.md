@@ -27,7 +27,7 @@ How AI coding agents (Claude, Gemini and others) work in this repository.
 - **Verify claims against the code before acting on them,** including claims in
   tickets, reviews and earlier conversation. Re-check rather than cite a past fix.
 - **Keep the polyglot split:**
-  - TypeScript runs the control plane (`apps/epoch`, `apps/mvt-runner`,
+  - TypeScript runs the control plane (`apps/epoch`, `apps/processor`,
     `apps/orchestrator`);
   - Python parses, writes facts (`db_writer.py`, the only writer) and renders the
     report.

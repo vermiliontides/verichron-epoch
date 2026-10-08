@@ -268,7 +268,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
   };
 
   // EPOCH-305 persistence criterion: as soon as a workspace becomes known
-  // (a fresh mvt-runner pass just finished, or -- if this view is ever
+  // (a fresh processor pass just finished, or -- if this view is ever
   // remounted while lastRunWorkspace is already set -- on that remount),
   // check whether a *previous* analysis for it is still marked running in
   // Postgres with nothing in this process actually running it. That state

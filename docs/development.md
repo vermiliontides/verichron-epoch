@@ -13,7 +13,7 @@ setup:
 | [mise](https://mise.jdx.dev/getting-started.html) | Provides Node, pnpm and uv at the versions in `mise.toml` |
 | A C compiler (`build-essential` on Debian/Ubuntu, Xcode Command Line Tools on macOS) | Two of iLEAPP's dependencies, `pyliblzfse` and `astc-decomp-faster`, publish no Linux wheels and are compiled |
 | Docker with the compose plugin | Local PostgreSQL 16 |
-| `sqlite3` (optional) | mvt-runner's repair pass; recorded as skipped if missing |
+| `sqlite3` (optional) | The processor's repair pass; recorded as skipped if missing |
 
 ## Pinned versions
 
@@ -37,9 +37,9 @@ the iLEAPP submodule. `mise.toml` and `.python-version` are updated by hand.
 | Environment | Holds | Used by |
 |---|---|---|
 | `.venv/` | The uv workspace: our Python stages, writer, report and tests | the orchestrator's stages, `uv run` |
-| `tools/mvt/.venv/` | mvt, pinned | mvt-runner runs `tools/mvt/.venv/bin/mvt-ios` (or `--mvt-bin`) |
+| `tools/mvt/.venv/` | mvt, pinned | The processor runs `tools/mvt/.venv/bin/mvt-ios` (or `--mvt-bin`) |
 | `tools/ileapp/.venv/` | iLEAPP's runtime dependencies, pinned | the iLEAPP bridge runs `iLEAPP/ileapp.py` with this interpreter |
-| `node_modules/` | The pnpm workspace | the app, mvt-runner, the orchestrator |
+| `node_modules/` | The pnpm workspace | the app, the processor, the orchestrator |
 
 mvt and iLEAPP each have their own uv project and lockfile because their exact
 dependency pins conflict (for example, `packaging`). No workspace code imports
@@ -79,10 +79,10 @@ docker compose -f infra/docker-compose.yml down -v && docker compose -f infra/do
 
 ```bash
 # 1. Prepare backups: hash, decrypt (prompts for the password), repair, IOC scan
-pnpm --filter @verichron/mvt-runner dev -- --source /path/to/backups --workspace ~/mvt-workspace
+pnpm --filter @verichron/processor dev -- --source /path/to/backups --workspace ~/verichron-workspace
 
 # 2. Register the evidence and run every stage, for every decrypted backup in the workspace
-pnpm --filter @verichron/orchestrator investigate -- --workspace ~/mvt-workspace
+pnpm --filter @verichron/orchestrator investigate -- --workspace ~/verichron-workspace
 
 # 3. Or drive both from the desktop app
 pnpm --filter @verichron/epoch dev
@@ -114,7 +114,7 @@ There are two test tiers, and both run in CI (R33):
 uv run pytest                                        # Python: packages/, scripts/, apps/
 TEST_DATABASE_URL=postgresql://.../verichron_test uv run pytest
 
-pnpm --filter @verichron/mvt-runner test             # TypeScript (node:test via tsx)
+pnpm --filter @verichron/processor test             # TypeScript (node:test via tsx)
 pnpm --filter @verichron/orchestrator test           # real-Postgres tests need TEST_DATABASE_URL
 pnpm --filter @verichron/etl-db-reader test
 pnpm check:contracts                                 # schema ↔ TS ↔ Python mirrors in sync
@@ -130,7 +130,7 @@ External tools are tested through stub executables and servers (a stub
 | Workflow | Runs |
 |---|---|
 | `.github/workflows/python-tests.yml` | Migrations applied twice to a fresh PostgreSQL 16, pytest on both tiers, the index-usage check for evidence reads, and a check that the tool lockfiles match their manifests |
-| `.github/workflows/ts-tests.yml` | Typecheck and tests for mvt-runner, the reader and the orchestrator, with real PostgreSQL |
+| `.github/workflows/ts-tests.yml` | Typecheck and tests for the processor, the reader and the orchestrator, with real PostgreSQL |
 
 Both workflows install the toolchain from `mise.toml` and Python from
 `.python-version`, the same files a development machine uses. All Actions are

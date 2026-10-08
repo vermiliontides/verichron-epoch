@@ -200,7 +200,7 @@ function verifySidecar(workspace: string, label: string): VerifiedSidecar {
   const paths = deriveEvidencePath(workspace, label);
   if (!existsSync(paths.sidecar)) {
     throw new RegistrationError(
-      `no evidence sidecar at ${paths.sidecar}; re-run mvt-runner so the backup is hashed (EPOCH-401)`
+      `no evidence sidecar at ${paths.sidecar}; re-run the processor so the backup is hashed (EPOCH-401)`
     );
   }
   let raw: unknown;
@@ -268,9 +268,9 @@ function verifyDerivatives(
     throw new RegistrationError(
       decrypt
         ? `the decrypted copy at ${decryptedPath} was made from content root ${decrypt.content_root.slice(0, 12)}…, ` +
-            `but the evidence sidecar names ${contentRoot.slice(0, 12)}…; re-run mvt-runner to re-decrypt`
+            `but the evidence sidecar names ${contentRoot.slice(0, 12)}…; re-run the processor to re-decrypt`
         : `${decryptedPath} has no valid ${DECRYPT_MARKER} recording which evidence it was decrypted from; ` +
-            're-run mvt-runner'
+            're-run the processor'
     );
   }
 
@@ -286,7 +286,7 @@ function verifyDerivatives(
   if (check.content_root !== contentRoot) {
     throw new RegistrationError(
       `the mvt results at ${resultsPath} were made from content root ${check.content_root.slice(0, 12)}…, ` +
-        `but the evidence sidecar names ${contentRoot.slice(0, 12)}…; re-run mvt-runner`
+        `but the evidence sidecar names ${contentRoot.slice(0, 12)}…; re-run the processor`
     );
   }
   return {

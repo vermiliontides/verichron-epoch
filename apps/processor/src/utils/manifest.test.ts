@@ -1,5 +1,5 @@
 /**
- * EPOCH-401 definition of done, as tests. Run: pnpm --filter @verichron/mvt-runner test
+ * EPOCH-401 definition of done, as tests. Run: pnpm --filter @verichron/processor test
  *
  * macOS is covered by simulation, not a macOS runner (decided 2026-10-07):
  * the platform differences that matter -- NFD-decomposed names and `\`

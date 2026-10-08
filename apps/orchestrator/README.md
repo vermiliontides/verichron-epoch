@@ -19,7 +19,7 @@ what a stage must do is in the
 ## Run
 
 ```bash
-pnpm --filter @verichron/orchestrator investigate -- --workspace <mvt-runner-workspace>
+pnpm --filter @verichron/orchestrator investigate -- --workspace <workspace>
 pnpm --filter @verichron/orchestrator investigate -- <decrypted-backup-dir> [...]
 ```
 

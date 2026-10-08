@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { z } from 'zod';
 
 /**
- * Completion markers mvt-runner writes when a derivative is finished, and
+ * Completion markers the processor writes when a derivative is finished, and
  * the orchestrator reads before registering it (EPOCH-404, EPOCH-406).
  *
  * Each marker records the content_root of the evidence the derivative was
@@ -12,7 +12,7 @@ import { z } from 'zod';
  * be re-hashed (new content_root) while its old decrypt and results stayed in
  * place behind their "done" markers, and registration would file the old
  * backup's facts under the new evidence. With it, a stale derivative is
- * detectable: mvt-runner redoes it, and registration refuses it.
+ * detectable: the processor redoes it, and registration refuses it.
  *
  * Each marker also carries the derivative's provenance (EPOCH-406): the tool
  * that produced it and the parameters that shaped it. Registration copies

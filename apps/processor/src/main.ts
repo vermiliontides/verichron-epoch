@@ -92,7 +92,7 @@ async function run(cfg: Config): Promise<void> {
   // (EPOCH-406).
   assertNoForeignIocs(cfg);
   const mvtTool = await mvtToolVersion(cfg);
-  console.log(`[mvt-runner] mvt-ios ${mvtTool.version}; IOC folder ${indicatorsDir(cfg)}`);
+  console.log(`[processor] mvt-ios ${mvtTool.version}; IOC folder ${indicatorsDir(cfg)}`);
 
   const dirs = ["hashes", "decrypted", "results", "logs"];
   for (const d of dirs) {
@@ -106,7 +106,7 @@ async function run(cfg: Config): Promise<void> {
   } catch (err) {
     throw new Error(`iocs: ${err instanceof Error ? err.message : err}`);
   }
-  console.log(`[mvt-runner] IOC set ${iocs.params.ioc_set_hash.slice(0, 12)} (${iocs.params.ioc_file_count} file(s))`);
+  console.log(`[processor] IOC set ${iocs.params.ioc_set_hash.slice(0, 12)} (${iocs.params.ioc_file_count} file(s))`);
   try {
     await runBackups(cfg, mvtTool, iocs);
   } finally {
@@ -388,14 +388,14 @@ function mvtEnv(cfg: Config, dataFolder: string = path.join(cfg.mvtHome, "data")
 function assertNoForeignIocs(cfg: Config): void {
   if (process.env.MVT_STIX2) {
     throw new Error(
-      `MVT_STIX2 is set, but mvt-runner records and uses only the IOC set in ${indicatorsDir(cfg)}; ` +
+      `MVT_STIX2 is set, but the processor records and uses only the IOC set in ${indicatorsDir(cfg)}; ` +
         "copy those .stix2 files there and unset MVT_STIX2"
     );
   }
   const configFile = path.join(cfg.mvtHome, "config", "config.yaml");
   if (fs.existsSync(configFile) && /^\s*STIX2\s*:/m.test(fs.readFileSync(configFile, "utf8"))) {
     throw new Error(
-      `${configFile} sets STIX2, but mvt-runner records and uses only the IOC set in ${indicatorsDir(cfg)}; ` +
+      `${configFile} sets STIX2, but the processor records and uses only the IOC set in ${indicatorsDir(cfg)}; ` +
         "move those .stix2 files there and remove the setting"
     );
   }
@@ -503,7 +503,7 @@ async function hashBackup(cfg: Config, name: string, src: string): Promise<strin
     total_bytes: result.totalBytes,
     source_path: path.resolve(src),
     hashed_at: new Date().toISOString(),
-    tool: { name: "mvt-runner", version: TOOL_VERSION },
+    tool: { name: "processor", version: TOOL_VERSION },
   });
   await writeFileAtomic(paths.sidecar, JSON.stringify(sidecar, null, 2) + "\n");
 

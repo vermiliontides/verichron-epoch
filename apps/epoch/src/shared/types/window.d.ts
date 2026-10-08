@@ -66,7 +66,7 @@ export interface MvtFinishedResult {
   // EPOCH-305: distinguishes *why* an orchestrator run ended up
   // success: false, so the UI can say "cancelled" / "timed out" instead of
   // a generic failure message. Only ever set on the orchestrator-finished
-  // path today; the mvt-runner-finished path never sets these.
+  // path today; the processor-finished path never sets these.
   cancelled?: boolean;
   timedOut?: boolean;
 }

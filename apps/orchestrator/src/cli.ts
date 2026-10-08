@@ -8,7 +8,7 @@ import { loadRootEnv, resolveDatabaseUrl } from "@verichron/contracts";
 
 
 export function printUsage() {
-  console.error(`Usage:\n  pnpm --filter @verichron/orchestrator investigate -- --workspace <mvt-runner-workspace-dir>`);
+  console.error(`Usage:\n  pnpm --filter @verichron/orchestrator investigate -- --workspace <workspace-dir>`);
 }
 
 export async function resolvePythonBin(): Promise<string> {

@@ -1,9 +1,9 @@
 # mvt-ios, in its own pinned environment (EPOCH-458).
 #
-# mvt is a command-line tool that mvt-runner spawns; no workspace code imports
+# mvt is a command-line tool that the processor spawns; no workspace code imports
 # it. It has its own environment because it pins its dependencies exactly
 # (e.g. packaging==26.x) and those pins conflict with iLEAPP's. Created by
-# `mise run setup` as tools/mvt/.venv; mvt-runner runs tools/mvt/.venv/bin/mvt-ios.
+# `mise run setup` as tools/mvt/.venv; the processor runs tools/mvt/.venv/bin/mvt-ios.
 # The mvt version is recorded with every derivative it produces (EPOCH-406).
 [project]
 name = "verichron-tool-mvt"

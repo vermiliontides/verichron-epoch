@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 /**
- * Where mvt-runner writes, and the orchestrator reads, a backup's evidence
+ * Where the processor writes, and the orchestrator reads, a backup's evidence
  * artifacts inside a workspace. One helper so the two never disagree about
  * the layout -- the same reason deriveResultsPath exists.
  *

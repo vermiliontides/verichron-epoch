@@ -1,4 +1,4 @@
-# mvt-runner (`@verichron/mvt-runner`)
+# Processor (`@verichron/processor`)
 
 Prepares iOS backups for the pipeline. For each backup it:
 
@@ -15,7 +15,7 @@ in [docs/evidence-model.md](../../docs/evidence-model.md).
 ## Run
 
 ```bash
-pnpm --filter @verichron/mvt-runner dev -- --source <dir-of-backups> --workspace <workspace>
+pnpm --filter @verichron/processor dev -- --source <dir-of-backups> --workspace <workspace>
 ```
 
 It prompts for the backup password on stdin. The desktop app relays that prompt
@@ -24,7 +24,7 @@ to its UI.
 | Option | Meaning |
 |---|---|
 | `--source <dir>` | Directory containing encrypted backups (required) |
-| `--workspace <dir>` | Output workspace (default `~/mvt-workspace`) |
+| `--workspace <dir>` | Output workspace (default `~/verichron-workspace`) |
 | `--mvt-bin <path>` | `mvt-ios` binary (default `tools/mvt/.venv/bin/mvt-ios`, the pinned environment `mise run setup` creates; never searched for elsewhere) |
 | `--mvt-home <dir>` | mvt's data and config home, where the IOC set lives (default `$VERICHRON_MVT_HOME` or `~/.local/share/verichron/mvt`) |
 | `--sqlite-bin <path>` | `sqlite3` for the repair pass |
@@ -54,7 +54,7 @@ because the recorded IOC set must be exactly the one used.
 ## Test
 
 ```bash
-pnpm --filter @verichron/mvt-runner test
+pnpm --filter @verichron/processor test
 ```
 
 The tests drive the real CLI against stub `mvt-ios` and `sqlite3` executables.

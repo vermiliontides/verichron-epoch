@@ -94,7 +94,7 @@ def resolve_results_path(results_path: str | None, backup_path: str) -> Path:
     EXTRACTOR_CONTRACT.md #1 amendment — the orchestrator derives and
     passes it). Falls back to swapping 'decrypted' for 'results' in
     --backup-path for older orchestrator builds or manual invocation,
-    since that's mvt-runner's fixed workspace layout
+    since that's the processor's fixed workspace layout
     (<workspace>/decrypted/<name> and <workspace>/results/<name> are
     siblings)."""
     if results_path:

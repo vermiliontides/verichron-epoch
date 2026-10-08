@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "verichron-epoch"
 version = "0.1.0"
 description = "Privacy-first local desktop forensic client and incident response orchestration engine"
-requires-python = ">=3.12"
+requires-python = "==3.14.*"
 dependencies = [
     "verichron-contracts",
     "verichron-etl-db-writer",
@@ -23,11 +23,19 @@ dependencies = [
     "requests>=2.31",
     "stix2>=3.0",
     "faker>=20.0",
-    "mvt"
+    # mvt and iLEAPP are not workspace dependencies: each runs from its own
+    # pinned environment under tools/ (EPOCH-458).
 ]
 
 [tool.setuptools]
 py-modules = []
+
+[tool.uv]
+# The interpreter comes from .python-version and is always a uv-managed
+# CPython build (which ships its development headers); a system Python is
+# never used, so every machine and CI run the same interpreter (EPOCH-458).
+python-preference = "only-managed"
+required-version = ">=0.12.23,<0.13"
 
 [tool.uv.workspace]
 members = [
@@ -44,6 +52,8 @@ members = [
 exclude = [
     "packages/etl-db-reader",
 ]
+# tools/mvt and tools/ileapp are separate uv projects with their own lockfiles,
+# not workspace members: their pinned dependencies conflict with each other.
 
 [tool.uv.sources]
 verichron-contracts = { workspace = true }

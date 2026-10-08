@@ -1,0 +1,55 @@
+# iLEAPP's runtime, in its own pinned environment (EPOCH-458).
+#
+# The bridge runs apps/extractors/ileapp_bridge/iLEAPP/ileapp.py (a git
+# submodule, v2026.3.1) as a subprocess with tools/ileapp/.venv/bin/python;
+# no workspace code imports iLEAPP. Its dependencies live here, apart from the
+# workspace, because they pin versions (e.g. packaging==24.1) that conflict with
+# mvt's.
+#
+# This list mirrors the submodule's requirements.txt. Update it, and run
+# `uv lock --project tools/ileapp`, whenever the submodule pin moves;
+# scripts/test_tool_environments.py fails if a requirement is missing here.
+#
+# The submodule's Windows-only wheel entries for pyliblzfse are omitted (they
+# are relative paths into the submodule). Its duplicate nska_deserialize /
+# nska-deserialize lines are one package on PyPI. Version markers for Python
+# below 3.14 are dropped: this environment is always 3.14 (.python-version).
+#
+# pyliblzfse and astc-decomp-faster publish no Linux wheels, so building this
+# environment on Linux needs a C compiler; the Lab Edition toolchain bundle
+# ships it prebuilt (EPOCH-439).
+[project]
+name = "verichron-tool-ileapp"
+version = "0"
+requires-python = "==3.14.*"
+dependencies = [
+    "astc-decomp-faster",
+    "pytypedstream",
+    "bencoding",
+    "biplist",
+    "bs4",
+    "certifi",
+    "ijson",
+    "mmh3",
+    "mdplistlib",
+    "nska-deserialize>=1.3.1",
+    "numpy>=2.1",
+    "packaging==24.1",
+    "pandas",
+    "pathlib2==2.3.5",
+    "pgpy>=0.6.0",
+    "standard-imghdr",
+    "pillow",
+    "pillow-heif",
+    "protobuf==5.29.6",
+    "pycryptodome",
+    "pyinstaller",
+    "pyliblzfse",
+    "pytz",
+    "simplekml",
+]
+
+[tool.uv]
+package = false
+python-preference = "only-managed"
+required-version = ">=0.12.23,<0.13"

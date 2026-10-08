@@ -1,6 +1,16 @@
 import { parseArgs } from "node:util";
 import * as path from "node:path";
 import * as os from "node:os";
+import { fileURLToPath } from "node:url";
+
+// src/utils/ and dist/utils/ are both four levels below the repository root.
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+
+/**
+ * mvt-ios from its own pinned environment, tools/mvt (EPOCH-458). It is never
+ * looked up anywhere else, so every machine runs the same mvt version.
+ */
+export const DEFAULT_MVT_BIN = path.join(REPO_ROOT, "tools", "mvt", ".venv", "bin", "mvt-ios");
 
 export interface Config {
   source: string;
@@ -29,7 +39,7 @@ export function parseFlags(): Config {
     options: {
       source: { type: "string", default: "" },
       workspace: { type: "string", default: path.join(home, "mvt-workspace") },
-      "mvt-bin": { type: "string", default: path.join(home, "mvt", ".venv", "bin", "mvt-ios") },
+      "mvt-bin": { type: "string", default: DEFAULT_MVT_BIN },
       "mvt-home": { type: "string", default: defaultMvtHome() },
       "sqlite-bin": { type: "string", default: "sqlite3" },
       force: { type: "boolean", default: false },
@@ -95,7 +105,8 @@ function printUsage() {
 Options:
   --source <dir>          directory containing backup subdirectories (required)
   --workspace <dir>        workspace directory for evidence/decrypted/results (default: ./mvt-workspace)
-  --mvt-bin <path>         path to mvt-ios binary (default: <repo-root>/.venv/bin/mvt-ios or your active mvt venv)
+  --mvt-bin <path>         path to mvt-ios binary (default: <repo-root>/tools/mvt/.venv/bin/mvt-ios,
+                           the pinned environment "mise run setup" creates)
   --mvt-home <dir>         mvt-ios data/config home; IOCs are kept and hashed here only
                            (default: $VERICHRON_MVT_HOME or ~/.local/share/verichron/mvt)
   --sqlite-bin <path>      path to sqlite3 binary used for repairing malformed DBs (default: "sqlite3" on PATH)

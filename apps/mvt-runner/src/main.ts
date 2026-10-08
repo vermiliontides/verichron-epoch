@@ -24,7 +24,6 @@ import {
 import { parseFlags, type Config } from "./utils/cli.js";
 import { pathExists, writeFileAtomic, writeMarker } from "./utils/fs.js";
 import { hashTree } from "./utils/manifest.js";
-import { discoverMvtBin } from "./utils/resolver.js";
 import { repairDecrypted } from "./utils/repair.js";
 import { promptPassword } from "./utils/prompt.js";
 import { writeSummary } from "./utils/summary.js";
@@ -83,15 +82,9 @@ async function main() {
 
 async function run(cfg: Config): Promise<void> {
   if (!(await pathExists(cfg.mvtBin))) {
-    const discovered = await discoverMvtBin();
-    if (discovered) {
-      console.log(`[mvt-runner] mvt-ios not found at configured path (${cfg.mvtBin}), discovered at: ${discovered}`);
-      cfg.mvtBin = discovered;
-    } else {
-      throw new Error(
-        `mvt-ios not found at ${cfg.mvtBin} or standard locations (pass --mvt-bin to override, or install via python3 -m venv ~/mvt/.venv && ~/mvt/.venv/bin/pip install mvt)`
-      );
-    }
+    throw new Error(
+      `mvt-ios not found at ${cfg.mvtBin}. Run \`mise run setup\` to create the pinned tools/mvt environment, or pass --mvt-bin`
+    );
   }
 
   // mvt-ios runs only against the IOC folder this runner manages, so the IOC

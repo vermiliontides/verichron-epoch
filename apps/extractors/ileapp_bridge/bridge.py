@@ -11,6 +11,11 @@ from pathlib import Path
 
 from runtime_env import fatal_if_missing_venv
 
+# iLEAPP runs from its own pinned environment, tools/ileapp, created by
+# `mise run setup` (EPOCH-458). Its dependencies conflict with mvt's, so they
+# are not installed in the workspace venv this bridge runs in.
+ILEAPP_PYTHON = Path(__file__).resolve().parents[3] / "tools" / "ileapp" / ".venv" / "bin" / "python"
+
 
 def _module_available(module_name: str) -> bool:
     return importlib.util.find_spec(module_name) is not None
@@ -39,6 +44,11 @@ def run_ileapp_extraction(artifact_path: str, output_dir: str) -> dict:
         print(f"[-] {msg}", file=sys.stderr)
         return {"status": "error", "output_directory": str(out_path), "error": msg}
 
+    if not ILEAPP_PYTHON.exists():
+        msg = f"iLEAPP's environment is missing ({ILEAPP_PYTHON}). Run `mise run setup` to create it."
+        print(f"[-] {msg}", file=sys.stderr)
+        return {"status": "error", "output_directory": str(out_path), "error": msg}
+
     # iLEAPP's -t determines how it walks the input:
     #   itunes = hashed-name iTunes/Finder backup (has Manifest.db)
     #   fs     = plain folder of extracted files with normal names (Info.plist, no Manifest.db)
@@ -50,7 +60,7 @@ def run_ileapp_extraction(artifact_path: str, output_dir: str) -> dict:
 
     try:
         cmd = [
-            sys.executable,
+            str(ILEAPP_PYTHON),
             str(ileapp_script),
             "-t",
             input_type,

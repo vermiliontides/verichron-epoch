@@ -24,6 +24,7 @@ export const App: React.FC = () => {
     selectedRun,
     stages,
     records,
+    recordsTotal,
     recordsLoaded,
     sourceTypeFilter,
     loading,
@@ -104,8 +105,11 @@ export const App: React.FC = () => {
 
   const loadRecords = async (run: PipelineRunRow) => {
     try {
-      const data = await runsApi.getForensicRecords(run.run_id);
-      setRecords(data);
+      // First page only, with the true total (R25). RecordsView says when it
+      // is showing less than everything; the paged, server-filtered grid is
+      // EPOCH-411.
+      const page = await runsApi.getForensicRecords(run.run_id);
+      setRecords(page.rows, page.total);
       setRecordsLoaded(true);
       setDbStatus('connected');
     } catch (err) {
@@ -162,6 +166,8 @@ export const App: React.FC = () => {
               <RecordsView
                 selectedRun={!!selectedRun}
                 records={visibleRecords}
+                loadedCount={records.length}
+                totalCount={recordsTotal}
                 availableSourceTypes={availableSourceTypes}
                 sourceTypeFilter={sourceTypeFilter}
                 onFilterChange={setSourceTypeFilter}
@@ -169,10 +175,7 @@ export const App: React.FC = () => {
             )}
 
             {section === 'iocs' && (
-              <IocsView 
-                selectedRun={selectedRun} 
-                records={records} 
-              />
+              <IocsView selectedRun={selectedRun} />
             )}
 
             {section === 'reports' && (

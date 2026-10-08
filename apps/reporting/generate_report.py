@@ -2,7 +2,7 @@
 """
 reporting/generate_report.py
 
-Reads forensic_records + pipeline_stage_status for a run and renders the
+Reads one evidence item's facts + one run's pipeline_stage_status and renders the
 Markdown artifact. This replaces the report-generation half of the original
 deep_ips_report.py — that file's PARSING logic moves to /extractors/crash,
 its RENDERING logic (and rendering for every other domain) lives here.
@@ -55,17 +55,24 @@ def fetch_stage_status(conn, run_id: str) -> list[dict]:
         return cur.fetchall()
 
 
-def fetch_records_by_source_type(conn, run_id: str, source_type: str) -> list[dict]:
+# Facts are read by evidence, never by run (R7): a run is an audit event, and
+# every run over the same evidence sees the same facts. They come from
+# current_forensic_records (0004), which applies the completed-units and
+# latest-parser_version rules in the database so this file and
+# @verichron/etl-db-reader can't disagree (R27).
+
+
+def fetch_records_by_source_type(conn, evidence_id: str, source_type: str) -> list[dict]:
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         cur.execute(
             """
             SELECT incident_id, source_type, event_time, bug_type,
                    process_name, pid, bundle_id, fields
-            FROM forensic_records
-            WHERE run_id = %s AND source_type = %s
-            ORDER BY event_time NULLS LAST
+            FROM current_forensic_records
+            WHERE evidence_id = %s AND source_type = %s
+            ORDER BY event_time NULLS LAST, id
             """,
-            (run_id, source_type),
+            (evidence_id, source_type),
         )
         return cur.fetchall()
 
@@ -90,8 +97,8 @@ def render_stage_preface(stages: list[dict]) -> list[str]:
 # --- correlation section (Extractor Requirements.md §7) ------------------
 
 
-def fetch_correlation_pivots(conn, run_id: str) -> list[dict]:
-    """Every mvt_ioc_detection / timestamp_anomaly row for this run — these
+def fetch_correlation_pivots(conn, evidence_id: str) -> list[dict]:
+    """Every mvt_ioc_detection / timestamp_anomaly row for this evidence — these
     are the pivot points the correlation section builds a window around.
     Rows with a null event_time (e.g. an untimed alert) come back too;
     they're rendered separately since there's nothing to correlate them
@@ -100,17 +107,17 @@ def fetch_correlation_pivots(conn, run_id: str) -> list[dict]:
         cur.execute(
             """
             SELECT id, source_type, event_time, fields
-            FROM forensic_records
-            WHERE run_id = %s AND source_type IN ('mvt_ioc_detection', 'timestamp_anomaly')
-            ORDER BY event_time NULLS LAST
+            FROM current_forensic_records
+            WHERE evidence_id = %s AND source_type IN ('mvt_ioc_detection', 'timestamp_anomaly')
+            ORDER BY event_time NULLS LAST, id
             """,
-            (run_id,),
+            (evidence_id,),
         )
         return cur.fetchall()
 
 
-def fetch_correlated_context(conn, run_id: str, event_time, exclude_id: int) -> list[dict]:
-    """Everything else in forensic_records for this run within the
+def fetch_correlated_context(conn, evidence_id: str, event_time, exclude_id: int) -> list[dict]:
+    """Everything else known about this evidence within the
     correlation window — across every source_type, which is the entire
     point (crash today; safari/sms/network automatically once they land,
     with no change needed here)."""
@@ -120,11 +127,11 @@ def fetch_correlated_context(conn, run_id: str, event_time, exclude_id: int) -> 
         cur.execute(
             """
             SELECT id, source_type, event_time, process_name, bundle_id, fields
-            FROM forensic_records
-            WHERE run_id = %s AND event_time BETWEEN %s AND %s AND id != %s
-            ORDER BY event_time
+            FROM current_forensic_records
+            WHERE evidence_id = %s AND event_time BETWEEN %s AND %s AND id != %s
+            ORDER BY event_time, id
             """,
-            (run_id, lo, hi, exclude_id),
+            (evidence_id, lo, hi, exclude_id),
         )
         return cur.fetchall()
 
@@ -183,14 +190,14 @@ def load_timeline_supplement(results_path: Path | None, center, window=CORRELATI
     return rows
 
 
-def render_correlation_section(conn, run_id: str, results_path: Path | None) -> list[str]:
-    pivots = fetch_correlation_pivots(conn, run_id)
+def render_correlation_section(conn, evidence_id: str, results_path: Path | None) -> list[str]:
+    pivots = fetch_correlation_pivots(conn, evidence_id)
     if not pivots:
         return []  # nothing flagged this run — omit the section entirely, don't render an empty shell
 
     lines = ["## ⚠ IOC Detections & Correlated Activity", ""]
     lines.append(
-        f"Every `mvt_ioc_detection` / `timestamp_anomaly` finding for this run, "
+        f"Every `mvt_ioc_detection` / `timestamp_anomaly` finding for this evidence, "
         f"with everything else in `forensic_records` within ±{int(CORRELATION_WINDOW.total_seconds() // 60)} "
         f"minutes of it. This is what mvt-ios's own report can't show you — it flags an event in isolation; "
         f"this section shows what else was happening around it.\n"
@@ -213,7 +220,7 @@ def render_correlation_section(conn, run_id: str, results_path: Path | None) -> 
         lines.append(f"### `{ts.isoformat()}` — {title}")
         lines.append(f"> {detail}\n")
 
-        context = fetch_correlated_context(conn, run_id, ts, p["id"])
+        context = fetch_correlated_context(conn, evidence_id, ts, p["id"])
         supplement = load_timeline_supplement(results_path, ts)
         supplement_lines, churn = [], {}
         for sts, plugin, event, desc in supplement:
@@ -313,12 +320,15 @@ RENDERERS = {
 }
 
 
-def generate_report(conn, run_id: str, output_path: str, results_path: str | None) -> None:
+def generate_report(conn, run_id: str, evidence_id: str, output_path: str, results_path: str | None) -> None:
+    """Stage status is this run's own (a run's outcome is about the run);
+    every fact is the evidence's, whichever run produced it (R7)."""
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     stages = fetch_stage_status(conn, run_id)
 
     lines = [
         "# Forensic Investigation Report",
+        f"**Evidence ID:** `{evidence_id}`  ",
         f"**Run ID:** `{run_id}`  ",
         f"**Generated:** {timestamp}  ",
         "",
@@ -329,10 +339,10 @@ def generate_report(conn, run_id: str, output_path: str, results_path: str | Non
     lines.append("---")
     lines.append("")
 
-    lines += render_correlation_section(conn, run_id, Path(results_path) if results_path else None)
+    lines += render_correlation_section(conn, evidence_id, Path(results_path) if results_path else None)
 
     for source_type, renderer in RENDERERS.items():
-        records = fetch_records_by_source_type(conn, run_id, source_type)
+        records = fetch_records_by_source_type(conn, evidence_id, source_type)
         if not records:
             continue
         lines += renderer(records)
@@ -379,6 +389,10 @@ def main():
     fatal_if_missing_venv()
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--evidence-id", required=True, help="the evidence this report covers; every fact is read by evidence (R7)")
+    # Passed to every stage by the orchestrator; the report reads the
+    # evidence's current facts, not one derivative's.
+    parser.add_argument("--derivative-id", required=False)
     parser.add_argument("--backup-path", required=False)  # unused here, present for contract consistency
     parser.add_argument("--results-path", required=False, help="enables the timeline.csv correlation supplement (see render_correlation_section), and is also where the report itself is written by default -- see resolve_output_path")
     parser.add_argument("--db-url", required=True)
@@ -395,7 +409,7 @@ def main():
         sys.exit(1)
 
     try:
-        generate_report(conn, args.run_id, output_path, args.results_path)
+        generate_report(conn, args.run_id, args.evidence_id, output_path, args.results_path)
     except Exception as e:
         print(f"[reporting] failed: {e}", file=sys.stderr)
         sys.exit(1)

@@ -1,6 +1,19 @@
 import { ipcMain } from 'electron';
 import { Pool } from 'pg';
-import { getPipelineRuns, getStageStatus, getForensicRecords, getCorrelationPivots, getCorrelatedContext } from '@verichron/etl-db-reader';
+import {
+  getPipelineRuns,
+  getRunEvidence,
+  getStageStatus,
+  getForensicRecords,
+  getCorrelationPivots,
+  getCorrelatedContext,
+  type ForensicRecordPage,
+  type ForensicRecordQuery,
+} from '@verichron/etl-db-reader';
+
+/** What a run with no registered evidence (pre-EPOCH-404) shows: nothing,
+ * stated as such, rather than another evidence item's facts. */
+const NO_RECORDS: ForensicRecordPage = { rows: [], total: 0, nextCursor: null };
 
 export function registerDbHandlers(dbPool: Pool) {
   ipcMain.handle('epoch:getPipelineRuns', async () => {
@@ -21,9 +34,14 @@ export function registerDbHandlers(dbPool: Pool) {
     }
   });
 
-  ipcMain.handle('epoch:getForensicRecords', async (_event, runId: string, sourceType?: string) => {
+  // The renderer still selects a run; facts belong to the run's evidence (R7),
+  // so every fact read resolves run -> evidence first. Any run over the same
+  // evidence therefore shows the same records.
+  ipcMain.handle('epoch:getForensicRecords', async (_event, runId: string, query?: ForensicRecordQuery) => {
     try {
-      return await getForensicRecords(dbPool, runId, { sourceType });
+      const evidenceId = await getRunEvidence(dbPool, runId);
+      if (!evidenceId) return NO_RECORDS;
+      return await getForensicRecords(dbPool, evidenceId, query ?? {});
     } catch (err) {
       console.error('DB error:', err);
       throw err;
@@ -32,7 +50,9 @@ export function registerDbHandlers(dbPool: Pool) {
 
   ipcMain.handle('epoch:getCorrelationPivots', async (_event, runId: string) => {
     try {
-      return await getCorrelationPivots(dbPool, runId);
+      const evidenceId = await getRunEvidence(dbPool, runId);
+      if (!evidenceId) return [];
+      return await getCorrelationPivots(dbPool, evidenceId);
     } catch (err) {
       console.error('DB error:', err);
       throw err;
@@ -41,9 +61,11 @@ export function registerDbHandlers(dbPool: Pool) {
 
   ipcMain.handle(
     'epoch:getCorrelatedContext',
-    async (_event, runId: string, eventTime: string, excludeId: number, windowMinutes?: number) => {
+    async (_event, runId: string, eventTime: string, excludeId: string, windowMinutes?: number) => {
       try {
-        return await getCorrelatedContext(dbPool, runId, eventTime, excludeId, windowMinutes);
+        const evidenceId = await getRunEvidence(dbPool, runId);
+        if (!evidenceId) return [];
+        return await getCorrelatedContext(dbPool, evidenceId, eventTime, excludeId, windowMinutes);
       } catch (err) {
         console.error('DB error:', err);
         throw err;

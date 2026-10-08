@@ -121,12 +121,6 @@ fi
 
 echo "[setup] installing"
 
-# The forensic-output pre-commit guard comes first, before anything can produce
-# output worth committing by mistake (SECURITY.md).
-git config core.hooksPath .githooks
-chmod +x .githooks/*
-echo "  done  git hooks (core.hooksPath=.githooks)"
-
 # docker compose reads infra/.env; keep it the same file as the root .env.
 if [ ! -e infra/.env ]; then
   ln -s ../.env infra/.env

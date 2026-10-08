@@ -9,8 +9,8 @@ reimplementing them, so this script can never silently drift from what the
 extractor actually does -- if normalizer.py changes its filtering rules,
 this diagnostic changes with it automatically.
 
-Usage:
-    python3 scripts/inspect_ileapp_output.py <ileapp_output_dir>
+Usage (with iLEAPP's own interpreter, which provides ijson; EPOCH-458):
+    tools/ileapp/.venv/bin/python scripts/inspect_ileapp_output.py <ileapp_output_dir>
 
 <ileapp_output_dir> is the -o target you pass to ileapp_bridge/main.py's
 --output flag -- e.g. the iLEAPP_Output_<timestamp>/ directory iLEAPP itself
@@ -146,9 +146,9 @@ def inspect_lava_json(path: Path, full_structure: bool) -> None:
     try:
         import ijson
     except ImportError:
-        print("    ijson is not installed in this environment (it IS declared in")
-        print("    apps/extractors/ileapp_bridge/pyproject.toml -- run `uv sync` or")
-        print("    `pip install -e apps/extractors/ileapp_bridge` first).")
+        print("    ijson is not installed in this interpreter. Run this script with")
+        print("    iLEAPP's environment: tools/ileapp/.venv/bin/python (created by")
+        print("    `mise run setup`).")
         return
 
     size_mb = path.stat().st_size / (1024 * 1024)

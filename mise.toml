@@ -36,6 +36,7 @@ description = "TypeScript test suites (need TEST_DATABASE_URL)"
 run = [
   "pnpm --filter @verichron/contracts build",
   "pnpm --filter @verichron/mvt-runner test",
+  "pnpm --filter @verichron/etl-db-writer test",
   "pnpm --filter @verichron/etl-db-reader test",
   "pnpm --filter @verichron/orchestrator test",
 ]

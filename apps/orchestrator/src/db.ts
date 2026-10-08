@@ -18,11 +18,25 @@ export async function hasSucceededRun(client: Client, backupPath: string): Promi
   return rows.length > 0;
 }
 
-export async function createRun(client: Client, backupPath: string, stages: StageDefinition[]): Promise<string> {
+/** What a run records about how it was produced (R35). */
+export interface RunProvenance {
+  /** sha256 over the canonical contract schemas; see contractVersion(). */
+  contractVersion: string;
+  /** e.g. { orchestrator: "0.1.0", node: "v24.21.0", python: "3.12.3" } */
+  toolVersions: Record<string, string>;
+}
+
+export async function createRun(
+  client: Client,
+  backupPath: string,
+  stages: StageDefinition[],
+  provenance: RunProvenance
+): Promise<string> {
   const runId = randomUUID();
   await client.query(
-    `INSERT INTO pipeline_runs (run_id, backup_source) VALUES ($1, $2)`,
-    [runId, backupPath]
+    `INSERT INTO pipeline_runs (run_id, backup_source, contract_version, tool_versions)
+     VALUES ($1, $2, $3, $4)`,
+    [runId, backupPath, provenance.contractVersion, provenance.toolVersions]
   );
   for (const stage of stages) {
     await client.query(

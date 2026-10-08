@@ -45,50 +45,65 @@ def ensure_migrations_table(conn) -> None:
     conn.commit()
 
 
+#: For each migration, a query that is true once its schema exists. Used only
+#: by bootstrap_if_needed(); add an entry with every new migration.
+APPLIED_MARKERS: dict[str, str] = {
+    "0001_init.sql": "SELECT to_regclass('pipeline_runs') IS NOT NULL",
+    "0002_ingest_completion.sql": (
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = 'ingested_files' AND column_name = 'ingest_complete')"
+    ),
+    "0003_evidence_schema.sql": "SELECT to_regclass('evidence_items') IS NOT NULL",
+}
+
+
 def bootstrap_if_needed(conn) -> None:
     """
-    Handles the one case that would otherwise break this script on day one:
-    a dev environment where 0001_init.sql was already applied by
-    docker-entrypoint-initdb.d (container's first boot) but schema_migrations
-    has no record of it, because that hook doesn't know this script exists.
+    Backfills the ledger for migrations that were applied by something other
+    than this script.
 
-    Without this, the first real `migrate.py` run would try to CREATE TABLE
-    pipeline_runs again and fail on "relation already exists" — not because
-    anything is wrong, just because two different mechanisms applied the
-    same file. Detect that case and backfill the ledger instead of re-running.
+    infra/docker-compose.yml mounts migrations/ into docker-entrypoint-initdb.d,
+    so a brand-new dev volume runs EVERY .sql file at first boot, while
+    schema_migrations stays empty because that hook doesn't know this script
+    exists. Without this, the first `migrate.py` run would re-apply those files
+    and fail on "relation already exists" -- not because anything is wrong,
+    just because two mechanisms applied the same files.
+
+    Each migration declares a marker (APPLIED_MARKERS); a migration whose
+    marker already holds but which the ledger doesn't list is recorded instead
+    of re-run. A missing marker entry fails loudly, so a new migration can't
+    silently skip this check.
     """
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_name = 'pipeline_runs'
-            )
-            """
-        )
-        pipeline_runs_exists = cur.fetchone()[0]
-
-    if not pipeline_runs_exists:
-        return
-
     with conn.cursor() as cur:
         cur.execute("SELECT filename FROM schema_migrations")
         applied = {row[0] for row in cur.fetchall()}
 
-    if "0001_init.sql" in applied:
-        return
-
-    with conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO schema_migrations (filename) VALUES (%s) ON CONFLICT DO NOTHING",
-            ("0001_init.sql",),
+    for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if path.name in applied:
+            continue
+        marker = APPLIED_MARKERS.get(path.name)
+        if marker is None:
+            raise RuntimeError(
+                f"{path.name} has no entry in APPLIED_MARKERS; add one so a database "
+                "initialized by docker-entrypoint-initdb.d can be reconciled"
+            )
+        with conn.cursor() as cur:
+            cur.execute(marker)
+            already_there = bool(cur.fetchone()[0])
+        if not already_there:
+            # Everything from here on is genuinely pending; leave it to the
+            # normal apply loop.
+            break
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO schema_migrations (filename) VALUES (%s) ON CONFLICT DO NOTHING",
+                (path.name,),
+            )
+        print(
+            f"[migrate] detected {path.name} already applied outside this script "
+            "(docker-entrypoint-initdb.d) -- recording it instead of re-running it"
         )
     conn.commit()
-    print(
-        "[migrate] detected 0001_init.sql already applied via "
-        "docker-entrypoint-initdb.d — backfilling schema_migrations instead "
-        "of re-running it"
-    )
 
 
 def pending_migrations(conn) -> list[Path]:

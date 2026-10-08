@@ -27,3 +27,21 @@ Every extractor, regardless of language, must:
    `stage.json` is skipped (with a warning), not run. The stage's name is
    always its directory's basename; there is no separate name field to
    drift out of sync with where the extractor actually lives.
+
+## Identity, versioning and payload (EPOCH-402)
+
+- **Identity comes from the orchestrator, never the extractor (R16).** Every
+  extractor accepts `--run-id`, `--evidence-id` and `--derivative-id`
+  (`db_writer.add_context_args`), builds one `IngestContext` from them
+  (`context_from_args`), and passes it to every `ingest()` call. Extractor code
+  never invents or edits these IDs.
+- **`PARSER_VERSION` is an incrementing integer constant** in the extractor's
+  entrypoint module, passed to `ingest()` as `parser_version`. Not text or
+  semver: "latest" is chosen by numeric order. Bump it whenever parsing or
+  normalization changes what the extractor writes. A bump is append-only (R8):
+  every file is re-ingested as a new unit beside the old rows, which stay
+  queryable as history.
+- **A unit is `(evidence_id, file_hash, source_type, parser_version)` (R6).**
+  Byte-identical files under two evidence items are two units.
+- **Declare what `raw_payload` keeps (R12)** with `payload_kind`: `full` (the
+  parsed source), `summary` (metadata only) or `none`.

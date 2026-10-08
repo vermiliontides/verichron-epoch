@@ -63,25 +63,53 @@ class RealisticBackupGenerator:
         return hashlib.sha1(relative_path.encode()).hexdigest()
     
     def add_file(self, domain: str, relative_path: str, content_bytes: bytes, file_size: int = None) -> str:
+        # As in a real iTunes/Finder backup: the file ID is sha1("<domain>-<path>"),
+        # and the file is stored at <first two hex digits>/<full file ID>. iLEAPP
+        # and mvt both locate files this way.
         file_hash = self.path_to_hash(f"{domain}-{relative_path}")
-        hex_dir = file_hash[:2]
-        hex_file = file_hash[2:]
-        
-        hex_path = self.backup_dir / hex_dir
+        hex_path = self.backup_dir / file_hash[:2]
         hex_path.mkdir(exist_ok=True)
-        
-        file_path = hex_path / hex_file
-        file_path.write_bytes(content_bytes)
-        
+        (hex_path / file_hash).write_bytes(content_bytes)
+
         self.manifest_entries[file_hash] = {
             'Domain': domain,
             'RelativePath': relative_path,
             'Flags': 1,
             'Length': file_size or len(content_bytes)
         }
-        
+
         return file_hash
-    
+
+    def _mbfile_metadata(self, relative_path: str, size: int) -> bytes:
+        """The Manifest.db `file` column: an NSKeyedArchiver-encoded MBFile record,
+        as iOS writes it. mvt reads the timestamps, mode, owner and size from
+        $objects[1]; iLEAPP keeps it as the file's metadata."""
+        archive = {
+            '$version': 100000,
+            '$archiver': 'NSKeyedArchiver',
+            '$top': {'root': plistlib.UID(1)},
+            '$objects': [
+                '$null',
+                {
+                    '$class': plistlib.UID(3),
+                    'RelativePath': plistlib.UID(2),
+                    'Size': size,
+                    'Birth': self.backup_timestamp,
+                    'LastModified': self.backup_timestamp,
+                    'LastStatusChange': self.backup_timestamp,
+                    'Mode': 0o100644,
+                    'UserID': 501,
+                    'GroupID': 501,
+                    'InodeNumber': random.randint(100000, 999999),
+                    'ProtectionClass': 3,
+                    'Flags': 0,
+                },
+                relative_path,
+                {'$classname': 'MBFile', '$classes': ['MBFile', 'NSObject']},
+            ],
+        }
+        return plistlib.dumps(archive, fmt=plistlib.FMT_BINARY)
+
     def create_contacts_db(self):
         db_bytes = self._build_contacts_db()
         self.add_file('HomeDomain', 'Library/AddressBook/AddressBook.sqlitedb', db_bytes)
@@ -358,23 +386,25 @@ class RealisticBackupGenerator:
         conn = sqlite3.connect(str(db_path))
         c = conn.cursor()
         
+        # The schema of a real iOS 10+ Manifest.db.
         c.execute('''CREATE TABLE Files
                      (fileID TEXT PRIMARY KEY,
                       domain TEXT,
                       relativePath TEXT,
                       flags INTEGER,
-                      file_length INTEGER)''')
-        
+                      file BLOB)''')
+        c.execute('''CREATE TABLE Properties (key TEXT PRIMARY KEY, value BLOB)''')
+
         for file_hash, info in self.manifest_entries.items():
             c.execute('''INSERT INTO Files
-                         (fileID, domain, relativePath, flags, file_length)
+                         (fileID, domain, relativePath, flags, file)
                          VALUES (?, ?, ?, ?, ?)''',
                       (file_hash,
                        info['Domain'],
                        info['RelativePath'],
                        info['Flags'],
-                       info['Length']))
-        
+                       self._mbfile_metadata(info['RelativePath'], info['Length'])))
+
         conn.commit()
         conn.close()
     

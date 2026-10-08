@@ -49,15 +49,17 @@ jobs:
           version: 2026.10.4
 
       # uv takes the interpreter from .python-version (a uv-managed CPython).
-      # Only the workspace is installed; the tools/ environments aren't needed
-      # by the tests, but their lockfiles must match their manifests.
       - name: Sync workspace
         run: uv sync --locked --all-extras
 
-      - name: Check tool lockfiles
-        run: |
-          uv lock --check --project tools/mvt
-          uv lock --check --project tools/ileapp
+      - name: Check the mvt lockfile
+        run: uv lock --check --project tools/mvt
+
+      # The iLEAPP end-to-end test runs the real iLEAPP from this environment
+      # (VER-16). Building it compiles two native packages; the runner has a
+      # compiler. --locked also fails on a stale lockfile.
+      - name: Build iLEAPP's environment
+        run: uv sync --locked --project tools/ileapp
 
       - name: Apply PostgreSQL migrations
         run: uv run python packages/etl-db-writer/migrate.py --db-url "$DATABASE_URL"

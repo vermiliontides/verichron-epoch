@@ -84,11 +84,16 @@ else
   problem "no working C compiler (needed to build iLEAPP's environment)" "$COMPILER_FIX"
 fi
 
-if docker compose version >/dev/null 2>&1; then
-  ok "docker compose $(docker compose version --short 2>/dev/null)"
-else
+if ! docker compose version >/dev/null 2>&1; then
   problem "docker with the compose plugin is not available (local PostgreSQL)" \
     "install Docker Engine or Docker Desktop (https://docs.docker.com/engine/install/)"
+elif ! docker info >/dev/null 2>&1; then
+  # The client is installed but can't reach the daemon: it isn't running, or
+  # this user may not use its socket.
+  problem "docker is installed but its daemon is not reachable (not running, or permission denied)" \
+    "start Docker; on Linux, also: sudo usermod -aG docker \$USER, then log out and back in"
+else
+  ok "docker compose $(docker compose version --short 2>/dev/null)"
 fi
 
 if [ -f .env ]; then

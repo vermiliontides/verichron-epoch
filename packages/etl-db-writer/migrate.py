@@ -81,6 +81,10 @@ APPLIED_MARKERS: dict[str, tuple[str, str]] = {
         _relation("run_completeness"),
         _relation("evidence_derivatives_identity"),
     ),
+    "0006_stage_parser_version.sql": (
+        _column("pipeline_stage_status", "parser_version"),
+        _column("pipeline_stage_status", "parser_version"),
+    ),
 }
 
 

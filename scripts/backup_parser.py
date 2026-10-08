@@ -72,7 +72,7 @@ class BackupParser:
             with open(info_path, 'rb') as f:
                 info_plist = plistlib.load(f)
                 backup_info['device_name'] = info_plist.get('Device Name')
-                backup_info['udid'] = info_plist.get('GUID')
+                backup_info['udid'] = info_plist.get('Unique Identifier') or info_plist.get('Target Identifier')
                 backup_info['imei'] = info_plist.get('IMEI')
                 backup_info['iccid'] = info_plist.get('ICCID')
                 

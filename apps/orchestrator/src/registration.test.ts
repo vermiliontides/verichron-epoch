@@ -21,7 +21,7 @@ import pg from 'pg';
 
 import { CHECK_MARKER, DECRYPT_MARKER, renderDerivativeMarker } from '@verichron/contracts';
 
-import { getRunState, hasSucceededRun } from './db.js';
+import { getRunState, hasCompleteRunFor } from './db.js';
 import { runPipelineForBackup } from './pipeline.js';
 import { deviceKey, loadDeviceSecret, readPlistStrings, registerEvidence, RegistrationError } from './registration.js';
 import type { StageDefinition, StageSet } from './types.js';
@@ -390,8 +390,73 @@ describe('stages and the completeness predicate', live, () => {
     for (const stuck of ['pending', 'running']) {
       await db.query(`UPDATE pipeline_stage_status SET status = $1 WHERE run_id = $2`, [stuck, result.runId]);
       assert.equal(await getRunState(db, result.runId!), 'incomplete', `a stage left ${stuck} by a killed process`);
-      assert.equal(await hasSucceededRun(db, result.evidenceId!, derivative.rows[0].derivative_id), false);
+      assert.equal(await hasCompleteRunFor(db, result.evidenceId!, derivative.rows[0].derivative_id, []), false);
     }
+  });
+
+  it('records each stage\'s declared parser version on the run', async () => {
+    const ws = makeWorkspace('stage-versions');
+    const versioned = recordingStage('versioned', 10, { parserVersion: 4 });
+    const unversioned = recordingStage('unversioned', 20);
+    const off = recordingStage('off', 30, { parserVersion: 2, enabled: false });
+    const result = await run(ws.backupPath, { enabled: [versioned, unversioned], disabled: [off] });
+    const { rows } = await db.query(
+      `SELECT stage_name, parser_version FROM pipeline_stage_status WHERE run_id = $1 ORDER BY stage_name`,
+      [result.runId]
+    );
+    assert.deepEqual(rows, [
+      { stage_name: 'off', parser_version: 2 },
+      { stage_name: 'unversioned', parser_version: null },
+      { stage_name: 'versioned', parser_version: 4 },
+    ]);
+  });
+
+  it('a parserVersion bump re-runs complete evidence; the same version does not', async () => {
+    const ws = makeWorkspace('version-bump');
+    const v1 = recordingStage('parser', 10, { parserVersion: 1 });
+    const first = await run(ws.backupPath, { enabled: [v1], disabled: [] });
+    assert.equal(await getRunState(db, first.runId!), 'complete');
+
+    const same = await run(ws.backupPath, { enabled: [v1], disabled: [] });
+    assert.equal(same.skipped, true, 'nothing changed, so the complete run stands');
+
+    const v2 = recordingStage('parser', 10, { parserVersion: 2 });
+    const bumped = await run(ws.backupPath, { enabled: [v2], disabled: [] });
+    assert.notEqual(bumped.skipped, true, 'R8: a new parser version must reach the stage');
+    assert.notEqual(bumped.runId, first.runId);
+    assert.equal(argsOf(v2)['--parser-version'], '2');
+
+    const again = await run(ws.backupPath, { enabled: [v2], disabled: [] });
+    assert.equal(again.skipped, true, 'once version 2 has run, it is done');
+  });
+
+  it('a stage enabled after a complete run gets a new run', async () => {
+    const ws = makeWorkspace('newly-enabled');
+    const base = recordingStage('base', 10, { parserVersion: 1 });
+    const later = recordingStage('later', 20, { parserVersion: 1, enabled: false });
+    const first = await run(ws.backupPath, { enabled: [base], disabled: [later] });
+    assert.equal(await getRunState(db, first.runId!), 'complete');
+
+    const enabledLater = recordingStage('later', 20, { parserVersion: 1 });
+    const second = await run(ws.backupPath, { enabled: [base, enabledLater], disabled: [] });
+    assert.notEqual(second.skipped, true, 'the stage skipped as disabled never ran');
+    assert.equal(argsOf(enabledLater)['--evidence-id'], first.evidenceId);
+
+    const disabledAgain = await run(ws.backupPath, { enabled: [base], disabled: [later] });
+    assert.equal(disabledAgain.skipped, true, 'disabling a stage again needs no new run');
+  });
+
+  it('refuses a backup identified only by GUID, which is not the device UDID', async () => {
+    const ws = makeWorkspace('guid-only');
+    writeFileSync(
+      path.join(ws.backupPath, 'Info.plist'),
+      infoPlist(UDID, 'Phone').replace('<key>Unique Identifier</key>', '<key>GUID</key>')
+    );
+    const result = await run(ws.backupPath);
+    assert.equal(result.success, false);
+    assert.match(result.error ?? '', /"GUID" is the backup's iTunes GUID, not the device UDID/);
+    assert.equal(await count('evidence_items'), 0);
+    assert.equal(await count('pipeline_runs'), 0);
   });
 
   it('a failed stage makes the run incomplete, so the next invocation re-runs it', async () => {

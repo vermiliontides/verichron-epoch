@@ -4,7 +4,7 @@ import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { Client } from "pg";
 import type { StageDefinition, StageSet, RunConfig } from "./types.js";
-import { createRun, hasSucceededRun, markStage, markRunFailed, type RunProvenance } from "./db.js";
+import { createRun, hasCompleteRunFor, markStage, markRunFailed, type RunProvenance } from "./db.js";
 import { registerEvidence, RegistrationError, type Registration } from "./registration.js";
 import { contractVersion, deriveResultsPath } from "@verichron/contracts";
 
@@ -145,8 +145,10 @@ export async function runPipelineForBackup(
   }
 
   // Resume is keyed by evidence identity, not by path: the same backup
-  // registered from another mount path is the same evidence.
-  if (await hasSucceededRun(client, registration.evidenceId, registration.decryptedDerivativeId)) {
+  // registered from another mount path is the same evidence. It is also
+  // keyed by the stage plan: a bumped parserVersion or a newly enabled stage
+  // is not "already done".
+  if (await hasCompleteRunFor(client, registration.evidenceId, registration.decryptedDerivativeId, stages.enabled)) {
     return { success: true, skipped: true, evidenceId: registration.evidenceId };
   }
 

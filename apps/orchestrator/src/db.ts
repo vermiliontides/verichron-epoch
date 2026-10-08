@@ -7,16 +7,38 @@ export type RunState = "running" | "incomplete" | "complete";
 
 /**
  * Whether this evidence has already been fully processed from this
- * derivative: a run against the same (evidence, derivative) whose state in
- * the run_completeness view is 'complete'. The view is the ONE definition of
- * completeness (R23, migration 0005); nothing here re-derives it.
+ * derivative, as these stages would process it now: a run against the same
+ * (evidence, derivative) whose state in the run_completeness view is
+ * 'complete' (R23, migration 0005; not re-derived here) AND in which every
+ * stage enabled now succeeded at the parserVersion its stage.json declares
+ * now. A parserVersion bump (R8) or a newly enabled stage therefore gets a
+ * new run instead of being skipped as done; stages that are unchanged dedup
+ * in the ledger, so re-running them writes nothing new.
  */
-export async function hasSucceededRun(client: Client, evidenceId: string, derivativeId: string): Promise<boolean> {
+export async function hasCompleteRunFor(
+  client: Client,
+  evidenceId: string,
+  derivativeId: string,
+  enabled: StageSet["enabled"]
+): Promise<boolean> {
   const { rows } = await client.query(
-    `SELECT 1 FROM run_completeness
-      WHERE evidence_id = $1 AND derivative_id = $2 AND state = 'complete'
+    `SELECT 1 FROM run_completeness c
+      WHERE c.evidence_id = $1 AND c.derivative_id = $2 AND c.state = 'complete'
+        AND NOT EXISTS (
+          SELECT 1 FROM unnest($3::text[], $4::int[]) AS want(stage_name, parser_version)
+           WHERE NOT EXISTS (
+             SELECT 1 FROM pipeline_stage_status s
+              WHERE s.run_id = c.run_id
+                AND s.stage_name = want.stage_name
+                AND s.status = 'succeeded'
+                AND s.parser_version IS NOT DISTINCT FROM want.parser_version))
       LIMIT 1`,
-    [evidenceId, derivativeId]
+    [
+      evidenceId,
+      derivativeId,
+      enabled.map((stage) => stage.name),
+      enabled.map((stage) => stage.manifest.parserVersion ?? null),
+    ]
   );
   return rows.length > 0;
 }
@@ -67,15 +89,16 @@ export async function createRun(
   );
   for (const stage of stages.enabled) {
     await client.query(
-      `INSERT INTO pipeline_stage_status (run_id, stage_name, status) VALUES ($1, $2, 'pending')`,
-      [runId, stage.name]
+      `INSERT INTO pipeline_stage_status (run_id, stage_name, status, parser_version)
+       VALUES ($1, $2, 'pending', $3)`,
+      [runId, stage.name, stage.manifest.parserVersion ?? null]
     );
   }
   for (const stage of stages.disabled) {
     await client.query(
-      `INSERT INTO pipeline_stage_status (run_id, stage_name, status, error_message)
-       VALUES ($1, $2, 'skipped', 'stage disabled in its stage.json')`,
-      [runId, stage.name]
+      `INSERT INTO pipeline_stage_status (run_id, stage_name, status, error_message, parser_version)
+       VALUES ($1, $2, 'skipped', 'stage disabled in its stage.json', $3)`,
+      [runId, stage.name, stage.manifest.parserVersion ?? null]
     );
   }
   return runId;

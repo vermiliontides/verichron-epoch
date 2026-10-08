@@ -381,7 +381,13 @@ class RealisticBackupGenerator:
     def create_info_plist(self):
         info = {
             'Device Name': f"{fake.first_name()}'s iPhone",
-            'GUID': self.udid,
+            # As in a real iTunes/Finder backup: the device's UDID is
+            # "Unique Identifier" / "Target Identifier" (what registration
+            # keys the device by), while "GUID" is a separate iTunes-assigned
+            # backup GUID, not the UDID.
+            'Unique Identifier': self.udid.upper(),
+            'Target Identifier': self.udid.upper(),
+            'GUID': fake.hexify('^' * 32, upper=True),
             'ICCID': fake.bothify('##############'),
             'IMEI': fake.bothify('##############'),
             'IMSI': fake.bothify('##############'),

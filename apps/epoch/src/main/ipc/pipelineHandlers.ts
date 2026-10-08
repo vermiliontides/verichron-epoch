@@ -454,7 +454,7 @@ export function registerPipelineHandlers(getMainWindow: () => BrowserWindow | nu
   /**
    * EPOCH-308: re-invokes the orchestrator against exactly one previously-
    * run backup_source instead of the whole workspace. ingest()'s per-file
-   * atomicity and hasSucceededRun()'s zero-failed-stages check already make
+   * atomicity and hasCompleteRunFor()'s complete-run check already make
    * this skip already-complete files and retry only what failed or never
    * ran -- no orchestrator or extractor changes required. Shares
    * runningOrchestratorProcess as its single-flight guard, so a retry and a

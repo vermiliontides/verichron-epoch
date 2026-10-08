@@ -17,7 +17,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
     setReportLoading(true);
     setReportLoadError(null);
     try {
-      const result = await reportsApi.getReport(run.backup_source);
+      const result = await reportsApi.getReport(run.run_id);
       setReport(result);
     } catch (err) {
       console.error('Failed to load report:', err);
@@ -37,7 +37,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
  
   const openReportFile = async () => {
     if (!selectedRun) return;
-    const opened = await reportsApi.openReport(selectedRun.backup_source);
+    const opened = await reportsApi.openReport(selectedRun.run_id);
     if (!opened) console.error('Failed to open report in default app');
   };
  
@@ -55,10 +55,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
         <p className="text-muted-foreground text-sm">Loading...</p>
       ) : report.status === 'no-results-path' ? (
         <div className="bg-surface shadow-elevation-1 rounded-lg p-5 text-data text-muted-foreground">
-          Can't derive a results path for this run's backup source (
-          <span className="font-mono text-data">{selectedRun.backup_source}</span>) -- it has no{' '}
-          <span className="font-mono text-data">decrypted</span> path segment to swap for{' '}
-          <span className="font-mono text-data">results</span>.
+          This run read no mvt results, so it has no results location to hold a report.
         </div>
       ) : report.status === 'not-found' ? (
         <div className="bg-surface shadow-elevation-1 rounded-lg p-5 text-data text-muted-foreground">

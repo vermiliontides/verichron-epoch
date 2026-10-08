@@ -1,17 +1,23 @@
 import { ipcMain, shell } from 'electron';
 import path from 'path';
 import fs from 'fs/promises';
-import { deriveResultsPath } from '@verichron/contracts';
+import type { Pool } from 'pg';
+import { getRunResultsPath } from '@verichron/etl-db-reader';
 
-function reportPathFor(backupSource: string): string | undefined {
-  const resultsPath = deriveResultsPath(backupSource);
-  if (!resultsPath) return undefined;
-  return path.join(resultsPath, 'investigation_report.md');
+/**
+ * A run's report is written beside the mvt results it read. The results'
+ * location comes from the database, where registration keeps a derivative's
+ * path current when its workspace moves; the run's backup_source keeps the
+ * path the run started from and goes stale after a move.
+ */
+async function reportPathFor(dbPool: Pool, runId: string): Promise<string | undefined> {
+  const resultsPath = await getRunResultsPath(dbPool, runId);
+  return resultsPath ? path.join(resultsPath, 'investigation_report.md') : undefined;
 }
 
-export function registerReportHandlers() {
-  ipcMain.handle('epoch:getReport', async (_event, backupSource: string) => {
-    const reportPath = reportPathFor(backupSource);
+export function registerReportHandlers(dbPool: Pool) {
+  ipcMain.handle('epoch:getReport', async (_event, runId: string) => {
+    const reportPath = await reportPathFor(dbPool, runId);
     if (!reportPath) {
       return { status: 'no-results-path' as const };
     }
@@ -27,8 +33,8 @@ export function registerReportHandlers() {
     }
   });
 
-  ipcMain.handle('epoch:openReport', async (_event, backupSource: string) => {
-    const reportPath = reportPathFor(backupSource);
+  ipcMain.handle('epoch:openReport', async (_event, runId: string) => {
+    const reportPath = await reportPathFor(dbPool, runId);
     if (!reportPath) return false;
     const result = await shell.openPath(reportPath);
     return result === '';

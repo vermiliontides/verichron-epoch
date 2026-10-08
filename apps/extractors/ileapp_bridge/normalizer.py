@@ -314,7 +314,7 @@ def _parse_tabular_artifact(file_path: Path, delimiter: str = ",") -> list:
     csv.field_size_limit(min(sys.maxsize, 10 * 1024 * 1024))  # 10MB ceiling
     records = []
     artifact_name = file_path.stem
-    with open(file_path, mode="r", encoding="utf-8", errors="ignore", newline="") as handle:
+    with open(file_path, mode="r", encoding="utf-8-sig", errors="ignore", newline="") as handle:
         reader = csv.DictReader(handle, delimiter=delimiter)
         for row in reader:
             ts_key = _find_timestamp_key(row.keys())

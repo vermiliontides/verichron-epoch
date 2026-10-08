@@ -19,11 +19,11 @@ For what the pieces are, read [architecture.md](architecture.md) first.
 
 ```bash
 git clone --recurse-submodules <repo>    # or: git submodule update --init  (iLEAPP)
-scripts/bootstrap-dev.sh                 # git hooks, infra/.env link, uv sync
-pnpm install
 cp .env.example .env                     # then fill in DB_USER, DB_PASSWORD, DB_NAME, DB_HOST, DB_PORT
+scripts/bootstrap-dev.sh                 # git hooks, infra/.env link (needs .env), uv sync, pnpm install, submodules
 docker compose -f infra/docker-compose.yml up -d postgres
-uv run python packages/etl-db-writer/migrate.py --db-url "postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME"
+set -a; . ./.env; set +a                 # load DB_* into this shell
+uv run python packages/etl-db-writer/migrate.py --db-url "postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME"
 ```
 
 PostgreSQL applies the migrations itself on its first boot; `migrate.py` records

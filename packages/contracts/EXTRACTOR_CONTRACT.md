@@ -36,8 +36,10 @@ The orchestrator registers the evidence before the run and passes every stage:
 | `--backup-path`, `--results-path` | Where the decrypted backup and the mvt results are |
 | `--db-url` | The database. *Moving to the environment (EPOCH-423).* |
 
-Python stages read these with `db_writer.add_context_args` and
-`context_from_args`, which build one `IngestContext`. **Never invent, default or
+Python stages register the four identity arguments with
+`db_writer.add_context_args` and build one `IngestContext` with
+`context_from_args`. Add `--backup-path`, `--results-path` and `--db-url`
+separately. **Never invent, default or
 edit these values (R16).** A stage reads only the derivative it was given.
 
 ## 3. Write facts through `ingest()`, one source file per unit
@@ -46,7 +48,8 @@ edit these values (R16).** A stage reads only the derivative it was given.
 with ingest(conn, ctx, file_path, source_type=..., payload_kind=..., raw_payload=...) as unit:
     if unit.already_ingested:
         ...           # this exact file, at this parser version, is already in: count ok(0) and note it
-    unit.write(records)
+    else:
+        unit.write(records)   # write() raises on an already-ingested unit
 ```
 
 - **One unit per source file** (R13). Its ledger row, payload and records commit

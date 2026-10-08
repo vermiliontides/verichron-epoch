@@ -9,8 +9,8 @@ time, so a silent failure shows up directly instead of as an unexplained
 empty list. Does not assume the cause -- prints what actually happens at
 each step and lets you read the result.
 
-Usage:
-    python3 scripts/diagnose_ileapp_plugin_loading.py
+Usage (with iLEAPP's own interpreter, which has its dependencies; EPOCH-458):
+    tools/ileapp/.venv/bin/python scripts/diagnose_ileapp_plugin_loading.py
 """
 
 from __future__ import annotations

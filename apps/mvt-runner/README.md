@@ -25,7 +25,7 @@ to its UI.
 |---|---|
 | `--source <dir>` | Directory containing encrypted backups (required) |
 | `--workspace <dir>` | Output workspace (default `~/mvt-workspace`) |
-| `--mvt-bin <path>` | `mvt-ios` binary (found automatically in common venv locations) |
+| `--mvt-bin <path>` | `mvt-ios` binary (default `tools/mvt/.venv/bin/mvt-ios`, the pinned environment `mise run setup` creates; never searched for elsewhere) |
 | `--mvt-home <dir>` | mvt's data and config home, where the IOC set lives (default `$VERICHRON_MVT_HOME` or `~/.local/share/verichron/mvt`) |
 | `--sqlite-bin <path>` | `sqlite3` for the repair pass |
 | `--force` | Re-run `check-backup` even if current |
@@ -47,7 +47,7 @@ because the recorded IOC set must be exactly the one used.
 | `src/main.ts` | The per-backup loop: hash → decrypt → repair → check, plus markers and summary |
 | `src/utils/manifest.ts` | Canonical manifest, `content_root`, stat cache |
 | `src/utils/repair.ts` | SQLite quick-check and `.recover`, returning repair provenance |
-| `src/utils/resolver.ts` | Finding `mvt-ios`; reading the `sqlite3` version |
+| `src/utils/resolver.ts` | Reading the `sqlite3` version |
 | `src/utils/prompt.ts` | Password prompt |
 | `src/utils/summary.ts` | `summary.md` |
 

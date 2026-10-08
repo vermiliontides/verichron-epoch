@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "verichron-analysis"
 version = "0.1.0"
 description = "Forensic analysis and LLM-assisted triage engine"
-requires-python = ">=3.10"
+requires-python = "==3.14.*"
 dependencies = [
     "requests>=2.31",
     "verichron-runtime-env",

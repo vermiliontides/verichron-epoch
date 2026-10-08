@@ -5,26 +5,64 @@ For what the pieces are, read [architecture.md](architecture.md) first.
 
 ## Prerequisites
 
-| Tool | Version | Used by |
+Install these yourself; everything else is installed, at pinned versions, by
+setup:
+
+| Prerequisite | Why |
+|---|---|
+| [mise](https://mise.jdx.dev/getting-started.html) | Provides Node, pnpm and uv at the versions in `mise.toml` |
+| A C compiler (`build-essential` on Debian/Ubuntu, Xcode Command Line Tools on macOS) | Two of iLEAPP's dependencies, `pyliblzfse` and `astc-decomp-faster`, publish no Linux wheels and are compiled |
+| Docker with the compose plugin | Local PostgreSQL 16 |
+| `sqlite3` (optional) | mvt-runner's repair pass; recorded as skipped if missing |
+
+## Pinned versions
+
+Each version is declared once, in the file the enforcing tool reads:
+
+| Tool | Version | Declared in |
 |---|---|---|
-| Node.js | 24 or later | the app, mvt-runner, the orchestrator |
-| pnpm | 10 (pinned in `package.json`) | TypeScript workspace |
-| Python | 3.12 or later | stages, the writer, the report |
-| uv | current | Python workspace (`uv.lock` is the only lockfile) |
-| Docker | current | local PostgreSQL 16 |
-| `mvt-ios` | in its own venv, e.g. `~/mvt/.venv` | mvt-runner (`--mvt-bin` if it isn't found) |
-| `sqlite3` | any | mvt-runner's repair pass (recorded as skipped if missing) |
+| Node | 24.21.0 (24.x enforced by `engine-strict`) | `mise.toml`, `engines` in `package.json` |
+| pnpm | 10.34.5 | `packageManager` in `package.json` |
+| uv | 0.12.23 | `mise.toml` (`required-version` in `pyproject.toml` guards it) |
+| Python | 3.14.8, a uv-managed CPython; system interpreters are never used | `.python-version` |
+| Electron | 44.7.0 | `apps/epoch/package.json` |
+| mvt | 2026.10.5 | `tools/mvt/pyproject.toml` |
+| iLEAPP | v2026.3.1 (submodule) | `.gitmodules` pin; its dependencies in `tools/ileapp/pyproject.toml` |
+
+Dependabot proposes updates to the npm and uv dependencies, the CI actions and
+the iLEAPP submodule. `mise.toml` and `.python-version` are updated by hand.
+
+## Environments
+
+| Environment | Holds | Used by |
+|---|---|---|
+| `.venv/` | The uv workspace: our Python stages, writer, report and tests | the orchestrator's stages, `uv run` |
+| `tools/mvt/.venv/` | mvt, pinned | mvt-runner runs `tools/mvt/.venv/bin/mvt-ios` (or `--mvt-bin`) |
+| `tools/ileapp/.venv/` | iLEAPP's runtime dependencies, pinned | the iLEAPP bridge runs `iLEAPP/ileapp.py` with this interpreter |
+| `node_modules/` | The pnpm workspace | the app, mvt-runner, the orchestrator |
+
+mvt and iLEAPP each have their own uv project and lockfile because their exact
+dependency pins conflict (for example, `packaging`). No workspace code imports
+either tool; both run as subprocesses.
 
 ## First-time setup
 
 ```bash
-git clone --recurse-submodules <repo>    # or: git submodule update --init  (iLEAPP)
+git clone --recurse-submodules <repo>
 cp .env.example .env                     # then fill in DB_USER, DB_PASSWORD, DB_NAME, DB_HOST, DB_PORT
-scripts/bootstrap-dev.sh                 # git hooks, infra/.env link (needs .env), uv sync, pnpm install, submodules
+mise install                             # Node, pnpm and uv at the pinned versions
+mise run check                           # report any missing prerequisite; changes nothing
+mise run setup                           # check again, then install every environment from the lockfiles
 docker compose -f infra/docker-compose.yml up -d postgres
 set -a; . ./.env; set +a                 # load DB_* into this shell
 uv run python packages/etl-db-writer/migrate.py --db-url "postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME"
 ```
+
+`mise run setup` reports every missing prerequisite at once, each with the
+command that installs it, and changes nothing until all are present. It never
+updates a lockfile: change a dependency in its `pyproject.toml` or
+`package.json`, then run `uv lock` (with `--project tools/<tool>` for a tool
+environment) or `pnpm install`, and commit the lockfile with the change.
 
 PostgreSQL applies the migrations itself on its first boot; `migrate.py` records
 what was applied and applies anything newer. It refuses a database where a
@@ -82,6 +120,8 @@ pnpm --filter @verichron/etl-db-reader test
 pnpm check:contracts                                 # schema ↔ TS ↔ Python mirrors in sync
 ```
 
+`mise run test` runs both suites (`mise run test:py`, `mise run test:ts`).
+
 External tools are tested through stub executables and servers (a stub
 `mvt-ios`, `sqlite3`, Ollama), so tests exercise the real process boundary.
 
@@ -89,10 +129,12 @@ External tools are tested through stub executables and servers (a stub
 
 | Workflow | Runs |
 |---|---|
-| `.github/workflows/python-tests.yml` | Migrations applied twice to a fresh PostgreSQL 16, pytest on both tiers, the index-usage check for evidence reads |
+| `.github/workflows/python-tests.yml` | Migrations applied twice to a fresh PostgreSQL 16, pytest on both tiers, the index-usage check for evidence reads, and a check that the tool lockfiles match their manifests |
 | `.github/workflows/ts-tests.yml` | Typecheck and tests for mvt-runner, the reader and the orchestrator, with real PostgreSQL |
 
-All Actions are pinned to full commit SHAs. The desktop app isn't built or
+Both workflows install the toolchain from `mise.toml` and Python from
+`.python-version`, the same files a development machine uses. All Actions are
+pinned to full commit SHAs. The desktop app isn't built or
 tested in CI yet (EPOCH-454).
 
 ## Conventions

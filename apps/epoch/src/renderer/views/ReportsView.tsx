@@ -55,7 +55,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
         <p className="text-muted-foreground text-sm">Loading...</p>
       ) : report.status === 'no-results-path' ? (
         <div className="bg-surface shadow-elevation-1 rounded-lg p-5 text-data text-muted-foreground">
-          This run read no mvt results, so it has no results location to hold a report.
+          This run has no registered evidence location (it predates evidence registration), so its
+          report can't be located.
         </div>
       ) : report.status === 'not-found' ? (
         <div className="bg-surface shadow-elevation-1 rounded-lg p-5 text-data text-muted-foreground">

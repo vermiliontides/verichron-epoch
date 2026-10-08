@@ -17,6 +17,8 @@ never silently deleted.
 | The app owns one pinned, hash-verified toolchain (mvt-ios, sqlite3, iLEAPP, Ollama and a model pinned by digest) instead of examiner-installed tools | Reproducibility is the product | EPOCH-439 |
 | No custom-tuned model until a labelled evaluation set shows what a tune would fix | A tune must be justified and defensible | EPOCH-441 |
 | Lab requirements (network enforcement, signing, audit artifacts) come from practicing examiners, not from us alone | Only they and their auditors can answer them | EPOCH-440 |
+| The two builds are named **Lab Edition** and **Personal Edition**. "Personal" was chosen over "Home" | "Personal" states whose device and data the edition is for; "Home" describes a place and implies examining other household members' devices | Linear projects "Verichron Epoch: Lab Edition 1.0" and "Personal Edition 1.0" |
+| The Personal Edition empowers its user: it keeps the core's full capability, and adds restrictions only where the law requires them | The product serves the person examining their own device; it does not assume a paternal role | Personal Edition 1.0 |
 
 ## AI
 

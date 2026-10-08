@@ -46,7 +46,7 @@ const getMainWindow = () => mainWindow;
 
 // Register all modularized IPC routes
 registerDbHandlers(dbPool);
-registerReportHandlers();
+registerReportHandlers(dbPool);
 // EPOCH-305: pipelineHandlers now needs DB access too -- when the
 // orchestrator subprocess it spawns crashes, times out, or is cancelled,
 // it closes out any dangling pipeline_runs/pipeline_stage_status rows

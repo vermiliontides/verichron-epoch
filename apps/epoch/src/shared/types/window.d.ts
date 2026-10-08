@@ -93,8 +93,8 @@ declare global {
         excludeId: string,
         windowMinutes?: number
       ) => Promise<CorrelatedContextRow[]>;
-      getReport: (backupSource: string) => Promise<ReportResult>;
-      openReport: (backupSource: string) => Promise<boolean>;
+      getReport: (runId: string) => Promise<ReportResult>;
+      openReport: (runId: string) => Promise<boolean>;
       // Stage 3 (orchestrator) -- see main.ts's epoch:startAnalysis handler.
       // Reuses MvtLogEntry/MvtFinishedResult since the shape is identical;
       // no need for a second pair of structurally-equal types.

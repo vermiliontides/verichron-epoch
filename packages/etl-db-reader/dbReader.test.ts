@@ -25,6 +25,7 @@ import {
   getCorrelationPivots,
   getForensicRecords,
   getRunEvidence,
+  getRunResultsPath,
   type ForensicRecordQuery,
   type ForensicRecordRow,
   type RecordSortKey,
@@ -37,6 +38,8 @@ const MIGRATIONS = path.resolve(__dirname, '../etl-db-writer/migrations');
 const EVIDENCE = '11111111-1111-1111-1111-111111111111';
 const OTHER = '22222222-2222-2222-2222-222222222222';
 const RUN = '33333333-3333-3333-3333-333333333333';
+const RESULTS_RUN = '44444444-4444-4444-4444-444444444444';
+const RESULTS = '55555555-5555-5555-5555-555555555555';
 
 /** 23 records for EVIDENCE: more than several pages at limit 4. Includes NULL
  * times and names, exact ties (decided by id), and two times that differ only
@@ -301,5 +304,40 @@ describe('evidence-scoped helpers', live, () => {
     const context = await getCorrelatedContext(db, EVIDENCE, new Date(timed.event_time!).toISOString(), timed.id);
     assert.ok(context.length > 0);
     assert.ok(context.every((c) => c.id !== timed.id && c.process_name !== 'other_evidence'));
+  });
+});
+
+describe('getRunResultsPath', live, () => {
+  before(async () => {
+    // A run whose mvt_iocs stage read a results derivative of EVIDENCE's decrypt.
+    await db.query(
+      `INSERT INTO evidence_derivatives (derivative_id, evidence_id, kind, path, parent_derivative_id, tool, params, provenance_key)
+       VALUES ($1, $2, 'mvt_results', '/old/ws/results/a', $2, '{"name": "mvt-ios", "version": "0"}', '{}', repeat('1', 64))`,
+      [RESULTS, EVIDENCE]
+    );
+    await db.query(
+      `INSERT INTO pipeline_runs (run_id, backup_source, contract_version, tool_versions, evidence_id, derivative_id)
+       VALUES ($1, '/old/ws/decrypted/a', 'test', '{}', $2, $2)`,
+      [RESULTS_RUN, EVIDENCE]
+    );
+    await db.query(
+      `INSERT INTO pipeline_stage_status (run_id, stage_name, status, derivative_id)
+       VALUES ($1, 'crash', 'succeeded', $2), ($1, 'mvt_iocs', 'succeeded', $3), ($1, 'reporting', 'succeeded', $2)`,
+      [RESULTS_RUN, EVIDENCE, RESULTS]
+    );
+  });
+
+  it('returns the results derivative the run read', async () => {
+    assert.equal(await getRunResultsPath(db, RESULTS_RUN), '/old/ws/results/a');
+  });
+
+  it('follows the derivative to where its workspace moved, not the run backup_source', async () => {
+    // What registration does when the same results are found at a new location.
+    await db.query(`UPDATE evidence_derivatives SET path = '/new/ws/results/a' WHERE derivative_id = $1`, [RESULTS]);
+    assert.equal(await getRunResultsPath(db, RESULTS_RUN), '/new/ws/results/a');
+  });
+
+  it('is null for a run that read no mvt results', async () => {
+    assert.equal(await getRunResultsPath(db, RUN), null);
   });
 });

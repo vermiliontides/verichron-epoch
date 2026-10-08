@@ -372,3 +372,16 @@ def test_input_copies_under_data_and_media_are_not_artifacts(tmp_path):
     assert found == ["iLEAPP_Output_2026-10-08_Thursday_123713/_TSV Exports/iTunes Backup Information.tsv"]
     # The same rule applies when given the run directory itself (EPOCH-416).
     assert [p.name for p in list_supported_artifacts(run)] == ["iTunes Backup Information.tsv"]
+
+
+def test_byte_order_mark_does_not_hide_the_time_column(tmp_path):
+    """iLEAPP writes its TSV exports with a UTF-8 byte-order mark. Read as plain
+    UTF-8, the first header becomes '\ufeffTimestamp', the time column is not
+    recognized, and every row is filed as untimed."""
+    tsv = tmp_path / "Example.tsv"
+    tsv.write_bytes("\ufeffTimestamp\tURL\n2026-09-27 23:00:30\thttps://example.com/\n".encode("utf-8"))
+
+    records = parse_artifact_file(tsv)
+
+    assert list(records[0]["data"])[0] == "Timestamp"
+    assert records[0]["timestamp"] == "2026-09-27T23:00:30+00:00"

@@ -258,6 +258,10 @@ importers:
         version: 6.0.3
 
   packages/etl-db-reader:
+    dependencies:
+      '@verichron/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

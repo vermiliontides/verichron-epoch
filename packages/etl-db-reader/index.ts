@@ -30,8 +30,7 @@ export type {
 export {
   getPipelineRuns,
   getRunEvidence,
-  getRunDecryptedPath,
-  getRunResultsPath,
+  getRunResultsLocation,
   getStageStatus,
   getForensicRecords,
   getCorrelationPivots,

@@ -2,34 +2,34 @@ import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { spawn } from "node:child_process";
 import { walkFiles, pathExists } from "./fs.js";
-import { checkSqliteBinAvailable } from "./resolver.js";
+import type { RepairProvenance } from "@verichron/contracts";
+import { sqliteVersion } from "./resolver.js";
 import type { Config } from "./cli.js";
 
 const SQLITE_MAGIC = Buffer.from("SQLite format 3\0", "ascii");
 
-export interface RepairResult {
-  scanned: number | null;
-  repaired: number;
-  failed: number;
-  failedFiles: string[];
-}
+let sqliteChecked = false;
+let sqliteToolVersion: string | null = null;
 
-let sqliteBinChecked = false;
-let sqliteBinAvailable = false;
-
-export async function repairDecrypted(cfg: Config, decDir: string): Promise<RepairResult> {
-  if (!sqliteBinChecked) {
-    sqliteBinChecked = true;
-    sqliteBinAvailable = await checkSqliteBinAvailable(cfg.sqliteBin);
+/**
+ * Quick-checks every SQLite database in a decrypt and recovers malformed ones
+ * in place, keeping each original as `<db>.corrupt-<timestamp>`. Returns what
+ * it did as the decrypt's repair provenance (EPOCH-406); paths are relative
+ * to decDir.
+ */
+export async function repairDecrypted(cfg: Config, decDir: string): Promise<RepairProvenance> {
+  if (!sqliteChecked) {
+    sqliteChecked = true;
+    sqliteToolVersion = await sqliteVersion(cfg.sqliteBin);
   }
-  if (!sqliteBinAvailable) {
-    return { scanned: null, repaired: 0, failed: 0, failedFiles: [] };
+  if (!sqliteToolVersion) {
+    return { status: "skipped", reason: `sqlite3 not available (${cfg.sqliteBin})` };
   }
 
   let scanned = 0;
   let repaired = 0;
-  let failed = 0;
   const failedFiles: string[] = [];
+  const preserved: string[] = [];
 
   for await (const p of walkFiles(decDir)) {
     if (path.basename(p).startsWith(".mvt_")) continue;
@@ -43,7 +43,8 @@ export async function repairDecrypted(cfg: Config, decDir: string): Promise<Repa
 
     console.log(`  [repair]  malformed DB detected: ${path.relative(decDir, p)}`);
     try {
-      const { applyWarnings } = await sqliteRecoverInPlace(cfg.sqliteBin, p);
+      const { applyWarnings, preservedPath } = await sqliteRecoverInPlace(cfg.sqliteBin, p);
+      preserved.push(path.relative(decDir, preservedPath));
       const okNow = await sqliteQuickCheck(cfg.sqliteBin, p);
       if (okNow) {
         console.log(
@@ -57,17 +58,22 @@ export async function repairDecrypted(cfg: Config, decDir: string): Promise<Repa
             `(some data may be permanently lost; original preserved as .corrupt-<timestamp>)` +
             (applyWarnings ? ` [${applyWarnings}]` : "")
         );
-        failed++;
         failedFiles.push(path.relative(decDir, p));
       }
     } catch (err) {
       console.error(`  [repair]  ERROR recovering ${path.relative(decDir, p)}:${err instanceof Error ? err.message : err}`);
-      failed++;
       failedFiles.push(path.relative(decDir, p));
     }
   }
 
-  return { scanned, repaired, failed, failedFiles };
+  return {
+    status: "ran",
+    tool: { name: "sqlite3", version: sqliteToolVersion },
+    scanned,
+    repaired,
+    failed_files: failedFiles,
+    preserved_originals: preserved,
+  };
 }
 
 async function looksLikeSqlite(p: string): Promise<boolean> {
@@ -133,7 +139,10 @@ function summarizeSqliteWarnings(stderr: string): string {
   return `${lines.length} warning line(s) applying recovered SQL:${parts.join("; ")}`;
 }
 
-async function sqliteRecoverInPlace(sqliteBin: string, dbPath: string): Promise<{ applyWarnings: string }> {
+async function sqliteRecoverInPlace(
+  sqliteBin: string,
+  dbPath: string
+): Promise<{ applyWarnings: string; preservedPath: string }> {
   const recoverResult = await runProcess(sqliteBin, [dbPath, ".recover"]);
   if (recoverResult.stdout.trim() === "") {
     throw new Error(
@@ -161,5 +170,5 @@ async function sqliteRecoverInPlace(sqliteBin: string, dbPath: string): Promise<
   await fsp.rm(`${dbPath}-wal`, { force: true });
   await fsp.rm(`${dbPath}-shm`, { force: true });
 
-  return { applyWarnings: summarizeSqliteWarnings(applyResult.stderr) };
+  return { applyWarnings: summarizeSqliteWarnings(applyResult.stderr), preservedPath: corruptBackupPath };
 }

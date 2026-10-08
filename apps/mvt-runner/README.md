@@ -55,6 +55,9 @@ npx tsx src/main.ts --source ./backups --workspace ./mvt-workspace
 * `--mvt-bin <path>`: Explicit path to the `mvt-ios` binary (auto-discovers standard local virtual environments if omitted).
 
 
+* `--mvt-home <dir>`: mvt-ios's data and config home (default: `$VERICHRON_MVT_HOME`, else `~/.local/share/verichron/mvt`). IOCs are downloaded to and loaded from `<mvt-home>/data/indicators` only; `MVT_STIX2` is refused, so the IOC set recorded with each result set is exactly what `check-backup` used.
+
+
 * `--sqlite-bin <path>`: Path to the `sqlite3` binary used for repairing malformed databases.
 
 
@@ -62,3 +65,12 @@ npx tsx src/main.ts --source ./backups --workspace ./mvt-workspace
 
 
 * `--force-decrypt`: Force re-decryption, cascading repairs and checks.
+
+## Provenance (EPOCH-406)
+
+Each finished derivative carries a marker that registration copies into `evidence_derivatives` (see `packages/contracts/ts/derivativeMarker.ts`):
+
+* `decrypted/<label>/.mvt_decrypted_ok`: the evidence `content_root`, the mvt-ios version, and the SQLite repair outcome (sqlite3 version, databases scanned and repaired, files not fully recovered, originals preserved as `.corrupt-<timestamp>`, or why repair was skipped). Written only after decrypt and repair both finish.
+* `results/<label>/.mvt_check_ok`: the evidence `content_root`, the mvt-ios version, and the IOC set's hash and file count.
+
+Results are re-checked when the backup, the mvt-ios version or the IOC set changes. Registration files the new results as a new derivative, and the old one keeps its provenance.

@@ -223,6 +223,56 @@ def test_the_report_takes_its_evidence_from_the_run_when_not_given(db, tmp_path)
     assert "INCIDENT-FROM-RUN" in _crash_section(report)
 
 
+def test_the_report_says_what_produced_each_derivative_the_run_read(db, tmp_path):
+    """EPOCH-406: "produced by mvt-ios X.Y, IOC set abc123, N files repaired"."""
+    if not isinstance(db, PgReal):
+        pytest.skip("the report reads through psycopg2 RealDictCursor on real Postgres")
+    import json
+
+    from reporting.generate_report import generate_report
+
+    results = "aaaa0000-0000-0000-0000-0000000000eb"
+    repair = {
+        "status": "ran",
+        "tool": {"name": "sqlite3", "version": "3.45.1"},
+        "scanned": 12,
+        "repaired": 2,
+        "failed_files": ["HomeDomain/Library/SMS/sms.db"],
+        "preserved_originals": ["a.db.corrupt-1", "HomeDomain/Library/SMS/sms.db.corrupt-1"],
+    }
+    mvt = json.dumps({"name": "mvt-ios", "version": "2.6.1"})
+    with db.cursor() as cur:
+        cur.execute(
+            "UPDATE evidence_derivatives SET tool = %s, params = %s WHERE derivative_id = %s",
+            (mvt, json.dumps({"repair": repair}), DERIVATIVE),
+        )
+        cur.execute(
+            "INSERT INTO evidence_derivatives "
+            "(derivative_id, evidence_id, parent_derivative_id, kind, path, tool, params, provenance_key) "
+            "VALUES (%s, %s, %s, 'mvt_results', '/pytest/results', %s, %s, repeat('1', 64))",
+            (results, EVIDENCE, DERIVATIVE, mvt, json.dumps({"ioc_set_hash": "abc123" + "0" * 58, "ioc_file_count": 14})),
+        )
+        cur.execute(
+            "UPDATE pipeline_runs SET evidence_id = %s, derivative_id = %s WHERE run_id = %s",
+            (EVIDENCE, DERIVATIVE, RUN_A),
+        )
+        cur.execute(
+            "INSERT INTO pipeline_stage_status (run_id, stage_name, status, derivative_id) "
+            "VALUES (%s, 'mvt_iocs', 'succeeded', %s)",
+            (RUN_A, results),
+        )
+    db.commit()
+
+    out = tmp_path / "report.md"
+    generate_report(db._conn, RUN_A, None, str(out), None)
+    report = out.read_text()
+    section = report.split("## Provenance", 1)[1].split("---", 1)[0]
+    assert "produced by mvt-ios 2.6.1; repair by sqlite3 3.45.1: 12 database(s) checked, 2 repaired" in section
+    assert "1 could not be fully recovered, 2 original(s) preserved" in section
+    assert "not fully recovered: `HomeDomain/Library/SMS/sms.db`" in section
+    assert "**mvt results** (`/pytest/results`): produced by mvt-ios 2.6.1, IOC set `abc123000000` (14 file(s))" in section
+
+
 def test_a_run_without_evidence_gets_a_report_that_says_so(db, tmp_path):
     """No evidence read must not look like nothing found."""
     if not isinstance(db, PgReal):

@@ -23,9 +23,18 @@ export { contractVersion, CONTRACT_SCHEMAS } from './ts/contractVersion.js';
 export {
   DECRYPT_MARKER,
   CHECK_MARKER,
-  DerivativeMarker,
-  readDerivativeMarker,
-  renderDerivativeMarker,
+  ToolVersion,
+  RepairProvenance,
+  DecryptParams,
+  CheckParams,
+  DecryptMarker,
+  CheckMarker,
+  readDecryptMarker,
+  readCheckMarker,
+  renderDecryptMarker,
+  renderCheckMarker,
+  canonicalJson,
+  provenanceKey,
 } from './ts/derivativeMarker.js';
 export { SourceType, isSourceType } from './ts/sourceType'
 export type { SourceType as SourceTypeValue } from './ts/sourceType'

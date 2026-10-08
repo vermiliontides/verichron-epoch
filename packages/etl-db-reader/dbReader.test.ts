@@ -88,8 +88,9 @@ before(async () => {
       [evidence, root]
     );
     await db.query(
-      `INSERT INTO evidence_derivatives (derivative_id, evidence_id, kind, path)
-       VALUES ($1, $1, 'decrypted', '/test')`,
+      `INSERT INTO evidence_derivatives (derivative_id, evidence_id, kind, path, tool, params, provenance_key)
+       VALUES ($1, $1, 'decrypted', '/test', '{"name": "test", "version": "0"}',
+               '{"repair": {"status": "skipped", "reason": "test fixture"}}', repeat('0', 64))`,
       [evidence]
     );
   }

@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { Client } from "pg";
 import type { StageDefinition, StageSet, RunConfig } from "./types.js";
 import { createRun, hasCompleteRunFor, markStage, markRunFailed, type RunProvenance } from "./db.js";
-import { registerEvidence, RegistrationError, type Registration } from "./registration.js";
+import { derivativeFor, registerEvidence, RegistrationError, type Registration } from "./registration.js";
 import { contractVersion, deriveResultsPath } from "@verichron/contracts";
 
 async function validateBackupPath(backupPath: string): Promise<{ ok: true } | { ok: false; reason: string }> {
@@ -29,10 +29,6 @@ async function validateBackupPath(backupPath: string): Promise<{ ok: true } | { 
  * otherwise the decrypted backup. Null when the stage needs results that
  * weren't registered (no results directory).
  */
-function derivativeFor(stage: StageDefinition, registration: Registration): string | null {
-  return stage.manifest.requiresResultsPath ? registration.resultsDerivativeId : registration.decryptedDerivativeId;
-}
-
 function runStage(
   stage: StageDefinition,
   config: RunConfig,
@@ -148,7 +144,7 @@ export async function runPipelineForBackup(
   // registered from another mount path is the same evidence. It is also
   // keyed by the stage plan: a bumped parserVersion or a newly enabled stage
   // is not "already done".
-  if (await hasCompleteRunFor(client, registration.evidenceId, registration.decryptedDerivativeId, stages.enabled)) {
+  if (await hasCompleteRunFor(client, registration, stages.enabled)) {
     return { success: true, skipped: true, evidenceId: registration.evidenceId };
   }
 

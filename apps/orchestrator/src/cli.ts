@@ -1,3 +1,4 @@
+import { DECRYPT_MARKER } from "@verichron/contracts";
 import { parseArgs } from "node:util";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
@@ -50,7 +51,7 @@ export async function parseCliConfig(): Promise<CliConfig> {
     const backupPaths: string[] = [];
     for (const entry of candidates) {
       const dir = path.join(decryptedDir, entry.name);
-      const markerExists = await fsp.access(path.join(dir, ".mvt_decrypted_ok")).then(() => true).catch(() => false);
+      const markerExists = await fsp.access(path.join(dir, DECRYPT_MARKER)).then(() => true).catch(() => false);
       if (markerExists) backupPaths.push(dir);
     }
     backupPaths.sort();

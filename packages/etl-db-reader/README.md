@@ -8,7 +8,8 @@ writes or commits.
 |---|---|
 | `getPipelineRuns` | Recent runs, with `state` from `run_completeness` (R23) |
 | `getRunEvidence` | The evidence a run processed |
-| `getRunDecryptedPath` | Where a run's decrypted backup is now, from which its results and report path are derived; follows a moved workspace |
+| `getRunResultsPath` | Where the mvt results a run read are now (null if it read none); follows a moved workspace |
+| `getRunDecryptedPath` | Where a run's decrypted backup is now; the fallback for locating a run's outputs when it read no mvt results |
 | `getStageStatus` | A run's stages |
 | `getForensicRecords` | One evidence's facts: keyset-paged, with the true total and a cursor (R25), and only allow-listed sorts and filters |
 | `getCorrelationPivots`, `getCorrelatedContext` | IOC detections and the activity around each |

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
-import type { PipelineRunRow, ForensicRecordRow, CorrelatedContextRow } from '@verichron/etl-db-reader';
+import type { PipelineRunRow, CorrelationPivotRow, CorrelatedContextRow } from '@verichron/etl-db-reader';
 import { CORRELATION_WINDOW_MINUTES } from '@verichron/etl-db-reader';
 import { Badge } from '../components/ui/Badge';
 import { runsApi } from '../api/runs';
@@ -21,16 +21,48 @@ function formatDelta(seconds: unknown): string {
 
 interface IocsViewProps {
   selectedRun: PipelineRunRow | null;
-  records: ForensicRecordRow[];
 }
 
-export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
-  const [expandedPivotId, setExpandedPivotId] = useState<number | null>(null);
-  const [correlatedContext, setCorrelatedContext] = useState<Record<number, CorrelatedContextRow[]>>({});
-  const [correlatedLoading, setCorrelatedLoading] = useState<number | null>(null);
-  const [correlatedError, setCorrelatedError] = useState<Record<number, string>>({});
+/**
+ * Loads its own complete pivot list. It used to filter the Records page's
+ * loaded rows, which were capped at 500: an indicator past row 500 was
+ * silently dropped, and a run whose only detections were late in the
+ * timeline showed "no indicator matches" -- a false negative.
+ */
+export const IocsView: React.FC<IocsViewProps> = ({ selectedRun }) => {
+  const [pivots, setPivots] = useState<CorrelationPivotRow[]>([]);
+  const [pivotsLoaded, setPivotsLoaded] = useState(false);
+  const [pivotsError, setPivotsError] = useState<string | null>(null);
+  const [expandedPivotId, setExpandedPivotId] = useState<string | null>(null);
+  const [correlatedContext, setCorrelatedContext] = useState<Record<string, CorrelatedContextRow[]>>({});
+  const [correlatedLoading, setCorrelatedLoading] = useState<string | null>(null);
+  const [correlatedError, setCorrelatedError] = useState<Record<string, string>>({});
 
-  const toggleCorrelatedContext = async (pivot: ForensicRecordRow) => {
+  useEffect(() => {
+    let cancelled = false;
+    setPivots([]);
+    setPivotsLoaded(false);
+    setPivotsError(null);
+    // No registered evidence means nothing to read -- shown as such below,
+    // never as "no matches".
+    if (!selectedRun?.evidence_id) return;
+    runsApi
+      .getCorrelationPivots(selectedRun.run_id)
+      .then((rows) => {
+        if (!cancelled) {
+          setPivots(rows);
+          setPivotsLoaded(true);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setPivotsError(err instanceof Error ? err.message : 'Unknown error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRun]);
+
+  const toggleCorrelatedContext = async (pivot: CorrelationPivotRow) => {
     if (expandedPivotId === pivot.id) {
       setExpandedPivotId(null);
       return;
@@ -54,13 +86,21 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun, records }) => {
     }
   };
 
-  const iocRecords = records.filter((r) => isIocSourceType(r.source_type));
+  const iocRecords = pivots.filter((r) => isIocSourceType(r.source_type));
 
   return (
     <div>
       <h2 className="font-display text-display text-accent mb-6">Indicator Matches</h2>
       {!selectedRun ? (
         <p className="text-muted-foreground text-data">Select an investigation first.</p>
+      ) : !selectedRun.evidence_id ? (
+        <p className="text-muted-foreground text-data">
+          This investigation's evidence isn't registered yet, so its facts haven't been read. This is not the same as finding nothing.
+        </p>
+      ) : pivotsError ? (
+        <p className="text-muted-foreground text-data">Could not load indicator matches: {pivotsError}</p>
+      ) : !pivotsLoaded ? (
+        <p className="text-muted-foreground text-data">Loading indicator matches…</p>
       ) : iocRecords.length === 0 ? (
         <p className="text-muted-foreground text-data">
           No indicator matches or timing anomalies were found for this investigation.

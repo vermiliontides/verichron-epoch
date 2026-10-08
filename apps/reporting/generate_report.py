@@ -118,6 +118,27 @@ def fetch_run_derivatives(conn, run_id: str) -> list[dict]:
         return cur.fetchall()
 
 
+def fetch_fact_derivatives(conn, evidence_id: str) -> list[dict]:
+    """The derivatives behind the facts this report reads (every current fact
+    of the evidence), with how many records each contributed. These can
+    differ from the run's inputs: a file whose bytes didn't change since an
+    earlier pass keeps that pass's ingest, and its derivative."""
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            """
+            SELECT d.derivative_id, d.kind, d.path, d.tool, d.params, d.provenance_key,
+                   count(*) AS records
+            FROM current_forensic_records f
+            JOIN evidence_derivatives d ON d.derivative_id = f.derivative_id
+            WHERE f.evidence_id = %s
+            GROUP BY d.derivative_id
+            ORDER BY d.kind, d.created_at
+            """,
+            (evidence_id,),
+        )
+        return cur.fetchall()
+
+
 def describe_derivative(d: dict) -> list[str]:
     """One line of what produced a derivative, plus any repair failures."""
     tool = d["tool"]
@@ -146,13 +167,35 @@ def describe_derivative(d: dict) -> list[str]:
     return lines
 
 
-def render_provenance_section(derivatives: list[dict]) -> list[str]:
-    lines = ["## Provenance", ""]
-    if not derivatives:
-        lines += ["No registered derivative was read by this run.", ""]
-        return lines
-    for d in derivatives:
+def render_provenance_section(inputs: list[dict], fact_sources: list[dict] | None) -> list[str]:
+    """What this run read, and, separately, what produced the facts shown.
+
+    The two differ whenever a fact was filed by an earlier pass: e.g. after an
+    IOC-set change, an unchanged alerts.json keeps its first ingest, so its
+    detections come from the older results set, not the one this run read.
+    `fact_sources` is None when no evidence is registered (no facts are read).
+    """
+    lines = ["## Provenance", "", "### Inputs this run read", ""]
+    if not inputs:
+        lines.append("No registered derivative was read by this run.")
+    for d in inputs:
         lines += describe_derivative(d)
+    lines.append("")
+    if fact_sources is None:
+        return lines
+
+    lines += ["### Where the facts in this report come from", ""]
+    if not fact_sources:
+        lines += ["No facts are recorded for this evidence.", ""]
+        return lines
+    read_now = {d["derivative_id"] for d in inputs}
+    for d in fact_sources:
+        described = describe_derivative(d)
+        note = f" — {d['records']} record(s)"
+        if d["derivative_id"] not in read_now:
+            note += "; **from an earlier pass, not an input of this run**"
+        lines.append(described[0] + note)
+        lines += described[1:]
     lines.append("")
     return lines
 
@@ -416,7 +459,10 @@ def generate_report(
         "",
     ]
     lines += render_stage_preface(stages)
-    lines += render_provenance_section(fetch_run_derivatives(conn, run_id))
+    lines += render_provenance_section(
+        fetch_run_derivatives(conn, run_id),
+        fetch_fact_derivatives(conn, evidence_id) if evidence_id else None,
+    )
     lines.append("---")
     lines.append("")
 

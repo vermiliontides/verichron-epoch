@@ -263,14 +263,37 @@ def test_the_report_says_what_produced_each_derivative_the_run_read(db, tmp_path
         )
     db.commit()
 
+    # A detection filed by an earlier results set (an older IOC set): its
+    # alerts.json was ingested then, and that ingest still stands.
+    older = "aaaa0000-0000-0000-0000-0000000000ea"
+    with db.cursor() as cur:
+        cur.execute(
+            "INSERT INTO evidence_derivatives "
+            "(derivative_id, evidence_id, parent_derivative_id, kind, path, tool, params, provenance_key) "
+            "VALUES (%s, %s, %s, 'mvt_results', '/pytest/results-old', %s, %s, repeat('2', 64))",
+            (older, EVIDENCE, DERIVATIVE, mvt, json.dumps({"ioc_set_hash": "0ff0" + "0" * 60, "ioc_file_count": 9})),
+        )
+    db.commit()
+    alerts = tmp_path / "alerts.json"
+    alerts.write_text("[]")
+    old_pass = IngestContext(evidence_id=EVIDENCE, derivative_id=older, run_id=RUN_B, parser_version=1)
+    with ingest(db, old_pass, alerts, source_type="mvt_ioc_detection", payload_kind="full") as unit:
+        unit.write([NormalizedRecord(source_type=SourceType.MVT_IOC_DETECTION, fields={})])
+
     out = tmp_path / "report.md"
     generate_report(db._conn, RUN_A, None, str(out), None)
     report = out.read_text()
     section = report.split("## Provenance", 1)[1].split("---", 1)[0]
-    assert "produced by mvt-ios 2.6.1; repair by sqlite3 3.45.1: 12 database(s) checked, 2 repaired" in section
-    assert "1 could not be fully recovered, 2 original(s) preserved" in section
-    assert "not fully recovered: `HomeDomain/Library/SMS/sms.db`" in section
-    assert "**mvt results** (`/pytest/results`): produced by mvt-ios 2.6.1, IOC set `abc123000000` (14 file(s))" in section
+    inputs, sources = section.split("### Where the facts in this report come from", 1)
+    assert "produced by mvt-ios 2.6.1; repair by sqlite3 3.45.1: 12 database(s) checked, 2 repaired" in inputs
+    assert "1 could not be fully recovered, 2 original(s) preserved" in inputs
+    assert "not fully recovered: `HomeDomain/Library/SMS/sms.db`" in inputs
+    assert "**mvt results** (`/pytest/results`): produced by mvt-ios 2.6.1, IOC set `abc123000000` (14 file(s))" in inputs
+    assert "/pytest/results-old" not in inputs, "this run did not read the older results set"
+    assert (
+        "**mvt results** (`/pytest/results-old`): produced by mvt-ios 2.6.1, IOC set `0ff000000000` (9 file(s))"
+        " — 1 record(s); **from an earlier pass, not an input of this run**"
+    ) in sources
 
 
 def test_a_run_without_evidence_gets_a_report_that_says_so(db, tmp_path):

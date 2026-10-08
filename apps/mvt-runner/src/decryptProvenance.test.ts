@@ -40,6 +40,7 @@ before(() => {
   // STUB_DECRYPT=fail: write part of the decrypt, then fail (not a password error).
   // STUB_DECRYPT=mutate: decrypt, then change the source, as if it changed mid-decrypt.
   // STUB_DECRYPT=unplug: decrypt BK1, then remove its source, as if the drive disconnected.
+  // STUB_DECRYPT=refresh: decrypt, then add an IOC file to $STUB_SHARED_IOCS, as if another runner refreshed it.
   stub = path.join(tmp, 'mvt-stub');
   writeFileSync(
     stub,
@@ -51,8 +52,9 @@ case "$1" in
     mkdir -p "$5" && touch "$5/from-$(cat "$6/version.txt").txt" "$5/Manifest.db"
     if [ "$STUB_DECRYPT" = fail ]; then echo "disk error mid-decrypt" >&2; exit 2; fi
     if [ "$STUB_DECRYPT" = mutate ]; then echo "mutated" > "$6/version.txt"; fi
+    if [ "$STUB_DECRYPT" = refresh ]; then echo late > "$STUB_SHARED_IOCS/late.stix2"; fi
     if [ "$STUB_DECRYPT" = unplug ] && [ "$(basename "$6")" = BK1 ]; then rm -rf "$6"; fi ;;
-  check-backup) mkdir -p "$3" && echo "$MVT_DATA_FOLDER|\${MVT_STIX2:-}" > "$3/mvt-env" ;;
+  check-backup) mkdir -p "$3" && echo "$MVT_DATA_FOLDER|\${MVT_STIX2:-}" > "$3/mvt-env" && ls "$MVT_DATA_FOLDER/indicators" > "$3/iocs-seen" ;;
 esac
 exit 0
 `
@@ -160,9 +162,13 @@ describe('derivative provenance (EPOCH-406)', () => {
     assert.equal(check.params.ioc_file_count, 1);
   });
 
-  it('runs mvt-ios against the managed IOC folder only', async () => {
-    const recorded = readFileSync(path.join(results(), 'mvt-env'), 'utf8').trim();
-    assert.equal(recorded, `${path.join(mvtHome, 'data')}|`, 'MVT_DATA_FOLDER is the managed home; MVT_STIX2 is not passed');
+  it('checks against a private copy of the IOC set, removed when the run ends', async () => {
+    const [dataFolder, stix2] = readFileSync(path.join(results(), 'mvt-env'), 'utf8').trim().split('|');
+    assert.equal(stix2, '', 'MVT_STIX2 is not passed');
+    assert.notEqual(dataFolder, path.join(mvtHome, 'data'), 'not the shared folder');
+    assert.ok(path.basename(dataFolder).startsWith('verichron-iocs-'));
+    assert.equal(existsSync(dataFolder), false, 'the copy is cleaned up');
+    assert.deepEqual(readFileSync(path.join(results(), 'iocs-seen'), 'utf8').trim().split('\n'), ['feed.stix2']);
   });
 
   it('a changed IOC set re-checks, and the new results carry the new hash', async () => {
@@ -185,6 +191,15 @@ describe('derivative provenance (EPOCH-406)', () => {
     assert.match(out, /re-checking: mvt-ios changed \(9\.9\.0 -> 10\.0\.0\)/);
     assert.equal(readCheckMarker(results())!.tool.version, '10.0.0');
     assert.deepEqual(readDecryptMarker(decrypted()), decryptBefore, 'a decrypt records the version that made it');
+  });
+
+  it('an IOC refresh by another runner mid-run does not change what this run checks or records', async () => {
+    const out = await runCli(['--force-decrypt'], 'refresh', { STUB_SHARED_IOCS: iocDir() });
+    assert.match(out, /\[check\]   done/);
+    assert.ok(existsSync(path.join(iocDir(), 'late.stix2')), 'precondition: the shared folder changed mid-run');
+    const seen = readFileSync(path.join(results(), 'iocs-seen'), 'utf8').trim().split('\n');
+    assert.ok(!seen.includes('late.stix2'), 'check-backup read the snapshot, not the refreshed folder');
+    assert.equal(readCheckMarker(results())!.params.ioc_file_count, seen.length, 'the recorded set is the set checked');
   });
 
   it('refuses to run with indicators from MVT_STIX2, which the recorded IOC set would not cover', async () => {

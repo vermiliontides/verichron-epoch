@@ -146,3 +146,25 @@ what makes the future toggle a CSS-only change.
 | `WorkspaceView.tsx` | No change needed (already elevation-only; dashed drop-zone border is a legitimate functional exception) | No change needed (`<h1>` already correct) | Not yet audited against §3 — known half-steps remain (e.g. modal `px-3.5`/`py-2.5`, several `gap-3.5`/`gap-2.5` outside the icon-label exception) |
 | `DevicePullPanel.tsx` | **Yes (this pass)** — both flag banners standardized to `shadow-elevation-1` + `border-flag/30`; `pullError`/`pulled` state banners also given `shadow-elevation-1` to match (this second part extends beyond the literal flag-banner instruction to the general state-banner rule above — flagged for confirmation, not silently assumed) | **Discrepancy:** this table previously said "Yes — internal `<h3>` sub-headings moved to `text-label`", but the file as currently pushed still shows `text-base font-semibold` on that heading. Needs reconciling — either the fix hasn't landed or this row was marked done prematurely. | Yes — padding/margin normalized to the §3 grid (confirmed by diff against the pre-202 version) |
 | `Button.tsx` (EPOCH-203) | **Resolved (this pass)** — added `tone="danger"` on `outline`, replacing the two independent flat-border/hover-reveal patterns (DevicePullPanel.tsx's Homebrew fallback, WorkspaceView.tsx's Cancel button) with one elevation-based treatment, per this section's rule above | Yes — `text-label` adopted for all button text per §2's row above. Confirmed decision: keep as-is even though it visibly shrinks default-size CTA text versus the old `text-sm`; revisit later rather than block on it now | Yes — `px-4 py-3` / `px-3 py-2`, matching `DevicePullPanel.tsx`'s already-landed grid |
+
+## 6. View layout — one gutter, one title, one left edge
+
+Every sidebar-navigated view (`WorkspaceView`, `RunsView`, `RecordsView`,
+`IocsView`, `ReportsView`) renders inside `ViewLayout`
+(`components/layout/ViewLayout.tsx`), and switching views never moves the
+content edge or the title (EPOCH-464).
+
+- **Gutter:** the app shell's content area (`App.tsx`) is the only place a
+  view's outer spacing is set: `p-8` (32px) on every side. A view sets no
+  outer padding or margin of its own; doing so is what made the edge jump
+  between 32px and 64px.
+- **Title:** `ViewLayout` renders the view's one `text-display` title (§2) as
+  an `h1` in `text-accent`, with 24px (`mb-6`) below the header. An optional
+  description sits under it, and an optional aside (e.g. a count) beside it.
+- **Width:** `full` by default. Form-like views use `readable`, which caps the
+  width at `max-w-4xl` (896px) but stays left-aligned, so the left edge
+  matches every other view. Views are never centered.
+- **Height:** the content below the header is a flex column that fills the
+  remaining height (`flex-1 min-h-0`). A view with a virtualized table passes
+  `overflow-hidden` and gives the table `flex-1 min-h-0`, so the table's
+  scrollport is bounded by the layout, never by a `calc(100vh - …)` constant.

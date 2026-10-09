@@ -3,6 +3,7 @@ import type { PipelineRunRow } from '@verichron/etl-db-reader';
 import type { ReportResult } from '../../shared/types/window';
 import { Button } from '../components/ui/Button';
 import { reportsApi } from '../api/reports';
+import { ViewLayout } from '../components/layout/ViewLayout';
  
 interface ReportsViewProps {
   selectedRun: PipelineRunRow | null;
@@ -42,8 +43,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
   };
  
   return (
-    <div>
-      <h2 className="font-display text-display text-accent mb-6">Reports</h2>
+    <ViewLayout title="Reports">
       {!selectedRun ? (
         <p className="text-muted-foreground text-sm">Select an investigation first.</p>
       ) : reportLoadError ? (
@@ -82,6 +82,6 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
           </pre>
         </div>
       )}
-    </div>
+    </ViewLayout>
   );
 };

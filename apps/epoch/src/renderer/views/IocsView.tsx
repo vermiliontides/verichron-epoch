@@ -4,6 +4,7 @@ import type { PipelineRunRow, CorrelationPivotRow, CorrelatedContextRow } from '
 import { CORRELATION_WINDOW_MINUTES } from '@verichron/etl-db-reader';
 import { Badge } from '../components/ui/Badge';
 import { runsApi } from '../api/runs';
+import { ViewLayout } from '../components/layout/ViewLayout';
 
 const IOC_SOURCE_TYPES = ['mvt_ioc_detection', 'timestamp_anomaly'] as const;
 type IocSourceType = (typeof IOC_SOURCE_TYPES)[number];
@@ -89,8 +90,7 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun }) => {
   const iocRecords = pivots.filter((r) => isIocSourceType(r.source_type));
 
   return (
-    <div>
-      <h2 className="font-display text-display text-accent mb-6">Indicator Matches</h2>
+    <ViewLayout title="Indicator Matches">
       {!selectedRun ? (
         <p className="text-muted-foreground text-data">Select an investigation first.</p>
       ) : !selectedRun.evidence_id ? (
@@ -196,6 +196,6 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun }) => {
           })}
         </div>
       )}
-    </div>
+    </ViewLayout>
   );
 };

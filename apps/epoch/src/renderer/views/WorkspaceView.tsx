@@ -9,6 +9,7 @@ import type { MvtLogEntry, MvtFinishedResult, StartPipelineOptions } from '../..
 import type { Backup } from '@verichron/contracts';
 import { applyMvtLogLine, initMvtRunProgress, type MvtRunProgress } from '../libs/mvtLogParser';
 import { pipelineApi } from '../api/pipeline';
+import { ViewLayout } from '../components/layout/ViewLayout';
 
 
 export interface WorkspaceViewProps {
@@ -318,14 +319,12 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
   const analysisFailedCount = analysisResult?.analysis?.filter((result) => result.status === 'failed').length ?? 0;
 
   return (
-    <div className="flex-1 flex flex-col p-8 max-w-4xl mx-auto w-full min-h-full gap-7">
-      <div>
-        <h1 className="font-display text-display font-bold text-foreground tracking-tight mb-2">Start an investigation</h1>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Import an iPhone backup or connect a device to examine evidence for suspicious activity.
-        </p>
-      </div>
-
+    <ViewLayout
+      title="Start an investigation"
+      description="Import an iPhone backup or connect a device to examine evidence for suspicious activity."
+      width="readable"
+      className="gap-7"
+    >
       {!selectedPath ? (
         <>
           <DevicePullPanel onBackupPulled={handleBackupPulled} />
@@ -690,6 +689,6 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           </div>
         </div>
       )}
-    </div>
+    </ViewLayout>
   );
 }

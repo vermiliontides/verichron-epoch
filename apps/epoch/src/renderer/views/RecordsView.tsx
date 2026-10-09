@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ForensicRecordRow } from '@verichron/etl-db-reader';
 import { Badge } from '../components/ui/Badge';
 import { DataTable, type DataTableColumn } from '../components/ui/DataTable';
+import { ViewLayout } from '../components/layout/ViewLayout';
 
 interface RecordsViewProps {
   selectedRun: boolean;
@@ -87,13 +88,11 @@ export function RecordsView({
   const columns = useMemo(buildColumns, []);
 
   return (
-    <div className="flex-1 overflow-auto p-8">
-      <h2 className="font-display text-display text-accent mb-6">Forensic Records</h2>
-
+    <ViewLayout title="Forensic Records" className="overflow-hidden">
       {selectedRun && loadedCount < totalCount && (
         // A capped list must say so (R25). Filters below apply only to the
         // loaded rows until the server-side grid lands (EPOCH-411).
-        <p className="text-data text-muted-foreground mb-4">
+        <p className="text-data text-muted-foreground mb-4 shrink-0">
           Showing the first {loadedCount.toLocaleString()} of {totalCount.toLocaleString()} records for this
           evidence. Filters apply to the loaded records only.
         </p>
@@ -109,7 +108,7 @@ export function RecordsView({
         <p className="text-muted-foreground text-data">No records for this run.</p>
       ) : (
         <>
-          <div className="flex gap-2 mb-5">
+          <div className="flex gap-2 mb-5 shrink-0">
             <button
               onClick={() => onFilterChange(null)}
               className={`px-4 py-2 rounded-md text-label font-mono transition-all ${
@@ -142,7 +141,7 @@ export function RecordsView({
             expandedId={expandedId}
             onRowClick={(row) => setExpandedId(expandedId === String(row.id) ? null : String(row.id))}
             estimateRowHeight={44}
-            className="h-[calc(100vh-20rem)] rounded-lg shadow-elevation-1"
+            className="flex-1 min-h-0 rounded-lg shadow-elevation-1"
             emptyState={<p className="text-muted-foreground text-data">No records match this filter.</p>}
             renderExpanded={(row) => (
               <pre className="text-data font-mono text-muted-foreground whitespace-pre-wrap break-all">
@@ -152,6 +151,6 @@ export function RecordsView({
           />
         </>
       )}
-    </div>
+    </ViewLayout>
   );
 }

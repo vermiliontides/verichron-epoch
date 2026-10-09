@@ -7,6 +7,7 @@ import { Button } from '../components/ui/Button';
 import { TerminalLog } from '../components/layout/TerminalLog';
 import { pipelineApi } from '../api/pipeline';
 import { DataTable, type DataTableColumn } from '../components/ui/DataTable';
+import { ViewLayout } from '../components/layout/ViewLayout';
 
 /** Labels for run_completeness states. The state itself comes from the
  * database (EPOCH-404); this view never derives it from stage rows. */
@@ -260,13 +261,15 @@ export function RunsView({
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden p-8">
-      <h1 className="font-display text-display text-accent mb-6 flex items-baseline gap-2 shrink-0">
-        Investigations
-        {!loading && !error && runs.length > 0 && (
+    <ViewLayout
+      title="Investigations"
+      titleAside={
+        !loading && !error && runs.length > 0 && (
           <span className="font-mono text-label text-muted-foreground">{runs.length}</span>
-        )}
-      </h1>
+        )
+      }
+      className="overflow-hidden"
+    >
 
       {error ? (
         <div className="text-flag bg-flag/10 border border-flag/30 rounded-md px-4 py-3 text-data shrink-0">
@@ -298,6 +301,6 @@ export function RunsView({
           />
         </div>
       )}
-    </div>
+    </ViewLayout>
   );
 }

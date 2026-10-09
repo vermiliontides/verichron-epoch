@@ -1,398 +1,304 @@
-#!/usr/bin/env python3
-"""
-Integration tests for the iLEAPP extractor.
+"""The iLEAPP bridge reads only iLEAPP's LAVA output (EPOCH-461).
 
-Covers:
-  - Normalizer parsing (CSV/TSV/SQLite), including batch streaming
-  - Event-time column mapping and the columns that must NOT be mapped
-  - Exclusion of iLEAPP's own bookkeeping tables
-  - NormalizedRecord schema validation
-  - Idempotent file hashing
-  - Failure surfacing (malformed input raises rather than short-reading)
-
-Run with `pytest packages-py`. Import paths come from `packages-py/conftest.py`.
-
-Previously this module carried its own `main()` runner that called each test in
-a try/except and tallied results. That reimplemented pytest — already a
-declared dependency in requirements.txt — but without parametrization, fixtures,
-assertion introspection, or a non-zero exit that CI could key on unless invoked
-directly as a script, which nothing did. The tests were real; the harness meant
-nothing ran them. They are plain pytest functions now.
+Each test writes a small report the way iLEAPP's `scripts/lavafuncs.py` does:
+`_lava_artifacts.db` with one table per artifact (sanitized column names,
+`datetime` columns as INTEGER Unix seconds) and the `_lava_data.lava`
+manifest describing them. Real iLEAPP output is covered by test_end_to_end.py.
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
-from db_writer import compute_file_hash
-from ileapp_bridge.main import normalize_record
-from ileapp_bridge.normalizer import (
-    EXCLUDED_TABLE_PREFIXES,
-    _find_timestamp_key,
-    is_excluded_table,
-    list_supported_artifacts,
-    normalize_timestamp,
-    parse_artifact_file,
-    parse_ileapp_outputs,
-    report_timestamp_coverage,
-    unmapped_artifacts,
+from db_writer import IngestContext, compute_file_hash
+from ileapp_bridge.lava import (
+    ArtifactError,
+    LavaError,
+    check_tables,
+    open_database,
+    read_artifact,
+    read_manifest,
+    unix_utc,
 )
+from ileapp_bridge.main import ingest_report
 from normalized_record import NormalizedRecord, SourceType
+from testing.pg_real import BACKENDS, open_db
+
+RUN_ID = "dddddddd-0000-0000-0000-000000000000"
+EVIDENCE_ID = "dddd0000-0000-0000-0000-00000000000d"
+DERIVATIVE_ID = "dddd0000-0000-0000-0000-0000000000dd"
+CTX = IngestContext(evidence_id=EVIDENCE_ID, derivative_id=DERIVATIVE_ID, run_id=RUN_ID, parser_version=1)
+INPUT = "/ws/decrypted/BK1"
+
+VISIT = 1791140650  # 2026-10-04T...Z
+SAFARI = {
+    "category": "Safari Browser",
+    "name": "Safari Browser - History",
+    "module": "safariHistory",
+    "tablename": "safarihistory",
+    "columns": [("visit_timestamp", "Visit Timestamp", "datetime"), ("url", "URL", None), ("title", "Title", None)],
+    "rows": [(VISIT, "https://example.org/", "Example"), (VISIT + 60, "https://example.net/", "Other")],
+    "source_path": "private/var/mobile/Library/Safari/History.db",
+}
 
 
-# --------------------------------------------------------------------------
-# Parsing
-# --------------------------------------------------------------------------
+@pytest.fixture(params=BACKENDS)
+def db(request):
+    yield from open_db(request.param, (RUN_ID,), {EVIDENCE_ID: DERIVATIVE_ID})
 
 
-def test_parses_csv_artifact(tmp_path):
-    csv_file = tmp_path / "history.csv"
-    csv_file.write_text(
-        "url,visit_count,timestamp\n"
-        "https://example.com,5,2024-01-15T10:30:00Z\n"
-        "https://test.com,3,2024-01-15T10:35:00Z\n"
-    )
-
-    records = parse_artifact_file(csv_file)
-
-    assert len(records) == 2
-    assert records[0]["engine"] == "iLEAPP"
-    assert records[0]["source_artifact"] == "history"
-    assert records[0]["data"]["url"] == "https://example.com"
-    assert records[0]["timestamp"] == "2024-01-15T10:30:00+00:00"
-
-
-def test_parses_sqlite_artifact(tmp_path):
-    db_file = tmp_path / "sms.db"
-    conn = sqlite3.connect(db_file)
-    conn.execute(
-        "CREATE TABLE messages (id INTEGER PRIMARY KEY, phone TEXT, message TEXT, timestamp TEXT)"
-    )
-    conn.execute("INSERT INTO messages VALUES (1, '+1234567890', 'hello', '2024-01-15T10:30:00Z')")
-    conn.execute("INSERT INTO messages VALUES (2, '+1987654321', 'world', '2024-01-15T10:35:00Z')")
+def write_report(report: Path, *artifacts: dict, status: str = "Complete", extra_tables: tuple[str, ...] = ()) -> Path:
+    """A report as iLEAPP writes it. An artifact dict may override
+    `record_count`, omit keys, or carry `listed=False` to leave it out of the
+    manifest while still creating its table."""
+    report.mkdir(parents=True)
+    conn = sqlite3.connect(report / "_lava_artifacts.db")
+    conn.execute("CREATE TABLE _file_path_list (id INTEGER PRIMARY KEY, file_path TEXT NOT NULL)")
+    conn.execute("INSERT INTO _file_path_list (file_path) VALUES ('private/var/mobile/Library/Safari/History.db')")
+    for table in extra_tables:
+        conn.execute(f'CREATE TABLE "{table}" (x TEXT)')
+    manifest_artifacts: dict[str, list] = {}
+    for a in artifacts:
+        cols = ", ".join(f'"{c}" {"INTEGER" if t == "datetime" else "TEXT"}' for c, _, t in a["columns"])
+        conn.execute(f'CREATE TABLE "{a["tablename"]}" ({cols})')
+        marks = ", ".join("?" for _ in a["columns"])
+        conn.executemany(f'INSERT INTO "{a["tablename"]}" VALUES ({marks})', a["rows"])
+        if a.get("listed", True):
+            entry = {
+                "artifact_key": a["module"],
+                "name": a["name"],
+                "tablename": a["tablename"],
+                "module": a["module"],
+                "column_map": {c: h for c, h, _ in a["columns"]},
+                "record_count": a.get("record_count", len(a["rows"])),
+                "source_path": a.get("source_path"),
+            }
+            typed = [{"name": c, "type": t} for c, _, t in a["columns"] if t]
+            if typed:
+                entry["object_columns"] = typed
+            manifest_artifacts.setdefault(a["category"], []).append(entry)
     conn.commit()
     conn.close()
-
-    records = parse_artifact_file(db_file)
-
-    assert len(records) == 2
-    assert records[0]["source_artifact"] == "sms:messages"
-    assert records[0]["data"]["phone"] == "+1234567890"
-
-
-def test_parses_mixed_artifact_types_in_a_directory(tmp_path):
-    (tmp_path / "safari.csv").write_text("url,timestamp\nhttps://example.com,2024-01-15T10:30:00Z\n")
-    (tmp_path / "network.tsv").write_text("iface\tbytes\ttimestamp\neth0\t1000\t2024-01-15T10:30:00Z\n")
-
-    assert len(list_supported_artifacts(tmp_path)) == 2
-    assert len(parse_ileapp_outputs(str(tmp_path))) == 2
+    (report / "_lava_data.lava").write_text(json.dumps({
+        "lava_schema_version": 2,
+        "processing_status": status,
+        "lava_db_name": "_lava_artifacts.db",
+        "param_input": INPUT,
+        "param_output": str(report),
+        "modules": [],
+        "artifacts": manifest_artifacts,
+    }))
+    return report
 
 
-def test_streams_large_sqlite_table_past_the_batch_size(tmp_path):
-    """2500 rows exercises the 1000-row fetchmany loop across three batches."""
-    db_file = tmp_path / "large.db"
-    conn = sqlite3.connect(db_file)
-    conn.execute("CREATE TABLE events (id INTEGER PRIMARY KEY, data TEXT, timestamp TEXT)")
-    conn.executemany(
-        "INSERT INTO events VALUES (?, ?, ?)",
-        [(i, f"event_{i}", "2024-01-15T10:30:00Z") for i in range(2500)],
-    )
-    conn.commit()
-    conn.close()
-
-    assert len(parse_artifact_file(db_file)) == 2500
+def stored(db) -> list[tuple[dict, datetime | None]]:
+    cur = db.cursor()
+    cur.execute("SELECT fields, event_time FROM forensic_records WHERE source_type = 'ileapp_record' ORDER BY id")
+    out = []
+    for fields, when in cur.fetchall():
+        fields = json.loads(fields) if isinstance(fields, str) else fields
+        if isinstance(when, str):
+            when = datetime.fromisoformat(when)
+        out.append((fields, when.astimezone(timezone.utc) if when else None))
+    return out
 
 
-def test_binary_blobs_are_hex_encoded_not_dropped(tmp_path):
-    db_file = tmp_path / "blobs.db"
-    conn = sqlite3.connect(db_file)
-    conn.execute("CREATE TABLE payloads (id INTEGER, blob BLOB, timestamp TEXT)")
-    conn.execute("INSERT INTO payloads VALUES (1, ?, '2024-01-15T10:30:00Z')", (b"\x00\xff\x10",))
-    conn.commit()
-    conn.close()
+def ledger(db) -> list[tuple[str, str]]:
+    cur = db.cursor()
+    cur.execute("SELECT file_name, file_hash FROM ingested_files WHERE ingest_complete ORDER BY file_name")
+    return list(cur.fetchall())
 
-    records = parse_artifact_file(db_file)
 
-    assert records[0]["data"]["blob"] == "00ff10"
+def read_one(report: Path, name: str):
+    output = read_manifest(report)
+    conn = open_database(output)
+    try:
+        return read_artifact(conn, output, next(a for a in output.artifacts if a.name == name))
+    finally:
+        conn.close()
 
 
 # --------------------------------------------------------------------------
-# Event-time mapping (regression: substring matching picked wrong columns)
+# What is read
 # --------------------------------------------------------------------------
+
+
+def test_rows_keep_original_headers_and_the_declared_time(db, tmp_path):
+    report = write_report(tmp_path / "BK1", SAFARI)
+    result = ingest_report(db, CTX, report)
+    assert result.failed == 0, result.failures
+
+    records = stored(db)
+    assert [f["URL"] for f, _ in records] == ["https://example.org/", "https://example.net/"]
+    fields, when = records[0]
+    assert when == datetime.fromtimestamp(VISIT, timezone.utc)
+    assert fields["Visit Timestamp"] == VISIT, "the time column is kept in fields too"
+    assert fields["source_artifact"] == "Safari Browser - History"
+    assert (fields["module"], fields["category"]) == ("safariHistory", "Safari Browser")
+    assert fields["source_path"] == "private/var/mobile/Library/Safari/History.db"
+    assert fields["engine"] == "iLEAPP"
+
+
+def test_nothing_is_read_from_exports_or_input_copies(db, tmp_path):
+    report = write_report(tmp_path / "BK1", SAFARI)
+    (report / "_TSV Exports").mkdir()
+    (report / "_TSV Exports" / "Safari Browser - History.tsv").write_text("URL\nhttps://from-the-export/\n")
+    (report / "data").mkdir()
+    sqlite3.connect(report / "data" / "History.db").execute("CREATE TABLE t (x)").connection.close()
+
+    ingest_report(db, CTX, report)
+    assert len(stored(db)) == 2
+    assert all("from-the-export" not in json.dumps(f) for f, _ in stored(db))
+    assert [name for name, _ in ledger(db)] == ["_lava_artifacts.db#safarihistory"]
+
+
+def test_the_first_declared_datetime_is_the_event_time_and_every_one_is_kept(tmp_path):
+    calls = {
+        "category": "Call History", "name": "Call History", "module": "callHistory", "tablename": "callhistory",
+        "columns": [("ended", "Ended", "datetime"), ("started", "Started", "datetime"), ("number", "Number", None)],
+        "rows": [(2000000000, 1999999000, "+15555550100")],
+    }
+    read = read_one(write_report(tmp_path / "BK1", calls), "Call History")
+    assert read.event_times == [datetime.fromtimestamp(2000000000, timezone.utc)]
+    assert read.rows[0] == {"Ended": 2000000000, "Started": 1999999000, "Number": "+15555550100"}
+
+
+def test_an_artifact_with_no_declared_datetime_is_untimed(tmp_path):
+    info = {
+        "category": "iTunes Backup", "name": "iTunes Backup Information", "module": "iTunesBackupInfo",
+        "tablename": "itunes_backup_info",
+        "columns": [("property", "Property", None), ("property_value", "Property Value", None)],
+        "rows": [("Device Name", "Phone"), ("Last Backup Date", "2026-10-08 12:00:00")],
+    }
+    read = read_one(write_report(tmp_path / "BK1", info), "iTunes Backup Information")
+    assert read.event_times == [None, None], "a time-looking string in an undeclared column is never parsed"
+
+
+def test_unconvertible_and_pre_1970_times(tmp_path):
+    odd = dict(SAFARI, rows=[(-86400.5, "https://a/", "pre-1970"), ("not a time", "https://b/", "bad"), (None, "https://c/", "none")])
+    read = read_one(write_report(tmp_path / "BK1", odd), "Safari Browser - History")
+    assert read.event_times[0] == datetime(1969, 12, 30, 23, 59, 59, 500000, tzinfo=timezone.utc)
+    assert read.event_times[1:] == [None, None]
+    assert read.rows[1]["Visit Timestamp"] == "not a time", "the raw value is kept"
+    assert read.unconvertible_times == 1, "a missing time is untimed, not unconvertible"
+    assert "1 row(s) have a value in Visit Timestamp that is not Unix seconds" in read.notes[0]
+
+
+@pytest.mark.parametrize("value", [True, float("nan"), float("inf"), 10**20, "1791140650"])
+def test_only_numeric_unix_seconds_convert(value):
+    assert unix_utc(value) is None
+
+
+# --------------------------------------------------------------------------
+# What is refused
+# --------------------------------------------------------------------------
+
+
+def test_a_record_count_mismatch_fails_that_artifact_and_leaves_no_partial_ingest(db, tmp_path):
+    short = dict(SAFARI, record_count=3)
+    other = dict(SAFARI, name="Safari Copy", tablename="safaricopy", module="safariCopy")
+    result = ingest_report(db, CTX, write_report(tmp_path / "BK1", short, other))
+    assert result.failed == 1
+    assert "2 row(s) in table safarihistory, but the manifest records 3" in str(result.failures)
+    assert [name for name, _ in ledger(db)] == ["_lava_artifacts.db#safaricopy"], "the other artifact still lands"
+    assert len(stored(db)) == 2
 
 
 @pytest.mark.parametrize(
-    ("columns", "expected"),
+    "kwargs, message",
     [
-        # A timezone name is not a time. This was the original bug: "TimeZone"
-        # contains "time", appeared first, and won.
-        (["TimeZone", "Visit Time", "URL"], "Visit Time"),
-        # Row-modification time is not event time.
-        (["updated_date", "timestamp", "note"], "timestamp"),
-        (["LastModifiedDate", "StartTime"], "StartTime"),
-        (["date_added", "date"], "date"),
-        # Priority is by semantic explicitness, not column order.
-        (["date", "timestamp"], "timestamp"),
-        (["Message Date", "date_sent"], "Message Date"),
-        # Nothing temporal -> None, never a guess.
-        (["created_by", "name"], None),
-        (["Duration", "Elapsed Time"], None),
-        (["tz", "utc_offset"], None),
-        (["ROWID", "bundle_id", "wifi_in", "wifi_out"], None),
+        ({"extra_tables": ("orphan_table",)}, "table(s) not in _lava_data.lava: orphan_table"),
+        ({"status": "In Progress"}, "processing_status 'In Progress'"),
     ],
 )
-def test_event_time_column_selection(columns, expected):
-    assert _find_timestamp_key(columns) == expected
+def test_a_report_that_does_not_describe_itself_fails_the_stage(tmp_path, kwargs, message):
+    report = write_report(tmp_path / "BK1", SAFARI, **kwargs)
+    with pytest.raises(LavaError, match=message.replace("(", r"\(").replace(")", r"\)")):
+        output = read_manifest(report)
+        check_tables(open_database(output), output)
 
 
-def test_column_selection_is_independent_of_column_order():
-    """Same columns in any order must yield the same event-time column.
-
-    iLEAPP column order is not stable across artifacts or versions, so an
-    order-dependent choice means the same artifact can be timestamped from a
-    different field between runs.
-    """
-    columns = ["TimeZone", "updated_date", "timestamp", "date"]
-    assert _find_timestamp_key(columns) == "timestamp"
-    assert _find_timestamp_key(list(reversed(columns))) == "timestamp"
+def test_a_listed_table_missing_from_the_database_fails_the_stage(tmp_path):
+    report = write_report(tmp_path / "BK1", SAFARI)
+    manifest = json.loads((report / "_lava_data.lava").read_text())
+    manifest["artifacts"]["Safari Browser"].append(dict(manifest["artifacts"]["Safari Browser"][0], name="Gone", tablename="gone"))
+    (report / "_lava_data.lava").write_text(json.dumps(manifest))
+    output = read_manifest(report)
+    with pytest.raises(LavaError, match="missing from _lava_artifacts.db: gone"):
+        check_tables(open_database(output), output)
 
 
-def test_timezone_column_does_not_become_the_event_time(tmp_path):
-    """End-to-end guard for the regression, at the parse level."""
-    csv_file = tmp_path / "wifi.csv"
-    csv_file.write_text("TimeZone,ssid,Visit Time\nAmerica/Chicago,home,2024-01-15T10:30:00Z\n")
-
-    records = parse_artifact_file(csv_file)
-
-    assert records[0]["timestamp"] == "2024-01-15T10:30:00+00:00"
-
-
-def test_artifact_with_no_timestamp_column_is_reported_not_hidden(tmp_path, capsys):
-    (tmp_path / "installed_apps.csv").write_text("bundle_id,name\ncom.example.app,Example\n")
-    (tmp_path / "history.csv").write_text("url,timestamp\nhttps://a.test,2024-01-15T10:30:00Z\n")
-
-    records = parse_ileapp_outputs(str(tmp_path))
-
-    assert unmapped_artifacts(records) == ["installed_apps"]
-    assert "installed_apps" in capsys.readouterr().err
+def test_a_missing_manifest_or_unknown_schema_fails_the_stage(tmp_path):
+    with pytest.raises(LavaError, match="does not exist"):
+        read_manifest(tmp_path)
+    report = write_report(tmp_path / "BK1", SAFARI)
+    manifest = json.loads((report / "_lava_data.lava").read_text())
+    (report / "_lava_data.lava").write_text(json.dumps(dict(manifest, lava_schema_version=3)))
+    with pytest.raises(LavaError, match="lava_schema_version 3"):
+        read_manifest(report)
 
 
-def test_timestamp_coverage_report_is_silent_when_all_mapped(tmp_path, capsys):
-    (tmp_path / "history.csv").write_text("url,timestamp\nhttps://a.test,2024-01-15T10:30:00Z\n")
-
-    records = parse_ileapp_outputs(str(tmp_path))
-    capsys.readouterr()
-
-    assert report_timestamp_coverage(records) == []
-    assert capsys.readouterr().err == ""
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        ("2024-01-15T10:30:00Z", "2024-01-15T10:30:00+00:00"),
-        ("2024-01-15T10:30:00", "2024-01-15T10:30:00+00:00"),
-        ("", None),
-        (None, None),
-        ("not a timestamp", None),
-        ("TimeZone", None),
-        (1705314600, "2024-01-15T10:30:00+00:00"),
-        (1705314600000, "2024-01-15T10:30:00+00:00"),  # milliseconds
-    ],
-)
-def test_timestamp_normalization_never_fabricates_a_value(raw, expected):
-    """An unparseable timestamp must become None, not `now`.
-
-    A fabricated wall-clock timestamp lands inside whatever correlation window
-    is currently being examined and reads as corroborating evidence.
-    """
-    assert normalize_timestamp(raw) == expected
+def test_a_header_that_clashes_with_the_stages_fields_fails_the_artifact(db, tmp_path):
+    clash = dict(SAFARI, columns=[("visit_timestamp", "Visit Timestamp", "datetime"), ("url", "source_path", None), ("title", "Title", None)])
+    result = ingest_report(db, CTX, write_report(tmp_path / "BK1", clash))
+    assert result.failed == 1 and "clash" in str(result.failures)
+    assert ledger(db) == []
 
 
 # --------------------------------------------------------------------------
-# Bookkeeping-table exclusion
+# Source paths, identity and the derivative's bytes
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("table", "excluded"),
-    [
-        ("_lava_artifacts", True),
-        ("_lava_data", True),
-        ("_LAVA_artifacts", True),  # case-insensitive
-        ("_artifact_search_patterns", True),
-        ("sqlite_sequence", True),
-        ("sqlite_master", True),
-        ("Safari History", False),
-        ("messages", False),
-        ("artifacts", False),  # no leading underscore: a real artifact table
-    ],
-)
-def test_bookkeeping_table_exclusion_policy(table, excluded):
-    assert is_excluded_table(table) is excluded
+def test_absolute_source_paths_are_recorded_relative_to_the_evidence(tmp_path):
+    under_input = dict(SAFARI, source_path=f"{INPUT}/Info.plist")
+    assert read_one(write_report(tmp_path / "a", under_input), SAFARI["name"]).source_path == "Info.plist"
+
+    report = tmp_path / "b"
+    under_copy = dict(SAFARI, source_path=f"{report}/data/private/var/mobile/Library/Safari/History.db")
+    assert read_one(write_report(report, under_copy), SAFARI["name"]).source_path == "private/var/mobile/Library/Safari/History.db"
+
+    elsewhere = dict(SAFARI, source_path="/somewhere/else/History.db")
+    with pytest.raises(ArtifactError, match="outside the input iLEAPP read"):
+        read_one(write_report(tmp_path / "c", elsewhere), SAFARI["name"])
 
 
-def test_ileapp_internal_tables_are_not_ingested_as_evidence(tmp_path):
-    """iLEAPP's search-pattern tables describe the tool, not the device.
+def test_identical_artifacts_are_one_unit_and_changed_ones_are_new(db, tmp_path):
+    first = write_report(tmp_path / "run1", SAFARI)
+    again = write_report(tmp_path / "run2", SAFARI)
+    changed = write_report(tmp_path / "run3", dict(SAFARI, rows=SAFARI["rows"][:1]))
 
-    Ingesting them put rows whose whole payload was a glob pattern into
-    forensic_records, alongside real evidence, in the same table the
-    correlation window queries.
-    """
-    db_file = tmp_path / "artifacts.db"
-    conn = sqlite3.connect(db_file)
-    conn.execute("CREATE TABLE _lava_artifacts (module_name TEXT, artifact_name TEXT)")
-    conn.execute("INSERT INTO _lava_artifacts VALUES ('lastBuild', 'Last Build Info')")
-    conn.execute("CREATE TABLE _artifact_search_patterns (module_name TEXT, regex TEXT)")
-    conn.execute("INSERT INTO _artifact_search_patterns VALUES ('lastBuild', '*/LastBuildInfo.plist')")
-    conn.execute("CREATE TABLE visits (url TEXT, timestamp TEXT)")
-    conn.execute("INSERT INTO visits VALUES ('https://example.com', '2024-01-15T10:30:00Z')")
-    conn.commit()
-    conn.close()
-
-    records = parse_artifact_file(db_file)
-
-    assert len(records) == 1
-    assert records[0]["source_artifact"] == "artifacts:visits"
-    assert all("regex" not in record["data"] for record in records)
+    ingest_report(db, CTX, first)
+    second = ingest_report(db, CTX, again)
+    assert second.failed == 0 and len(stored(db)) == 2, "the same table from a re-run of iLEAPP is a dedup hit"
+    ingest_report(db, CTX, changed)
+    hashes = [h for _, h in ledger(db)]
+    assert len(hashes) == 2 and len(set(hashes)) == 2
 
 
-def test_exclusion_prefixes_are_declared_not_inlined():
-    """Guards against the policy drifting back into an inline LIKE clause."""
-    assert "_lava" in EXCLUDED_TABLE_PREFIXES
-    assert "_artifact" in EXCLUDED_TABLE_PREFIXES
-    assert "sqlite_" in EXCLUDED_TABLE_PREFIXES
+def test_reading_never_changes_the_derivative(tmp_path):
+    report = write_report(tmp_path / "BK1", SAFARI)
+    before = compute_file_hash(report / "_lava_artifacts.db")
+    read_one(report, SAFARI["name"])
+    assert compute_file_hash(report / "_lava_artifacts.db") == before
+    assert sorted(p.name for p in report.iterdir()) == ["_lava_artifacts.db", "_lava_data.lava"], "no journal or lock files"
+
+
+def test_an_artifact_with_no_rows_files_nothing(db, tmp_path):
+    result = ingest_report(db, CTX, write_report(tmp_path / "BK1", dict(SAFARI, rows=[])))
+    assert result.failed == 0 and ledger(db) == []
 
 
 # --------------------------------------------------------------------------
-# Failure surfacing
+# Contract
 # --------------------------------------------------------------------------
-
-
-def test_corrupt_sqlite_raises_instead_of_returning_partial_rows(tmp_path):
-    """A short read must not be indistinguishable from a short file.
-
-    The parser used to catch everything, print, and return whatever it had, so
-    the caller counted a truncated database as a clean success.
-    """
-    db_file = tmp_path / "corrupt.db"
-    db_file.write_bytes(b"SQLite format 3\x00" + b"\x00" * 200)
-
-    with pytest.raises(sqlite3.DatabaseError):
-        parse_artifact_file(db_file)
-
-
-def test_missing_artifact_file_raises(tmp_path):
-    with pytest.raises(OSError):
-        parse_artifact_file(tmp_path / "does_not_exist.csv")
-
-
-def test_missing_output_directory_raises():
-    with pytest.raises(FileNotFoundError):
-        list_supported_artifacts("/nonexistent/ileapp/output")
-
-
-def test_rows_with_missing_timestamps_still_normalize(tmp_path):
-    """A null event_time is valid; it must not drop the row."""
-    csv_file = tmp_path / "mixed.csv"
-    csv_file.write_text(
-        "id,timestamp,data\n"
-        "1,2024-01-15T10:30:00Z,good\n"
-        "2,,missing_timestamp\n"
-        "3,2024-01-15T10:35:00Z,also_good\n"
-    )
-
-    records = parse_artifact_file(csv_file)
-    normalized = [normalize_record(record) for record in records]
-
-    assert len(normalized) == 3
-    assert normalized[1].event_time is None
-
-
-# --------------------------------------------------------------------------
-# Contract conformance
-# --------------------------------------------------------------------------
-
-
-def test_normalized_record_conforms_to_the_shared_envelope(tmp_path):
-    csv_file = tmp_path / "test.csv"
-    csv_file.write_text("id,data,timestamp\n1,sample,2024-01-15T10:30:00Z\n")
-
-    normalized = normalize_record(parse_artifact_file(csv_file)[0])
-
-    assert isinstance(normalized, NormalizedRecord)
-    assert normalized.source_type == SourceType.ILEAPP_RECORD
-    assert normalized.event_time is not None
-    assert normalized.fields["engine"] == "iLEAPP"
-    assert normalized.fields["source_artifact"] == "test"
 
 
 def test_ileapp_record_is_a_declared_source_type():
-    """Guards the enum drift that made this extractor's own rows unwritable.
-
-    The canonical contracts/normalized-record.schema.json omitted
-    `ileapp_record` while both language mirrors declared it, so JSON-schema
-    validation rejected every row this extractor produced.
-    """
-    assert SourceType.ILEAPP_RECORD.value == "ileapp_record"
-
-
-# --------------------------------------------------------------------------
-# Idempotency
-# --------------------------------------------------------------------------
-
-
-def test_file_hash_is_deterministic_and_content_sensitive(tmp_path):
-    test_file = tmp_path / "data.csv"
-    test_file.write_text("id,value\n1,test\n")
-
-    first = compute_file_hash(test_file)
-
-    assert first == compute_file_hash(test_file)
-    assert len(first) == 64
-
-    test_file.write_text("id,value\n1,modified\n")
-    assert compute_file_hash(test_file) != first
-
-
-def test_input_copies_under_data_and_media_are_not_artifacts(tmp_path):
-    """iLEAPP copies the backup's own databases into data/ (and media into
-    media/) of its report directory. Those are evidence, not iLEAPP results,
-    and must never be ingested as ileapp_record facts (VER-16)."""
-    report = tmp_path / "BK1"
-    (report / "_TSV Exports").mkdir(parents=True)
-    (report / "_TSV Exports" / "iTunes Backup Information.tsv").write_text("property\tvalue\nName\tx\n")
-    for copy in ("data/private/var/mobile/Library/SMS/sms.db", "media/IMG_0001.sqlite"):
-        (report / copy).parent.mkdir(parents=True)
-        (report / copy).write_bytes(b"")
-
-    found = [p.relative_to(report).as_posix() for p in list_supported_artifacts(report)]
-    assert found == ["_TSV Exports/iTunes Backup Information.tsv"]
-
-
-def test_byte_order_mark_does_not_hide_the_time_column(tmp_path):
-    """iLEAPP writes its TSV exports with a UTF-8 byte-order mark. Read as plain
-    UTF-8, the first header becomes '\ufeffTimestamp', the time column is not
-    recognized, and every row is filed as untimed."""
-    tsv = tmp_path / "Example.tsv"
-    tsv.write_bytes("\ufeffTimestamp\tURL\n2026-09-27 23:00:30\thttps://example.com/\n".encode("utf-8"))
-
-    records = parse_artifact_file(tsv)
-
-    assert list(records[0]["data"])[0] == "Timestamp"
-    assert records[0]["timestamp"] == "2026-09-27T23:00:30+00:00"
-
-
-def test_reads_only_the_output_directory_it_is_given(tmp_path):
-    """EPOCH-416: the bridge reads one backup's iLEAPP output, never a sibling's
-    or an earlier run's left beside it."""
-    own = tmp_path / "ileapp" / "BK1"
-    foreign = tmp_path / "ileapp" / "BK2"
-    stale = tmp_path / "ileapp" / "iLEAPP_Output_2026-01-01_000000"
-    for directory in (own, foreign, stale):
-        directory.mkdir(parents=True)
-        (directory / f"{directory.name}.csv").write_text("a,b\n1,2\n")
-
-    assert [p.name for p in list_supported_artifacts(own)] == ["BK1.csv"]
+    record = NormalizedRecord(source_type=SourceType.ILEAPP_RECORD, fields={"engine": "iLEAPP"})
+    assert record.source_type.value == "ileapp_record"

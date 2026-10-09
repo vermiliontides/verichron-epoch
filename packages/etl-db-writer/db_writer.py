@@ -66,6 +66,7 @@ only spawns the Python extractors that do).
 from __future__ import annotations
  
 import hashlib
+import re
 import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -243,6 +244,7 @@ def ingest(
     source_type: str,
     payload_kind: str,
     raw_payload: dict[str, Any] | None = None,
+    content_hash: str | None = None,
 ) -> Iterator[IngestUnit]:
     """
     Atomic ingest of one file: ledger row + records + completion flag, or nothing.
@@ -258,6 +260,11 @@ def ingest(
     A unit is identified by (evidence_id, file_hash, source_type,
     parser_version) (R6, R8): the same bytes under two evidence items are two
     units, and a parser_version bump is a new unit beside the old one.
+
+    `file_hash` is the file's sha256, unless the unit is one part of a file:
+    then the caller passes `content_hash`, a sha256 over that part's content,
+    and names the part in `file_path` (e.g. `_lava_artifacts.db#safarihistory`
+    for one iLEAPP artifact table, EPOCH-461).
 
     Guarantees:
 
@@ -284,7 +291,9 @@ def ingest(
         raise ValueError(f"payload_kind must be one of {PAYLOAD_KINDS}, got {payload_kind!r}")
 
     file_path = Path(file_path)
-    file_hash = compute_file_hash(file_path)
+    if content_hash is not None and not re.fullmatch(r"[0-9a-f]{64}", content_hash):
+        raise ValueError(f"content_hash must be a sha256 hex digest, got {content_hash!r}")
+    file_hash = content_hash or compute_file_hash(file_path)
     unit_key = (ctx.evidence_id, file_hash, source_type, parser_version)
 
     try:

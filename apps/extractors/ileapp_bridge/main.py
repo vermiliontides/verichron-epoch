@@ -11,12 +11,8 @@ runs iLEAPP, and never looks anywhere else for output.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-from datetime import datetime
 from pathlib import Path
-
-from typing import Any
 
 from runtime_env import fatal_if_missing_venv
 from db_writer import IngestContext, add_context_args, context_from_args, incomplete_ingests, ingest
@@ -24,152 +20,78 @@ from etl_run import ETLRunResult
 from normalized_record import NormalizedRecord, SourceType
 
 try:
-    from .normalizer import list_supported_artifacts, parse_artifact_file
+    from .lava import Artifact, ArtifactError, ArtifactRows, LavaOutput, check_tables, open_database, read_artifact, read_manifest
 except ImportError:
-    from normalizer import list_supported_artifacts, parse_artifact_file
+    from lava import Artifact, ArtifactError, ArtifactRows, LavaOutput, check_tables, open_database, read_artifact, read_manifest
 
 import psycopg2
 
-
-def _coerce_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    s = str(value).strip()
-    return s if s else None
-
-def _coerce_int(value: Any) -> int | None:
-    if value is None:
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
+#: Keys this stage adds to every record's fields beside the row's own headers.
+METADATA_KEYS = ("engine", "source_artifact", "module", "category", "source_path")
+SAMPLE_ROWS = 10
 
 
-def _coerce_datetime(value: Any) -> datetime | None:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            return datetime.fromisoformat(text.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-    return None
+def build_records(read: ArtifactRows) -> list[NormalizedRecord]:
+    """One record per row: the row under iLEAPP's original headers, plus where
+    it came from. event_time is the artifact's declared time (lava.py)."""
+    artifact = read.artifact
+    metadata = {
+        "engine": "iLEAPP",
+        "source_artifact": artifact.name,
+        "module": artifact.module,
+        "category": artifact.category,
+        "source_path": read.source_path,
+    }
+    clashing = sorted(h for h in artifact.column_map.values() if h in metadata)
+    if clashing:
+        raise ArtifactError(f"{artifact.name}: header(s) {', '.join(clashing)} clash with this stage's own field names")
+    return [
+        NormalizedRecord(source_type=SourceType.ILEAPP_RECORD, event_time=when, fields={**metadata, **row})
+        for row, when in zip(read.rows, read.event_times)
+    ]
 
 
-def _clean_value(value: Any) -> Any:
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if isinstance(value, dict):
-        return {str(k): _clean_value(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_clean_value(item) for item in value]
-    if isinstance(value, Path):
-        return str(value)
-    return str(value)
-
-
-def normalize_record(raw_record: dict) -> NormalizedRecord:
-    data = raw_record.get("data") or {}
-    if not isinstance(data, dict):
-        data = {"value": data}
-
-    fields = {"engine": raw_record.get("engine", "iLEAPP"), "source_artifact": raw_record.get("source_artifact", "unknown")}
-    for key, value in data.items():
-        fields[str(key)] = _clean_value(value)
-
-    record = NormalizedRecord(
-        incident_id=_coerce_str(data.get("incident_id") or data.get("id") or None),
-        source_type=SourceType.ILEAPP_RECORD,
-        event_time=_coerce_datetime(raw_record.get("timestamp") or data.get("timestamp")),
-        bug_type=data.get("bug_type"),
-        process_name=(data.get("process_name") or data.get("name") or None),
-        pid=_coerce_int(data.get("pid")),
-        bundle_id=(data.get("bundle_id") or data.get("bundleID") or None),
-        fields=fields,
-    )
-    return record
-
-
-def _summarize_raw_payload(file_path: Path, records: list[dict]) -> dict[str, Any]:
-    sample = []
-    for item in records[:10]:
-        sample.append(_clean_value(item.get("data", {})))
+def _summary(read: ArtifactRows) -> dict:
+    """The unit's raw payload: what the artifact is and a sample of its rows (R12)."""
+    artifact = read.artifact
     return {
-        "artifact_name": file_path.name,
-        "artifact_path": str(file_path),
-        "format": file_path.suffix.lower().lstrip("."),
-        "record_count": len(records),
-        "sample_records": sample,
+        "artifact": artifact.name,
+        "category": artifact.category,
+        "module": artifact.module,
+        "table": artifact.tablename,
+        "source_path": read.source_path,
+        "record_count": len(read.rows),
+        "event_time_column": artifact.column_map.get(artifact.event_time_column) if artifact.event_time_column else None,
+        "unconvertible_times": read.unconvertible_times,
+        "sample_records": read.rows[:SAMPLE_ROWS],
     }
 
 
-def process_artifact_file(conn, ctx: IngestContext, file_path: Path) -> ETLRunResult:
+def ingest_artifact(conn, lava_conn, ctx: IngestContext, output: LavaOutput, artifact: Artifact) -> ETLRunResult:
+    """One artifact table, one ingest unit (R13): every row commits, or none."""
     result = ETLRunResult()
-    records = parse_artifact_file(file_path)
-    if not records:
-        return result  # nothing in this artifact — empty, not a failure
+    read = read_artifact(lava_conn, output, artifact)
+    for note in read.notes:
+        result.note(note)
+    if not read.rows:
+        return result  # an artifact with no rows: nothing to file, not a failure
+    records = build_records(read)
 
-    summary = _summarize_raw_payload(file_path, records)
-
-    # One transaction per artifact: the ledger row, the raw payload summary and
-    # every normalized record commit together or not at all.
-    #
-    # This used to be ingest_file() (which committed on its own) followed by
-    # normalization and then write_records() (which committed again). The
-    # `if not normalized_records: return` branch below therefore left a
-    # committed ledger row with zero records, and since dedup keyed on that
-    # row's existence, every later run treated the artifact as already ingested
-    # and never retried it. An artifact whose rows were all malformed on one
-    # run was dropped permanently, even after the normalizer was fixed.
     with ingest(
         conn,
         ctx,
-        file_path,
+        Path(f"{output.database}#{artifact.tablename}"),
         source_type=SourceType.ILEAPP_RECORD.value,
-        # A summary with sample rows, not the artifact itself (R12).
         payload_kind="summary",
-        raw_payload=summary,
+        raw_payload=_summary(read),
+        content_hash=read.content_hash,
     ) as unit:
         if unit.already_ingested:
-            # A resumed run still counts an already-complete artifact as
-            # succeeded: it IS successfully in the database, just not
-            # newly-written by this run. Reporting it as neither would make
-            # a resumed run's summary look like it lost data relative to
-            # the first pass — same reasoning as extractors/crash/main.py.
+            # Already complete in the database, from this run or an earlier
+            # one: counted as succeeded, not as newly written.
             result.ok()
             return result
-
-        normalized_records = []
-        for i, record in enumerate(records):
-            try:
-                normalized_records.append(normalize_record(record))
-            except Exception as exc:
-                result.fail(f"{file_path.name}[{i}]", f"malformed record ({exc})")
-
-        if not normalized_records:
-            # Every record in this artifact failed to normalize. Previously
-            # this returned 0 with only a stderr print and no tracked failure
-            # — a file where every row was malformed still exited 0, and the
-            # orchestrator recorded the stage as "succeeded" while quietly
-            # losing that file's data. Now it's counted in result.failed.
-            #
-            # Raising rather than returning matters for a second reason: a
-            # clean exit here would mark the ledger row complete with
-            # record_count = 0, making the skip permanent. The caller catches
-            # this per artifact, so isolation is unchanged.
-            raise ValueError(
-                f"all {len(records)} record(s) failed to normalize; "
-                f"{len(result.failures)} failure(s) recorded"
-            )
-
-        result.ok(unit.write(normalized_records))
-
+        result.ok(unit.write(records))
     return result
 
 
@@ -202,35 +124,31 @@ def _warn_about_incomplete_ingests(conn) -> None:
         print(f"[ileapp]   ... and {len(stranded) - 20} more", file=sys.stderr)
 
 
-def process_output_directory(db_url: str, ctx: IngestContext, output_dir: str) -> ETLRunResult:
-    out_path = Path(output_dir)
-    artifacts = list_supported_artifacts(out_path)
-    if not artifacts:
-        raise FileNotFoundError(f"No supported iLEAPP artifact files were found under {out_path}")
+def ingest_report(conn, ctx: IngestContext, report_dir: str | Path) -> ETLRunResult:
+    """Ingest every artifact in one iLEAPP report. A report that can't be read
+    as a whole fails the stage (LavaError); one artifact that can't be read
+    fails only itself, and the rest are still ingested."""
+    output = read_manifest(report_dir)
+    lava_conn = open_database(output)
+    try:
+        check_tables(lava_conn, output)
+        result = ETLRunResult()
+        for artifact in output.artifacts:
+            try:
+                result = result.merge(ingest_artifact(conn, lava_conn, ctx, output, artifact))
+            except Exception as exc:
+                # Per-artifact isolation (EXTRACTOR_CONTRACT.md #5); the
+                # failed artifact's unit has rolled back.
+                result.fail(artifact.name, exc)
+        return result
+    finally:
+        lava_conn.close()
 
-    result = ETLRunResult()
+
+def process_output_directory(db_url: str, ctx: IngestContext, report_dir: str | Path) -> ETLRunResult:
     conn = psycopg2.connect(db_url)
     try:
-        for artifact in artifacts:
-            try:
-                file_result = process_artifact_file(conn, ctx, artifact)
-            except Exception as exc:
-                # Per-file isolation (EXTRACTOR_CONTRACT.md #5): one
-                # unreadable/unparseable artifact must not abort the rest
-                # of the output directory. Previously unguarded — an
-                # exception from parse_artifact_file or ingest_file
-                # propagated straight out of this loop and stopped every
-                # artifact file after it, not just the bad one.
-                result.fail(artifact.name, exc)
-                continue
-            result = result.merge(file_result)
-
-        # No commit here. Each artifact's ingest() unit already committed its
-        # own transaction, which is the point: one unparseable artifact at the
-        # end of a large output directory must not be able to discard the
-        # artifacts that succeeded before it. The previous conn.commit() on
-        # this line was also decorative, since ingest_file() and
-        # write_records() had each already committed.
+        result = ingest_report(conn, ctx, report_dir)
         _warn_about_incomplete_ingests(conn)
         return result
     finally:

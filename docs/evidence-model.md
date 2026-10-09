@@ -92,7 +92,9 @@ Every fact enters through one door, `ingest()` in `db_writer.py` (R13).
 - **The unit is one source file:** `(evidence, file_hash, source_type,
   parser_version)` (R6). A file's ledger row, payload and records commit together
   or not at all (R13, R14). A failed unit leaves no trace, so the next run
-  retries it.
+  retries it. When the unit is one part of a file, `file_hash` is a sha256 over
+  that part's content instead: each iLEAPP artifact table in
+  `_lava_artifacts.db` is its own unit (EPOCH-461).
 - **Identity comes from context (R16).** The orchestrator passes evidence,
   derivative, run and parser version, and the writer stamps them. A stage never
   supplies them.

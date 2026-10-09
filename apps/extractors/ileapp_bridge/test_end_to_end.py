@@ -24,8 +24,8 @@ from pathlib import Path
 import pytest
 
 from db_writer import IngestContext
-from ileapp_bridge.main import process_artifact_file
-from ileapp_bridge.normalizer import list_supported_artifacts
+from ileapp_bridge.lava import read_manifest
+from ileapp_bridge.main import ingest_report
 from testing.pg_real import BACKENDS, open_db
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -78,12 +78,9 @@ def ileapp_run(tmp_path_factory):
 
 def _ingest_all(db, output) -> int:
     ctx = IngestContext(evidence_id=EVIDENCE_ID, derivative_id=DERIVATIVE_ID, run_id=RUN_ID, parser_version=1)
-    written = 0
-    for artifact in list_supported_artifacts(output):
-        result = process_artifact_file(db, ctx, artifact)
-        assert result.failed == 0, result.failures
-        written += result.succeeded
-    return written
+    result = ingest_report(db, ctx, output)
+    assert result.failed == 0, result.failures
+    return result.succeeded
 
 
 def _stored_records(db) -> list[tuple[dict, object]]:
@@ -104,12 +101,7 @@ def _as_utc(value) -> datetime | None:
 
 def test_ileapp_produces_ingestable_results_from_a_backup(db, ileapp_run):
     output, _ = ileapp_run
-    artifacts = list_supported_artifacts(output)
-    assert artifacts, "iLEAPP produced no artifact the bridge can ingest"
-    for artifact in artifacts:
-        assert artifact.relative_to(output).parts[0] not in ("data", "media"), (
-            f"{artifact} is iLEAPP's copy of the input, not a result"
-        )
+    assert read_manifest(output).artifacts, "iLEAPP's manifest lists no artifact"
     assert _ingest_all(db, output) > 0, "no ileapp_record rows were written"
 
 
@@ -125,12 +117,8 @@ def test_generated_device_activity_reaches_the_records(db, ileapp_run):
     assert any(title in fields.values() for fields in matches)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="EPOCH-461: the bridge does not recognize iLEAPP's 'Visit Timestamp' column; it will read "
-    "iLEAPP's declared datetime column instead. Remove this marker when EPOCH-461 lands.",
-)
 def test_generated_visit_keeps_its_time(db, ileapp_run):
+    """EPOCH-461: the visit's time comes from iLEAPP's declared datetime column."""
     output, generator = ileapp_run
     _ingest_all(db, output)
     url, _, unix_seconds = generator.safari_visits[0]

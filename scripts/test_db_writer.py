@@ -731,3 +731,25 @@ def test_neither_writer_exposes_a_standalone_ledger_write():
     assert "def ingest_file(" not in py
     assert "export async function ingestFile" not in ts
     assert "export function ingestFile" not in ts
+
+
+def test_a_part_of_a_file_is_its_own_unit_by_content_hash(db, artifact):
+    """EPOCH-461: two tables of one database file are two units, keyed by a
+    hash of each table's content rather than the file's bytes."""
+    first, second = "1" * 64, "2" * 64
+    for content_hash in (first, second):
+        with ingest(db, ctx(), f"{artifact}#{content_hash[0]}", source_type="ileapp_record",
+                    payload_kind="none", content_hash=content_hash) as unit:
+            unit.write([record()])
+    cur = db.cursor()
+    cur.execute("SELECT file_hash, file_name FROM ingested_files ORDER BY file_hash")
+    assert cur.fetchall() == [(first, f"{artifact.name}#1"), (second, f"{artifact.name}#2")]
+    with ingest(db, ctx(), f"{artifact}#1", source_type="ileapp_record", payload_kind="none",
+                content_hash=first) as unit:
+        assert unit.already_ingested
+
+
+def test_a_content_hash_must_be_a_sha256(db, artifact):
+    with pytest.raises(ValueError, match="sha256 hex digest"):
+        with ingest(db, ctx(), artifact, source_type="ileapp_record", payload_kind="none", content_hash="abc"):
+            pass

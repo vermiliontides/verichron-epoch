@@ -1,7 +1,7 @@
 # ileapp_bridge stage
 
-Turns [iLEAPP](https://github.com/abrignoni/iLEAPP)'s output files (CSV, TSV,
-SQLite) into `ileapp_record` facts. It reads the **iLEAPP output** derivative
+Turns [iLEAPP](https://github.com/abrignoni/iLEAPP)'s results into
+`ileapp_record` facts. It reads the **iLEAPP output** derivative
 (`"reads": "ileapp_output"`); order 20. It follows the
 [stage contract](../../../packages/contracts/EXTRACTOR_CONTRACT.md).
 
@@ -17,20 +17,44 @@ This stage reads that directory and nothing else.
 
 ## How it works
 
-1. `normalizer.py` finds the CSV, TSV and SQLite outputs in the report and reads
-   their rows, skipping `data/` and `media/`, which hold iLEAPP's copies of the
-   input. It picks each row's time column by name and normalizes it to UTC, or
-   null.
-2. `main.py` maps each row to a record. It uses one `ingest()` unit per output
-   file, with a `summary` payload (file metadata and a sample of rows).
+It reads exactly two files of the report (EPOCH-461): `_lava_artifacts.db`,
+iLEAPP's structured results with one table per artifact, and `_lava_data.lava`,
+the manifest describing each table. The TSV/CSV exports and HTML report are
+presentation formats built from the same data, and `data/` and `media/` are
+iLEAPP's copies of the input, so none of them is read.
+
+1. `lava.py` checks the manifest (schema version 2, `processing_status`
+   `Complete`) and that its artifact tables and the database's are the same
+   set. Either failing stops the stage.
+2. For each artifact it reads the table, read-only and immutable, so the
+   derivative's bytes never change. The row count must equal the manifest's
+   `record_count`, and every column must have a header in its `column_map`;
+   otherwise that artifact fails and the rest continue.
+3. `main.py` files each artifact as one `ingest()` unit, so all of its rows
+   commit or none do. The unit's identity is a sha256 over the table's name,
+   columns, declared types and rows, recorded as
+   `_lava_artifacts.db#<table>`; the same table from a re-run of iLEAPP is a
+   dedup hit. The payload is a `summary`: the artifact, its counts and a sample
+   of rows.
+
+**Time.** iLEAPP's plugins convert their sources' time formats themselves and
+declare the result `datetime`, stored as Unix UTC seconds. `event_time` is the
+artifact's **first declared** `datetime` column. An artifact with none is
+untimed; a value that isn't Unix seconds gives `event_time = null`, keeps its
+raw value in `fields`, and is counted in the stage's notes (R11). No column is
+chosen or parsed by name.
 
 ## `fields`
 
-- `engine`: always `"iLEAPP"`
-- `source_artifact`: the file name, or `<db>:<table>`
-- every column of the source row, with binary values hex-encoded
+- every column of the row, under **iLEAPP's original header** (e.g. `Visit
+  Timestamp`, `URL`), binary values hex-encoded;
+- `engine`: always `"iLEAPP"`;
+- `source_artifact`, `module`, `category`: the artifact as the manifest names it;
+- `source_path`: the input file the artifact was read from, relative to the
+  evidence.
 
-The shape varies with the iLEAPP module that produced it.
+A header equal to one of these five keys fails its artifact rather than being
+overwritten. The shape otherwise varies with the iLEAPP module.
 
 ## Test
 
@@ -42,7 +66,6 @@ uv run pytest apps/extractors/ileapp_bridge
 
 | Issue | Ticket |
 |---|---|
-| Rows that fail to map are dropped while the rest of the file commits; `name` and `id` columns are mis-mapped | EPOCH-417 |
-| SQLite outputs are opened read-write; NUL and NaN values break inserts; rows are held in memory | EPOCH-418 |
-| Numeric timestamps are assumed to be Unix time | EPOCH-419 |
+| NUL characters and NaN values break inserts; an artifact's rows are held in memory | EPOCH-418 |
+| Whether a plausibility window is reported over iLEAPP's declared times | EPOCH-419 |
 | iLEAPP exits 0 even when it terminates early or a plugin fails, so the processor marks its output complete; it should read iLEAPP's per-module status | EPOCH-457 |

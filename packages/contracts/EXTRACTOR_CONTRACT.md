@@ -54,7 +54,9 @@ with ingest(conn, ctx, file_path, source_type=..., payload_kind=..., raw_payload
 
 - **One unit per source file** (R13). Its ledger row, payload and records commit
   together when the `with` block exits cleanly, and roll back on any exception.
-  Don't call `commit()` (R15).
+  Don't call `commit()` (R15). A unit that is one part of a file (a table in a
+  database) passes `content_hash`, a sha256 over that part, and names the part
+  in `file_path` (`<file>#<part>`).
 - **`payload_kind`** declares what `raw_payload` keeps (R12): `full` (the parsed
   source), `summary` (metadata and a sample) or `none`.
 - **Records are built through the language mirror**

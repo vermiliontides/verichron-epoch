@@ -4,6 +4,6 @@
   "runtime": "python",
   "order": 20,
   "reads": "ileapp_output",
-  "parserVersion": 2,
+  "parserVersion": 3,
   "enabled": true
 }

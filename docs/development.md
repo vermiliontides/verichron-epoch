@@ -98,7 +98,7 @@ Useful tools:
 | `uv run python scripts/db_peek.py` | Shows the latest run's stages and records |
 | `uv run python scripts/synthetic_backup_generator.py` | Builds a synthetic backup for testing |
 | `pnpm gen:fake-stix` | Builds a fake STIX2 IOC set from generated indicators |
-| `uv run python scripts/inspect_ileapp_output.py <dir>` | Shows what an iLEAPP output directory contains |
+| `uv run python scripts/inspect_ileapp_output.py <dir>` | Shows what the iLEAPP bridge will read from one report, and what would fail |
 
 ## Testing
 

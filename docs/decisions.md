@@ -107,6 +107,7 @@ never silently deleted.
 | External processes are tested through stub executables and servers (stub mvt-ios, sqlite3, Ollama), not in-process mocks | Tests cover the real process boundary, including argv and environment | Audits, 2026-10-08 |
 | Development data is disposable; there are no backfills or legacy-compatibility paths, and code fails fast | The process is being made tight before real data exists | Team decision, 2026-10-08 |
 | Automated pull request review is CodeRabbit, configured in `.coderabbit.yaml`: it reviews PRs to `main` and `dev`, grounded in `AGENTS.md`, `docs/rules.md` and this page, and skips the iLEAPP submodule and lockfiles | Free for public repositories. Copilot's free plan cannot review pull requests (Copilot Pro is required), and Greptile's free plan reached its monthly limit | Team decision, 2026-10-09 |
+| *Amended 2026-10-09:* CodeRabbit's Linear integration is disabled (`knowledge_base.linear.usage: disabled`) and is not connected. Reviews get ticket context from the PR description | The Linear workspace is private and the repository public, so ticket content must not reach public review comments. The integration also requires a paid CodeRabbit plan, and its only documented connection is OAuth to the whole workspace | Team decision, 2026-10-09 |
 
 ## App
 

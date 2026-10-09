@@ -146,9 +146,20 @@ def read_manifest(report_dir: str | Path) -> LavaOutput:
 def open_database(output: LavaOutput) -> sqlite3.Connection:
     """Open `_lava_artifacts.db` read-only and immutable: SQLite neither
     writes, locks nor creates journal files, so the derivative's bytes
-    never change by being read."""
+    never change by being read.
+
+    Immutable mode also ignores a `-wal` or `-journal` beside the database,
+    which would hold rows or changes not yet in it. iLEAPP uses neither WAL
+    nor an open transaction at exit, so one present means the database is
+    not in its final state, and it is refused."""
     if not output.database.is_file():
         raise LavaError(f"{output.database} does not exist")
+    pending = [s for s in ("-wal", "-journal") if Path(f"{output.database}{s}").exists()]
+    if pending:
+        raise LavaError(
+            f"{output.database} has {' and '.join(DATABASE + s for s in pending)} beside it; "
+            "the database is not in its final state"
+        )
     return sqlite3.connect(f"{output.database.resolve().as_uri()}?mode=ro&immutable=1", uri=True)
 
 

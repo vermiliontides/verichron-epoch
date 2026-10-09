@@ -289,6 +289,14 @@ def test_reading_never_changes_the_derivative(tmp_path):
     assert sorted(p.name for p in report.iterdir()) == ["_lava_artifacts.db", "_lava_data.lava"], "no journal or lock files"
 
 
+@pytest.mark.parametrize("suffix", ["-wal", "-journal"])
+def test_a_database_with_pending_changes_beside_it_is_refused(tmp_path, suffix):
+    report = write_report(tmp_path / "BK1", SAFARI)
+    (report / f"_lava_artifacts.db{suffix}").write_bytes(b"pending")
+    with pytest.raises(LavaError, match="not in its final state"):
+        open_database(read_manifest(report))
+
+
 def test_an_artifact_with_no_rows_files_nothing(db, tmp_path):
     result = ingest_report(db, CTX, write_report(tmp_path / "BK1", dict(SAFARI, rows=[])))
     assert result.failed == 0 and ledger(db) == []

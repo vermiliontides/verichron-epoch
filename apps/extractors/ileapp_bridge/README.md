@@ -28,13 +28,15 @@ iLEAPP's copies of the input, so none of them is read.
    set. Either failing stops the stage.
 2. For each artifact it reads the table, read-only and immutable, so the
    derivative's bytes never change. The row count must equal the manifest's
-   `record_count`, and every column must have a header in its `column_map`;
-   otherwise that artifact fails and the rest continue.
+   `record_count`, and every column must have its own header in its
+   `column_map`; otherwise that artifact fails and the rest continue.
 3. `main.py` files each artifact as one `ingest()` unit, so all of its rows
-   commit or none do. The unit's identity is a sha256 over the table's name,
-   columns, declared types and rows, recorded as
-   `_lava_artifacts.db#<table>`; the same table from a re-run of iLEAPP is a
-   dedup hit. The payload is a `summary`: the artifact, its counts and a sample
+   commit or none do. The unit's identity is a sha256 over everything its
+   records carry: the artifact's name, module, category and source path, its
+   columns and headers in order, its declared types in declared order (the
+   first `datetime` is `event_time`) and its rows. It is recorded as
+   `_lava_artifacts.db#<table>`. An unchanged artifact from a re-run of
+   iLEAPP is a dedup hit; any change is a new unit. The payload is a `summary`: the artifact, its counts and a sample
    of rows.
 
 **Time.** iLEAPP's plugins convert their sources' time formats themselves and

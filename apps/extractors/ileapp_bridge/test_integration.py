@@ -281,6 +281,59 @@ def test_identical_artifacts_are_one_unit_and_changed_ones_are_new(db, tmp_path)
     assert len(hashes) == 2 and len(set(hashes)) == 2
 
 
+def test_changed_metadata_or_time_declarations_are_new_content(db, tmp_path):
+    """A report that renames an artifact, corrects its source path or reorders
+    its declared datetime columns is new content: its records must be
+    written, not skipped as already ingested."""
+    two_times = dict(
+        SAFARI,
+        columns=[("visit_timestamp", "Visit Timestamp", "datetime"), ("url", "URL", None), ("loaded", "Loaded", "datetime")],
+        rows=[(VISIT, "https://example.org/", VISIT + 5)],
+    )
+    ingest_report(db, CTX, write_report(tmp_path / "base", two_times))
+    ingest_report(db, CTX, write_report(tmp_path / "renamed", dict(two_times, name="Safari - Visits")))
+    ingest_report(db, CTX, write_report(tmp_path / "moved", dict(two_times, source_path="private/var/History.db")))
+    reordered = dict(two_times, columns=[two_times["columns"][2], two_times["columns"][1], two_times["columns"][0]],
+                     rows=[(VISIT + 5, "https://example.org/", VISIT)])
+    ingest_report(db, CTX, write_report(tmp_path / "reordered", reordered))
+
+    assert len({h for _, h in ledger(db)}) == 4, "each change is its own unit"
+    records = stored(db)
+    assert {f["source_artifact"] for f, _ in records} == {"Safari Browser - History", "Safari - Visits"}
+    assert {f["source_path"] for f, _ in records} >= {"private/var/History.db"}
+    assert records[-1][1] == datetime.fromtimestamp(VISIT + 5, timezone.utc), "the newly first datetime is event_time"
+
+
+def test_reversed_datetime_declarations_alone_are_new_content(db, tmp_path):
+    """The same table, with only the manifest's order of declared datetime
+    columns reversed: event_time changes, so the unit must too."""
+    two_times = dict(
+        SAFARI,
+        columns=[("visit_timestamp", "Visit Timestamp", "datetime"), ("url", "URL", None), ("loaded", "Loaded", "datetime")],
+        rows=[(VISIT, "https://example.org/", VISIT + 5)],
+    )
+    first = write_report(tmp_path / "first", two_times)
+    second = write_report(tmp_path / "second", two_times)
+    manifest = json.loads((second / "_lava_data.lava").read_text())
+    entry = manifest["artifacts"]["Safari Browser"][0]
+    entry["object_columns"].reverse()
+    (second / "_lava_data.lava").write_text(json.dumps(manifest))
+
+    ingest_report(db, CTX, first)
+    ingest_report(db, CTX, second)
+    assert len(ledger(db)) == 2
+    assert [when for _, when in stored(db)] == [
+        datetime.fromtimestamp(VISIT, timezone.utc),
+        datetime.fromtimestamp(VISIT + 5, timezone.utc),
+    ]
+
+
+def test_two_columns_with_one_header_fail_the_artifact(tmp_path):
+    dup = dict(SAFARI, columns=[("visit_timestamp", "Visit Timestamp", "datetime"), ("url", "URL", None), ("title", "URL", None)])
+    with pytest.raises(ArtifactError, match="more than one column has the header"):
+        read_one(write_report(tmp_path / "BK1", dup), SAFARI["name"])
+
+
 def test_reading_never_changes_the_derivative(tmp_path):
     report = write_report(tmp_path / "BK1", SAFARI)
     before = compute_file_hash(report / "_lava_artifacts.db")

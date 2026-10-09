@@ -30,6 +30,9 @@ DATABASE = "_lava_artifacts.db"
 SCHEMA_VERSION = 2
 #: Tables whose names start with this are iLEAPP's bookkeeping, not artifacts.
 BOOKKEEPING_PREFIX = "_"
+#: Keys the stage adds to every record's fields beside the row's own headers;
+#: a header with one of these names would be overwritten, so it is refused.
+METADATA_KEYS = ("engine", "source_artifact", "module", "category", "source_path")
 
 
 class LavaError(Exception):
@@ -196,16 +199,33 @@ def read_artifact(conn: sqlite3.Connection, output: LavaOutput, artifact: Artifa
     if unmapped:
         raise ArtifactError(f"{artifact.name}: column(s) {', '.join(unmapped)} have no header in the manifest")
     headers = [artifact.column_map[c] for c in columns]
+    repeated = sorted({h for h in headers if headers.count(h) > 1})
+    if repeated:
+        # Rows are keyed by header, so a repeated one would silently keep
+        # only the last column's value.
+        raise ArtifactError(f"{artifact.name}: more than one column has the header(s) {', '.join(repeated)}")
+    clashing = sorted(h for h in headers if h in METADATA_KEYS)
+    if clashing:
+        raise ArtifactError(f"{artifact.name}: header(s) {', '.join(clashing)} clash with this stage's own field names")
+    source_path = evidence_relative(artifact, output)
     time_index = columns.index(artifact.event_time_column) if artifact.event_time_column in columns else None
     if artifact.event_time_column and time_index is None:
         raise ArtifactError(f"{artifact.name}: declared datetime column {artifact.event_time_column} is not in the table")
 
+    # The unit's identity covers everything its records carry: the artifact's
+    # metadata, its columns and headers in order, its declared types in order
+    # (the first datetime is event_time), and every row. A report that
+    # changes any of these is new content, not a dedup hit.
     digest = hashlib.sha256()
     digest.update(_canonical({
         "table": artifact.tablename,
-        "columns": columns,
-        "column_map": artifact.column_map,
-        "object_columns": artifact.object_columns,
+        "name": artifact.name,
+        "module": artifact.module,
+        "category": artifact.category,
+        "source_path": source_path,
+        "columns": [[c, artifact.column_map[c]] for c in columns],
+        "object_columns": [[c, t] for c, t in artifact.object_columns.items()],
+        "event_time_column": artifact.event_time_column,
     }))
     rows: list[dict[str, Any]] = []
     event_times: list[datetime | None] = []
@@ -238,7 +258,7 @@ def read_artifact(conn: sqlite3.Connection, output: LavaOutput, artifact: Artifa
         rows=rows,
         event_times=event_times,
         content_hash=digest.hexdigest(),
-        source_path=evidence_relative(artifact, output),
+        source_path=source_path,
         unconvertible_times=unconvertible,
         notes=notes,
     )

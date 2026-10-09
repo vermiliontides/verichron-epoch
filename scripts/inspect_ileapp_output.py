@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -34,12 +35,21 @@ def main() -> int:
     try:
         output = read_manifest(args.report_dir)
         conn = open_database(output)
-        check_tables(conn, output)
     except LavaError as exc:
         print(f"the stage would fail: {exc}")
         return 1
+    try:
+        return report(conn, output, args.report_dir)
+    except LavaError as exc:
+        print(f"the stage would fail: {exc}")
+        return 1
+    finally:
+        conn.close()
 
-    print(f"{len(output.artifacts)} artifact(s) in {args.report_dir}\n")
+
+def report(conn: sqlite3.Connection, output, report_dir: Path) -> int:
+    check_tables(conn, output)
+    print(f"{len(output.artifacts)} artifact(s) in {report_dir}\n")
     failed = 0
     for artifact in output.artifacts:
         try:
@@ -47,6 +57,11 @@ def main() -> int:
         except ArtifactError as exc:
             failed += 1
             print(f"FAIL  {exc}")
+            continue
+        except sqlite3.Error as exc:
+            # As in the stage, one unreadable artifact fails only itself.
+            failed += 1
+            print(f"FAIL  {artifact.name}: {exc}")
             continue
         column = artifact.column_map.get(artifact.event_time_column) if artifact.event_time_column else None
         timed = sum(1 for t in read.event_times if t is not None)
@@ -56,7 +71,6 @@ def main() -> int:
         )
         for note in read.notes:
             print(f"      note: {note}")
-    conn.close()
     print(f"\n{failed} artifact(s) would fail")
     return 1 if failed else 0
 

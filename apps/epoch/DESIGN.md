@@ -168,3 +168,9 @@ content edge or the title (EPOCH-464).
   remaining height (`flex-1 min-h-0`). A view with a virtualized table passes
   `overflow-hidden` and gives the table `flex-1 min-h-0`, so the table's
   scrollport is bounded by the layout, never by a `calc(100vh - …)` constant.
+- **No data:** every state with nothing to show (nothing selected, still
+  loading, nothing found, evidence not registered) is an `EmptyState`
+  (`components/ui/EmptyState.tsx`): centered in the space it fills, a muted
+  icon (or a spinner while loading), the state in one `text-data` line, and an
+  optional detail. A view never shows a bare line of text for these. Errors
+  are not empty states: they use the flag banner (§1).

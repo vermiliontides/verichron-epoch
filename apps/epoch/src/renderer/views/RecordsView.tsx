@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
+import { Database, FileQuestion, Filter, MousePointerClick } from 'lucide-react';
 import type { ForensicRecordRow } from '@verichron/etl-db-reader';
 import { Badge } from '../components/ui/Badge';
 import { DataTable, type DataTableColumn } from '../components/ui/DataTable';
 import { ViewLayout } from '../components/layout/ViewLayout';
+import { EmptyState } from '../components/ui/EmptyState';
 
 interface RecordsViewProps {
   selectedRun: boolean;
@@ -99,13 +101,15 @@ export function RecordsView({
       )}
 
       {!selectedRun ? (
-        <p className="text-muted-foreground text-data">Select an investigation first.</p>
+        <EmptyState
+          icon={MousePointerClick}
+          title="No investigation selected"
+          detail="Select an investigation in Investigations to see its forensic records."
+        />
       ) : !evidenceRegistered ? (
-        <p className="text-muted-foreground text-data">
-          This investigation's evidence isn't registered yet, so its facts haven't been read. This is not the same as finding nothing.
-        </p>
+        <EmptyState icon={FileQuestion} title="Evidence not registered" detail="This investigation's evidence isn't registered yet, so its facts haven't been read. This is not the same as finding nothing." />
       ) : records.length === 0 && !sourceTypeFilter ? (
-        <p className="text-muted-foreground text-data">No records for this run.</p>
+        <EmptyState icon={Database} title="No records" detail="No forensic records were found for this investigation." />
       ) : (
         <>
           <div className="flex gap-2 mb-5 shrink-0">
@@ -142,7 +146,7 @@ export function RecordsView({
             onRowClick={(row) => setExpandedId(expandedId === String(row.id) ? null : String(row.id))}
             estimateRowHeight={44}
             className="flex-1 min-h-0 rounded-lg shadow-elevation-1"
-            emptyState={<p className="text-muted-foreground text-data">No records match this filter.</p>}
+            emptyState={<EmptyState icon={Filter} title="No records match this filter" />}
             renderExpanded={(row) => (
               <pre className="text-data font-mono text-muted-foreground whitespace-pre-wrap break-all">
                 {JSON.stringify(row.fields, null, 2)}

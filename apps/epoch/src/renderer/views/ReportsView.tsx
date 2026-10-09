@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { FileQuestion, FileText, MousePointerClick } from 'lucide-react';
 import type { PipelineRunRow } from '@verichron/etl-db-reader';
 import type { ReportResult } from '../../shared/types/window';
 import { Button } from '../components/ui/Button';
 import { reportsApi } from '../api/reports';
 import { ViewLayout } from '../components/layout/ViewLayout';
+import { EmptyState } from '../components/ui/EmptyState';
  
 interface ReportsViewProps {
   selectedRun: PipelineRunRow | null;
@@ -45,25 +47,26 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
   return (
     <ViewLayout title="Reports">
       {!selectedRun ? (
-        <p className="text-muted-foreground text-sm">Select an investigation first.</p>
+        <EmptyState
+          icon={MousePointerClick}
+          title="No investigation selected"
+          detail="Select an investigation in Investigations to see its report."
+        />
       ) : reportLoadError ? (
         // §1 state-color banner rule: shadow-elevation-1 + state-color border together, never border alone.
         <div className="text-flag bg-flag/10 shadow-elevation-1 border border-flag/30 rounded-lg p-4 text-data">
           Error: {reportLoadError}
         </div>
       ) : reportLoading || !report ? (
-        <p className="text-muted-foreground text-sm">Loading...</p>
+        <EmptyState loading title="Loading the report…" />
       ) : report.status === 'no-results-path' ? (
-        <div className="bg-surface shadow-elevation-1 rounded-lg p-5 text-data text-muted-foreground">
-          This run has no registered evidence location (it predates evidence registration), so its
-          report can't be located.
-        </div>
+        <EmptyState
+          icon={FileQuestion}
+          title="Report location unknown"
+          detail="This run has no registered evidence location (it predates evidence registration), so its report can't be located."
+        />
       ) : report.status === 'not-found' ? (
-        <div className="bg-surface shadow-elevation-1 rounded-lg p-5 text-data text-muted-foreground">
-          No report generated yet. Expected at:
-          <br />
-          <span className="font-mono text-data">{report.path}</span>
-        </div>
+        <EmptyState icon={FileText} title="No report generated yet" detail={<>Expected at {report.path}</>} />
       ) : (
         <div>
           <div className="flex items-center justify-between mb-4">

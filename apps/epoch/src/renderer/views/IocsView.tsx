@@ -175,7 +175,7 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun }) => {
                     {contextError ? (
                       <p className="text-data text-flag font-mono">Error: {contextError}</p>
                     ) : correlatedLoading === rec.id ? (
-                      <p className="text-data text-muted-foreground">Loading...</p>
+                      <p className="text-data text-muted-foreground">Loading…</p>
                     ) : !contextRows || contextRows.length === 0 ? (
                       <p className="text-data text-muted-foreground">No other events in this window.</p>
                     ) : (

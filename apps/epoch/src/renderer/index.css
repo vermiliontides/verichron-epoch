@@ -51,6 +51,11 @@
   --text-display--line-height: 1.75rem;
   --text-display--font-weight: 600;
 
+  /* EPOCH-464: section and card titles, between the page title and content. */
+  --text-heading: 1rem;
+  --text-heading--line-height: 1.5rem;
+  --text-heading--font-weight: 600;
+
   --text-label: 0.75rem;
   --text-label--line-height: 1rem;
   --text-label--font-weight: 500;

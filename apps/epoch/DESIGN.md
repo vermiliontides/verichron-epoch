@@ -40,7 +40,7 @@ for no reason other than having been written at different times. Fixed
 in that file (see §5); the rule going forward is that every state-color
 banner gets both, uniformly.
 
-## 2. Type scale — three tiers, by role not by size
+## 2. Type scale — four tiers, by role not by size
 
 Each tier is a **composite** Tailwind v4 utility (`text-display`,
 `text-label`, `text-data`) that carries font-size, line-height, and
@@ -50,6 +50,7 @@ to approximate one of these; use the named class.
 | Class | Size / weight | Use for |
 |---|---|---|
 | `text-display` | 1.25rem / 600 | The one heading per view/route — page titles. Every top-level section header in the sidebar-navigated views (`WorkspaceView`, `RunsView`, `IocsView`, `ReportsView`, `RecordsView`) is a page title in this sense, even though some render inside a shared shell — there is exactly one per view. |
+| `text-heading` | 1rem / 600 | Section and card titles (`h2`/`h3`) inside a view: the option cards on New Investigation, "Backups Found", a dialog's title. Added 2026-10-09 (EPOCH-464); see the amendment below the table. |
 | `text-label` | 0.75rem / 500 | UI chrome: form labels, tab/filter labels, panel sub-headings (e.g. a card's own `<h3>` inside a page that already has its `text-display` title), uppercase eyebrow text, **and button text** (see EPOCH-203 / `Button.tsx` — a button's label is UI chrome, not content). |
 | `text-data` | 0.8125rem / 400 | Actual content — table cells, timestamps, IDs, badge-adjacent values, log lines. This is the default for anything that isn't a heading or a form label. |
 
@@ -61,6 +62,14 @@ for it elsewhere; use `text-label` or `text-data` instead.
 We are explicitly **not** adding a 4th tier right now. If a real gap
 shows up during 202/203/204/301, raise it as its own ticket rather than
 inventing an ad hoc size in place.
+
+*Amended 2026-10-09 (EPOCH-464):* the gap showed up. With only
+`text-display` (20px) and `text-label` (12px), a card title had no correct
+size, so New Investigation improvised three (16px semibold, 12px label, 14px
+semibold) and titles ended up smaller than their own descriptions.
+`text-heading` (1rem / 600) is the fourth tier, for section and card titles
+only. Content stays `text-data`; labels stay `text-label`. In order of size:
+`text-display` > `text-heading` > `text-data` > `text-label`.
 
 ## 3. Spacing scale — 4px grid, with one named exception
 
@@ -174,3 +183,27 @@ content edge or the title (EPOCH-464).
   icon (or a spinner while loading), the state in one `text-data` line, and an
   optional detail. A view never shows a bare line of text for these. Errors
   are not empty states: they use the flag banner (§1).
+
+## 7. Capitalization and wording — names are Title Case, sentences are not
+
+Decided 2026-10-09 (EPOCH-464), following the common desktop convention
+(Apple Human Interface Guidelines, Microsoft Writing Style Guide).
+
+- **Title Case for names:** page titles, sidebar items, section and card
+  titles, dialog titles and buttons ("New Investigation", "Backups Found",
+  "Pull Encrypted Backup"). Articles, coordinating conjunctions and
+  prepositions of four letters or fewer stay lowercase unless first or last
+  ("Import from iPhone", "Install with Homebrew").
+- **Sentence case for sentences:** descriptions, status lines, empty-state
+  lines, banners and their headings, errors, field labels, tooltips and
+  placeholders ("No investigation selected", "Setup failed", "Backup
+  encryption password (required)").
+- **A page's title is its sidebar label**, word for word, so the user always
+  knows where they are.
+- **Product names keep their own casing:** iPhone, iOS, iLEAPP, mvt-ios.
+- **Ellipsis:** the single character `…`, never three periods, for
+  in-progress states ("Checking for the required tool…").
+- **One term per concept:** the user-facing unit of work is an
+  *investigation*; "run" is a pipeline term and doesn't appear in the UI's
+  names.
+

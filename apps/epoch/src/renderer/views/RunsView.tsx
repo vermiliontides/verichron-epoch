@@ -176,7 +176,7 @@ export function RunsView({
   const renderExpanded = (row: PipelineRunRow) => {
     // Only render the detailed stages for the actively selected run to prevent over-fetching
     if (row.run_id !== selectedRun?.run_id) {
-      return <div className="p-6 text-data text-muted-foreground">Loading extraction details...</div>;
+      return <div className="p-6 text-data text-muted-foreground">Loading extraction details…</div>;
     }
 
     // The canonical predicate, not a local rule: a run whose process was killed
@@ -188,9 +188,9 @@ export function RunsView({
         <div className="flex items-center justify-between">
           <h3 className="text-label uppercase tracking-wider text-muted-foreground">Analysis Diagnostics</h3>
           {canRetry && (
-            <Button variant="outline" size="sm" onClick={handleRetry} loading={retrying} loadingText="Retrying...">
+            <Button variant="outline" size="sm" onClick={handleRetry} loading={retrying} loadingText="Retrying…">
               <RefreshCw size="0.875rem" />
-              Retry incomplete run
+              Retry Incomplete Run
             </Button>
           )}
         </div>
@@ -273,7 +273,7 @@ export function RunsView({
         <EmptyState
           icon={Inbox}
           title="No investigations yet"
-          detail="Import an iPhone backup or connect a device from New Run to begin."
+          detail="Import an iPhone backup or connect a device from New Investigation to begin."
         />
       ) : (
         <div className="flex-1 overflow-hidden rounded-lg shadow-elevation-1 bg-surface border border-border/40">

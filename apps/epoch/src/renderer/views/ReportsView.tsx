@@ -75,7 +75,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ selectedRun }) => {
                 control -- routed through the shared elevation-based Button primitive
                 instead, which also brings text-label for free (§2). */}
             <Button variant="outline" size="sm" onClick={openReportFile}>
-              Open in default app
+              Open in Default App
             </Button>
           </div>
           {/* §1: was bg-surface + flat border -- panel containers use elevation, not

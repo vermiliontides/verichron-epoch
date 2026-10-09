@@ -11,7 +11,7 @@ interface SidebarProps {
 
 export function Sidebar({ active, onSelect, dbStatus }: SidebarProps) {
   const navItems = [
-    { id: 'workspace', label: 'New Run', icon: PlusCircle },
+    { id: 'workspace', label: 'New Investigation', icon: PlusCircle },
     { id: 'runs', label: 'Investigations', icon: Activity },
     { id: 'records', label: 'Forensic Records', icon: Database },
     { id: 'iocs', label: 'Indicator Matches', icon: Target },
@@ -34,7 +34,7 @@ export function Sidebar({ active, onSelect, dbStatus }: SidebarProps) {
               : 'bg-muted-foreground animate-pulse'
           }`} />
           <span className="text-2xs font-mono text-muted-foreground font-medium tracking-wider">
-            {dbStatus === 'connected' ? 'DB CONNECTED' : dbStatus === 'error' ? 'DB ERROR' : 'CONNECTING...'}
+            {dbStatus === 'connected' ? 'DB CONNECTED' : dbStatus === 'error' ? 'DB ERROR' : 'CONNECTING…'}
           </span>
         </div>
       </div>

@@ -34,7 +34,7 @@ export function BackupRow({
 
   return (
     <label
-      className={`flex items-center gap-3.5 px-4 py-3 text-sm cursor-pointer select-none transition-colors ${
+      className={`flex items-center gap-3.5 px-4 py-3 text-data cursor-pointer select-none transition-colors ${
         selected ? 'bg-surface-raised/40' : 'hover:bg-surface-raised/30'
       } ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
     >
@@ -73,7 +73,7 @@ function LiveBackupRow({
 
   if (progress.overall === 'running') {
     icon = <Loader2 size="1.125rem" className="text-flag shrink-0 animate-spin" />;
-    statusText = awaitingPassword ? 'Waiting for password' : runningStage ? `${STAGE_LABELS[runningStage]}...` : 'Working...';
+    statusText = awaitingPassword ? 'Waiting for password' : runningStage ? `${STAGE_LABELS[runningStage]}…` : 'Working…';
     statusClass = 'text-flag';
   } else if (progress.overall === 'done') {
     icon = <CheckCircle2 size="1.125rem" className="text-accent shrink-0" />;
@@ -89,7 +89,7 @@ function LiveBackupRow({
 
   return (
     <div
-      className={`flex items-center gap-3.5 px-4 py-3 text-sm transition-colors ${
+      className={`flex items-center gap-3.5 px-4 py-3 text-data transition-colors ${
         progress.overall === 'running'
           ? 'bg-flag/5'
           : progress.overall === 'done'
@@ -104,7 +104,7 @@ function LiveBackupRow({
         <div className="font-mono text-foreground truncate font-medium" title={backup.path}>
           {backup.label}
         </div>
-        <div className={`text-xs truncate mt-0.5 ${statusClass}`}>{statusText}</div>
+        <div className={`text-label truncate mt-0.5 ${statusClass}`}>{statusText}</div>
       </div>
     </div>
   );

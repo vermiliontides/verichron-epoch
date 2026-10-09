@@ -320,7 +320,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
   return (
     <ViewLayout
-      title="Start an investigation"
+      title="New Investigation"
       description="Import an iPhone backup or connect a device to examine evidence for suspicious activity."
       width="readable"
       className="gap-7"
@@ -335,17 +335,17 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
             <div className="bg-surface-raised p-4 rounded-full shadow-elevation-1 mb-4 group-hover:scale-105 group-hover:shadow-elevation-2 transition-all">
               <FolderOpen size="2rem" className="text-muted-foreground group-hover:text-accent transition-colors" />
             </div>
-            <h3 className="font-display text-label text-foreground mb-1">Import an iPhone backup</h3>
-            <p className="text-sm text-muted-foreground mb-5 text-center max-w-md leading-relaxed">
+            <h2 className="font-display text-heading text-foreground mb-1">Use an Existing Backup</h2>
+            <p className="text-data text-muted-foreground mb-5 text-center max-w-md">
               Choose the folder containing your iPhone backups. Epoch will identify compatible backups automatically.
             </p>
             {/* Decorative -- the parent div (not this element) owns the click handler and
                 group-hover state, so this stays a plain styled button rather than <Button>. */}
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 bg-surface-raised shadow-elevation-1 group-hover:shadow-elevation-2 group-hover:bg-accent group-hover:text-background text-foreground font-semibold px-4 py-2 rounded-lg text-sm transition-all pointer-events-none"
+              className="inline-flex items-center gap-1.5 bg-surface-raised shadow-elevation-1 group-hover:shadow-elevation-2 group-hover:bg-accent group-hover:text-background text-foreground px-4 py-2 rounded-lg text-label transition-all pointer-events-none"
             >
-              <FolderOpen size="1rem" /> Choose backup folder
+              <FolderOpen size="1rem" /> Choose Backup Folder
             </button>
           </div>
         </>
@@ -357,7 +357,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-label text-muted-foreground uppercase tracking-wider">Evidence location</p>
-              <p className="text-sm font-mono text-foreground font-medium truncate" title={selectedPath}>
+              <p className="text-data font-mono text-foreground truncate" title={selectedPath}>
                 {selectedPath}
               </p>
             </div>
@@ -369,28 +369,28 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
             )}
           </div>
 
-          <div className="bg-surface shadow-elevation-2 rounded-xl p-6">
+          <div className="bg-surface shadow-elevation-1 rounded-xl p-6">
             <div className="flex items-center justify-between mb-5">
-              <p className="text-sm font-semibold text-foreground">
-                Backups found{backups.length > 0 ? ` (${backups.length})` : ''}
-              </p>
+              <h2 className="font-display text-heading text-foreground">
+                Backups Found{backups.length > 0 ? ` (${backups.length})` : ''}
+              </h2>
               <div className="flex items-center gap-3">
                 {backups.length > 1 && !busy && (
-                  <div className="flex items-center gap-2 text-xs bg-surface-raised shadow-elevation-1 rounded-lg p-1">
+                  <div className="flex items-center gap-2 text-label bg-surface-raised shadow-elevation-1 rounded-lg p-1">
                     {/* Segmented pill toggle -- a compound control, not a plain button;
                         left on Button.tsx's deferred list rather than forced into `ghost`. */}
                     <button
                       onClick={selectAllBackups}
                       className="px-3 py-1 rounded-md text-foreground/80 hover:text-foreground hover:bg-surface transition-colors cursor-pointer font-medium"
                     >
-                      Select all
+                      Select All
                     </button>
                     <span className="text-border">|</span>
                     <button
                       onClick={selectNoBackups}
                       className="px-3 py-1 rounded-md text-foreground/80 hover:text-foreground hover:bg-surface transition-colors cursor-pointer font-medium"
                     >
-                      Select none
+                      Select None
                     </button>
                   </div>
                 )}
@@ -398,23 +398,23 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                   onClick={handleStartPipeline}
                   disabled={discoveringBackups || selectedLabels.size === 0}
                   loading={busy}
-                  loadingText={isStarting ? 'Starting...' : 'Running...'}
+                  loadingText={isStarting ? 'Starting…' : 'Running…'}
                   className="shrink-0"
                 >
                   <Play size="1rem" fill="currentColor" />
-                  Prepare evidence{selectedLabels.size > 0 ? ` (${selectedLabels.size})` : ''}
+                  Prepare Evidence{selectedLabels.size > 0 ? ` (${selectedLabels.size})` : ''}
                 </Button>
               </div>
             </div>
 
-            {discoveringBackups && <p className="text-sm text-muted-foreground">Looking for compatible iPhone backups...</p>}
+            {discoveringBackups && <p className="text-data text-muted-foreground">Looking for compatible iPhone backups…</p>}
 
             {!discoveringBackups && discoverError && (
-              <p className="text-sm text-danger">Could not scan directory: {discoverError}</p>
+              <p className="text-data text-danger">Could not scan directory: {discoverError}</p>
             )}
 
             {!discoveringBackups && !discoverError && backups.length === 0 && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-data text-muted-foreground">
                 No compatible iPhone backups were found here. Choose the folder where your device backups are stored.
               </p>
             )}
@@ -449,10 +449,9 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                 size="sm"
                 onClick={() => setShowOptions((v) => !v)}
                 disabled={busy}
-                className="uppercase tracking-wider font-semibold"
               >
                 {showOptions ? <ChevronDown size="0.9rem" /> : <ChevronRight size="0.9rem" />}
-                Advanced settings
+                Advanced Settings
               </Button>
               {showOptions && (
                 <div className="mt-4 flex flex-col gap-4 p-4 rounded-xl bg-surface/30 shadow-elevation-1">
@@ -466,10 +465,10 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                       onChange={(e) => setWorkspace(e.target.value)}
                       disabled={busy}
                       placeholder="Use the default workspace"
-                      className="bg-background/90 border border-border/80 focus:border-accent focus:outline-none rounded-lg px-4 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground/60 disabled:opacity-50 transition-colors"
+                      className="bg-background/90 border border-border/80 focus:border-accent focus:outline-none rounded-lg px-4 py-2 text-data font-mono text-foreground placeholder:text-muted-foreground/60 disabled:opacity-50 transition-colors"
                     />
                   </label>
-                  <label className="flex items-center gap-3 text-sm cursor-pointer select-none">
+                  <label className="flex items-center gap-3 text-data cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={forceDecrypt}
@@ -479,7 +478,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                     />
                     <span className="text-foreground/90">Process backups again, even if they were previously imported</span>
                   </label>
-                  <label className="flex items-center gap-3 text-sm cursor-pointer select-none">
+                  <label className="flex items-center gap-3 text-data cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={refreshIOCs}
@@ -497,11 +496,11 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       )}
 
       {startError && (
-        <div className="flex items-start gap-3 text-danger bg-danger/10 border border-danger/30 rounded-xl p-4 sm:p-5 text-sm shadow-elevation-1">
+        <div className="flex items-start gap-3 text-danger bg-danger/10 border border-danger/30 rounded-xl p-4 sm:p-5 text-data shadow-elevation-1">
           <AlertCircle size="1.25rem" className="shrink-0 mt-1" />
           <div>
-            <p className="font-medium">Failed to start preparation</p>
-            <p className="text-xs text-danger/80 mt-1">{startError}</p>
+            <p>Failed to start preparation</p>
+            <p className="text-danger/80 mt-1">{startError}</p>
           </div>
         </div>
       )}
@@ -517,8 +516,8 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
           ) : (
             <XCircle className="text-danger shrink-0 mt-1" size="1.25rem" />
           )}
-          <div className="text-sm">
-            <p className={failedCount === 0 ? 'text-accent font-semibold' : 'text-danger font-semibold'}>
+          <div className="text-data">
+            <p className={failedCount === 0 ? 'text-accent' : 'text-danger'}>
               {failedCount === 0
                 ? `Analysis completed for all ${doneCount} backup${doneCount === 1 ? '' : 's'}.`
                 : `${doneCount} of ${runProgress.order.length} backup${
@@ -526,7 +525,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                   } finished; ${failedCount} couldn't be completed.`}
             </p>
             {!finishResult.success && finishResult.error && (
-              <p className="text-muted-foreground text-xs mt-1">{finishResult.error}</p>
+              <p className="text-muted-foreground mt-1">{finishResult.error}</p>
             )}
           </div>
         </div>
@@ -535,29 +534,29 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       {(isRunning || logLines.length > 0) && <TerminalLog lines={logLines} live={isRunning} />}
 
       {finishResult && runProgress && doneCount > 0 && lastRunWorkspace && (
-        <div className="bg-surface shadow-elevation-2 rounded-xl p-6">
+        <div className="bg-surface shadow-elevation-1 rounded-xl p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 rounded-md bg-accent/10 text-accent">
               <Microscope size="1.25rem" />
             </div>
             <div>
-              <h3 className="font-display text-label text-foreground">Run forensic analysis</h3>
-              <p className="text-xs text-muted-foreground">Examine prepared data for threat indicators and timeline anomalies</p>
+              <h2 className="font-display text-heading text-foreground">Run Forensic Analysis</h2>
+              <p className="text-data text-muted-foreground">Examine prepared data for threat indicators and timeline anomalies.</p>
             </div>
           </div>
 
           {!analysisRunning && !analysisResult && (
             <div className="mt-4">
-              <p className="text-sm text-foreground/80 leading-relaxed mb-4">
-                Run forensic analysis on the {doneCount} prepared backup{doneCount === 1 ? '' : 's'} to find indicators,
+              <p className="text-data text-foreground/80 mb-4">
+                Run forensic analysis on the {doneCount} prepared backup{doneCount === 1 ? '' : 's'} to find indicators
                 and timeline anomalies.
               </p>
               <Button onClick={handleStartAnalysis}>
                 <Microscope size="1rem" />
-                Run forensic analysis on {doneCount} backup{doneCount === 1 ? '' : 's'}
+                Analyze {doneCount} Backup{doneCount === 1 ? '' : 's'}
               </Button>
               {analysisStartError && (
-                <div className="flex items-center gap-1.5 text-sm text-danger mt-3">
+                <div className="flex items-center gap-1.5 text-data text-danger mt-3">
                   <AlertCircle size="1rem" />
                   <span>{analysisStartError}</span>
                 </div>
@@ -567,9 +566,9 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
 
           {analysisRunning && (
             <div className="flex items-center justify-between gap-3 py-3">
-              <div className="flex items-center gap-1.5 text-sm text-flag">
+              <div className="flex items-center gap-1.5 text-data text-flag">
                 <Loader className="text-flag" />
-                <span>{analysisCancelling ? 'Stopping analysis...' : 'Examining the imported evidence...'}</span>
+                <span>{analysisCancelling ? 'Stopping analysis…' : 'Examining the imported evidence…'}</span>
               </div>
               {/* EPOCH-305: always available while running, so a stalled or
                * abnormally long run can be broken out of without restarting
@@ -583,7 +582,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                 disabled={analysisCancelling}
               >
                 <XCircle size="0.875rem" />
-                {analysisCancelling ? 'Stopping...' : 'Cancel'}
+                {analysisCancelling ? 'Stopping…' : 'Cancel'}
               </Button>
             </div>
           )}
@@ -592,11 +591,11 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
             <div>
               {analysisResult.success && analysisFailedCount === 0 ? (
                 <div>
-                  <p className="text-sm text-accent flex items-center gap-1.5 mb-3">
+                  <p className="text-data text-accent flex items-center gap-1.5 mb-3">
                     <CheckCircle2 size="1rem" /> Analysis complete.
                   </p>
                   {analysisResult.analysis && (
-                    <p className="text-xs text-muted-foreground mb-3">
+                    <p className="text-data text-muted-foreground mb-3">
                       {analysisResult.analysis.filter((result) => result.status === 'succeeded').length} investigation
                       {analysisResult.analysis.filter((result) => result.status === 'succeeded').length === 1 ? '' : 's'}
                       analyzed
@@ -607,13 +606,13 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                     </p>
                   )}
                   <Button onClick={onAnalysisComplete}>
-                    View investigation
+                    View Investigation
                     <ArrowRight size="1rem" />
                   </Button>
                 </div>
               ) : (
                 <div>
-                  <p className="text-sm text-danger flex items-center gap-1.5">
+                  <p className="text-data text-danger flex items-center gap-1.5">
                     <XCircle size="1rem" />
                     {/* EPOCH-305: cancelled/timedOut/interrupted all reach
                      * this same branch (success: false) -- distinguish them
@@ -627,7 +626,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                           : `Analysis failed${analysisResult.error ? `: ${analysisResult.error}` : '.'}`}
                   </p>
                   {analysisResult.analysis && (
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-data text-muted-foreground mt-1">
                       {analysisResult.analysis.filter((result) => result.status === 'failed').length} investigation
                       {analysisResult.analysis.filter((result) => result.status === 'failed').length === 1 ? '' : 's'}
                       need attention.
@@ -635,8 +634,8 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
                   )}
                   {/* "Try again" reads as an inline link (accent color, underline-on-hover),
                       not a restatement of `ghost` -- deferred per Button.tsx's header note. */}
-                  <button onClick={handleStartAnalysis} className="text-xs text-accent hover:underline mt-2">
-                    Try again
+                  <button onClick={handleStartAnalysis} className="text-label text-accent hover:underline mt-2">
+                    Try Again
                   </button>
                 </div>
               )}
@@ -654,7 +653,7 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       {!selectedPath && (
         <div className="flex items-start gap-4 bg-surface-raised/40 shadow-elevation-1 rounded-xl p-4 sm:p-5">
           <AlertCircle className="text-accent shrink-0 mt-1" size="1.125rem" />
-          <p className="text-xs text-muted-foreground leading-relaxed">
+          <p className="text-data text-muted-foreground">
             <strong className="text-foreground font-semibold">Tip:</strong> Connect an iPhone by USB to import a fresh backup,
             or choose an existing backup folder from your computer.
           </p>
@@ -664,10 +663,10 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
       {pendingPasswordFor && (
         <div className="fixed inset-0 bg-background/80 backdrop-blur-xs flex items-center justify-center z-50">
           <div className="bg-surface shadow-elevation-3 rounded-xl p-6 w-full max-w-sm">
-            <h3 className="font-display text-label mb-1 text-foreground">Password required</h3>
-            <p className="text-sm text-muted-foreground mb-4">
+            <h2 className="font-display text-heading mb-1 text-foreground">Password Required</h2>
+            <p className="text-data text-muted-foreground mb-4">
               The selected backup requires its password for{' '}
-              <span className="font-mono text-foreground font-medium">{pendingPasswordFor}</span>.
+              <span className="font-mono text-foreground">{pendingPasswordFor}</span>.
             </p>
             <input
               type="password"
@@ -676,12 +675,12 @@ export function WorkspaceView({ onAnalysisComplete }: WorkspaceViewProps) {
               onKeyDown={(e) => e.key === 'Enter' && !submittingPassword && handleSubmitPassword()}
               autoFocus
               disabled={submittingPassword}
-              className="w-full bg-surface-raised border border-border focus:border-accent focus:outline-hidden rounded-lg px-4 py-3 text-sm font-mono text-foreground mb-4 disabled:opacity-50 transition-colors"
+              className="w-full bg-surface-raised border border-border focus:border-accent focus:outline-hidden rounded-lg px-4 py-3 text-data font-mono text-foreground mb-4 disabled:opacity-50 transition-colors"
             />
             <Button
               onClick={handleSubmitPassword}
               loading={submittingPassword}
-              loadingText="Submitting..."
+              loadingText="Submitting…"
               className="w-full"
             >
               Continue

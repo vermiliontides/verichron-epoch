@@ -29,7 +29,7 @@ export function ViewLayout({ title, titleAside, description, width = 'full', cla
           {title}
           {titleAside}
         </h1>
-        {description && <p className="text-sm text-muted-foreground leading-relaxed mt-2">{description}</p>}
+        {description && <p className="text-data text-muted-foreground mt-2">{description}</p>}
       </header>
       <div className={cn('flex flex-col flex-1 min-h-0', className)}>{children}</div>
     </div>

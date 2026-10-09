@@ -68,17 +68,19 @@
                         0 2px 6px hsl(var(--shadow-tint) / 0.35);
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: var(--font-sans);
-  background: var(--color-background);
-  color: var(--color-foreground);
-  overflow: hidden;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* Element defaults live in @layer base, below Tailwind's utilities (EPOCH-464).
+   Unlayered rules outrank every layered one, so a rule here outside a layer
+   would override utilities whatever their specificity: an unlayered
+   `* { margin: 0; padding: 0 }` reset did exactly that, and no padding,
+   margin or space-* utility ever applied. Tailwind's preflight already
+   resets margin, padding and box-sizing on every element. */
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-background);
+    color: var(--color-foreground);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }

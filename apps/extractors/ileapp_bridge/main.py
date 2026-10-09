@@ -20,20 +20,19 @@ from etl_run import ETLRunResult
 from normalized_record import NormalizedRecord, SourceType
 
 try:
-    from .lava import Artifact, ArtifactError, ArtifactRows, LavaOutput, check_tables, open_database, read_artifact, read_manifest
+    from .lava import Artifact, ArtifactRows, LavaOutput, check_tables, open_database, read_artifact, read_manifest
 except ImportError:
-    from lava import Artifact, ArtifactError, ArtifactRows, LavaOutput, check_tables, open_database, read_artifact, read_manifest
+    from lava import Artifact, ArtifactRows, LavaOutput, check_tables, open_database, read_artifact, read_manifest
 
 import psycopg2
 
-#: Keys this stage adds to every record's fields beside the row's own headers.
-METADATA_KEYS = ("engine", "source_artifact", "module", "category", "source_path")
 SAMPLE_ROWS = 10
 
 
 def build_records(read: ArtifactRows) -> list[NormalizedRecord]:
     """One record per row: the row under iLEAPP's original headers, plus where
-    it came from. event_time is the artifact's declared time (lava.py)."""
+    it came from. event_time is the artifact's declared time, and lava.py has
+    already refused headers that would clash with these keys."""
     artifact = read.artifact
     metadata = {
         "engine": "iLEAPP",
@@ -42,9 +41,6 @@ def build_records(read: ArtifactRows) -> list[NormalizedRecord]:
         "category": artifact.category,
         "source_path": read.source_path,
     }
-    clashing = sorted(h for h in artifact.column_map.values() if h in metadata)
-    if clashing:
-        raise ArtifactError(f"{artifact.name}: header(s) {', '.join(clashing)} clash with this stage's own field names")
     return [
         NormalizedRecord(source_type=SourceType.ILEAPP_RECORD, event_time=when, fields={**metadata, **row})
         for row, when in zip(read.rows, read.event_times)

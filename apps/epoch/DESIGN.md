@@ -179,9 +179,10 @@ content edge or the title (EPOCH-464).
   scrollport is bounded by the layout, never by a `calc(100vh - …)` constant.
 - **No data:** every state with nothing to show (nothing selected, still
   loading, nothing found, evidence not registered) is an `EmptyState`
-  (`components/ui/EmptyState.tsx`): centered in the space it fills, a muted
-  icon (or a spinner while loading), the state in one `text-data` line, and an
-  optional detail. A view never shows a bare line of text for these. Errors
+  (`components/ui/EmptyState.tsx`): centered in the space it fills, its icon
+  (or a spinner while loading) in an accent chip (`bg-accent/10 text-accent`,
+  the same chip as New Investigation's panels), the state in one `text-data`
+  line in the foreground color, and an optional muted detail. A view never shows a bare line of text for these. Errors
   are not empty states: they use the flag banner (§1).
 
 ## 7. Capitalization and wording — names are Title Case, sentences are not

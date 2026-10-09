@@ -108,10 +108,12 @@ knowledge_base:
       - "packages/contracts/EXTRACTOR_CONTRACT.md"
       - files: "apps/epoch/DESIGN.md"
         applyTo: "apps/epoch/**"
+  # Never connected: the Linear workspace is private and this repository is
+  # public, so ticket content must not reach public review comments. The
+  # integration also needs a paid CodeRabbit plan. Reviews get ticket context
+  # from the PR description ("Resolves EPOCH-<n>") instead.
   linear:
-    usage: auto
-    team_keys:
-      - "VER"
+    usage: disabled
 
 chat:
   auto_reply: true

@@ -50,5 +50,3 @@ pnpm --filter @verichron/orchestrator test     # needs TEST_DATABASE_URL (a thro
 | Discovery checks `stage.json` by hand instead of against the schema | EPOCH-444 |
 | Run ids aren't reported to the app | EPOCH-443 |
 | The database URL is passed to stages on the command line | EPOCH-423 |
-| `src/resultsPath.ts` is dead code | EPOCH-427 |
-| `analysis-summary.json` and `investigation_report.md` committed in this directory are stale output | EPOCH-409 |

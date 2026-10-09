@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import posixpath
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -280,20 +281,39 @@ def unix_utc(value: Any) -> datetime | None:
 def evidence_relative(artifact: Artifact, output: LavaOutput) -> str | None:
     """The artifact's source file relative to the evidence (R7). iLEAPP
     records it relative to the backup root, or as an absolute path under the
-    input it was given (`param_input`) or under its own copy of it (`data/`)."""
+    input it was given (`param_input`) or under its own copy of it (`data/`).
+
+    Paths are normalized lexically (they name files on the machine iLEAPP ran
+    on, so the filesystem is not consulted) before they are checked: `..`
+    can't climb out of the evidence by being written inside a path that only
+    looks contained. A path that escapes, or names no file, fails its
+    artifact."""
     source = artifact.source_path
     if not source:
         return None
-    path = PurePosixPath(source)
-    if not path.is_absolute():
-        return str(path)
-    for root in (output.input_path, str(PurePosixPath(output.manifest.get("param_output") or "") / "data")):
-        if root and root != "/" and path.is_relative_to(PurePosixPath(root)):
-            return str(path.relative_to(PurePosixPath(root)))
+    path = posixpath.normpath(source)
+    if not posixpath.isabs(path):
+        return _within_evidence(artifact, source, path)
+    roots = (output.input_path, posixpath.join(output.manifest.get("param_output") or "", "data"))
+    for root in roots:
+        root = posixpath.normpath(root) if root else ""
+        if posixpath.isabs(root) and root != "/" and PurePosixPath(path).is_relative_to(root):
+            return _within_evidence(artifact, source, posixpath.relpath(path, root))
     raise ArtifactError(
         f"{artifact.name}: source_path {source} is outside the input iLEAPP read ({output.input_path}); "
         "it can't be recorded relative to the evidence"
     )
+
+
+def _within_evidence(artifact: Artifact, source: str, relative: str) -> str:
+    """A normalized relative path, refused if it leaves the evidence or names
+    the evidence root itself rather than a file in it."""
+    if relative == "." or relative == ".." or relative.startswith("../"):
+        raise ArtifactError(
+            f"{artifact.name}: source_path {source} does not name a file inside the evidence; "
+            "it can't be recorded relative to the evidence"
+        )
+    return relative
 
 
 def _quote(identifier: str) -> str:

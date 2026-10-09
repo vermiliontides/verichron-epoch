@@ -268,6 +268,35 @@ def test_absolute_source_paths_are_recorded_relative_to_the_evidence(tmp_path):
         read_one(write_report(tmp_path / "c", elsewhere), SAFARI["name"])
 
 
+@pytest.mark.parametrize(
+    "source_path",
+    [
+        "../outside/History.db",                       # climbs out of a relative path
+        "private/../../outside/History.db",            # climbs out after descending
+        f"{INPUT}/../../etc/passwd",                   # looks under the input, isn't
+        f"{INPUT}/../BK2/Info.plist",                  # another backup's file
+        INPUT,                                         # the evidence root, not a file
+        ".",
+    ],
+)
+def test_a_source_path_that_escapes_the_evidence_fails_the_artifact(tmp_path, source_path):
+    with pytest.raises(ArtifactError, match="source_path"):
+        read_one(write_report(tmp_path / "BK1", dict(SAFARI, source_path=source_path)), SAFARI["name"])
+
+
+@pytest.mark.parametrize(
+    "source_path, recorded",
+    [
+        ("./private/var/mobile/History.db", "private/var/mobile/History.db"),
+        ("private/var/tmp/../mobile/History.db", "private/var/mobile/History.db"),
+        (f"{INPUT}//private/./var/History.db", "private/var/History.db"),
+    ],
+)
+def test_contained_source_paths_are_recorded_normalized(tmp_path, source_path, recorded):
+    read = read_one(write_report(tmp_path / "BK1", dict(SAFARI, source_path=source_path)), SAFARI["name"])
+    assert read.source_path == recorded
+
+
 def test_identical_artifacts_are_one_unit_and_changed_ones_are_new(db, tmp_path):
     first = write_report(tmp_path / "run1", SAFARI)
     again = write_report(tmp_path / "run2", SAFARI)

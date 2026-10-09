@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, FileQuestion, MousePointerClick, ShieldCheck } from 'lucide-react';
 import type { PipelineRunRow, CorrelationPivotRow, CorrelatedContextRow } from '@verichron/etl-db-reader';
 import { CORRELATION_WINDOW_MINUTES } from '@verichron/etl-db-reader';
 import { Badge } from '../components/ui/Badge';
 import { runsApi } from '../api/runs';
 import { ViewLayout } from '../components/layout/ViewLayout';
+import { EmptyState } from '../components/ui/EmptyState';
 
 const IOC_SOURCE_TYPES = ['mvt_ioc_detection', 'timestamp_anomaly'] as const;
 type IocSourceType = (typeof IOC_SOURCE_TYPES)[number];
@@ -92,19 +93,25 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun }) => {
   return (
     <ViewLayout title="Indicator Matches">
       {!selectedRun ? (
-        <p className="text-muted-foreground text-data">Select an investigation first.</p>
+        <EmptyState
+          icon={MousePointerClick}
+          title="No investigation selected"
+          detail="Select an investigation in Investigations to see its indicator matches."
+        />
       ) : !selectedRun.evidence_id ? (
-        <p className="text-muted-foreground text-data">
-          This investigation's evidence isn't registered yet, so its facts haven't been read. This is not the same as finding nothing.
-        </p>
+        <EmptyState icon={FileQuestion} title="Evidence not registered" detail="This investigation's evidence isn't registered yet, so its facts haven't been read. This is not the same as finding nothing." />
       ) : pivotsError ? (
-        <p className="text-muted-foreground text-data">Could not load indicator matches: {pivotsError}</p>
+        <div className="text-flag bg-flag/10 border border-flag/30 shadow-elevation-1 rounded-md px-4 py-3 text-data">
+          Could not load indicator matches: {pivotsError}
+        </div>
       ) : !pivotsLoaded ? (
-        <p className="text-muted-foreground text-data">Loading indicator matches…</p>
+        <EmptyState loading title="Loading indicator matches…" />
       ) : iocRecords.length === 0 ? (
-        <p className="text-muted-foreground text-data">
-          No indicator matches or timing anomalies were found for this investigation.
-        </p>
+        <EmptyState
+          icon={ShieldCheck}
+          title="No indicator matches"
+          detail="No indicator matches or timing anomalies were found for this investigation."
+        />
       ) : (
         <div className="flex flex-col gap-3">
           {iocRecords.map((rec) => {
@@ -162,7 +169,7 @@ export const IocsView: React.FC<IocsViewProps> = ({ selectedRun }) => {
                 </div>
                 {expanded && (
                   <div className="shadow-elevation-1/60 p-4">
-                    <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-3">
+                    <p className="text-label uppercase tracking-wide text-muted-foreground mb-3">
                       Nearby events (±{CORRELATION_WINDOW_MINUTES}m)
                     </p>
                     {contextError ? (

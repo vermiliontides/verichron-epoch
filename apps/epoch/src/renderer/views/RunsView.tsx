@@ -8,6 +8,7 @@ import { TerminalLog } from '../components/layout/TerminalLog';
 import { pipelineApi } from '../api/pipeline';
 import { DataTable, type DataTableColumn } from '../components/ui/DataTable';
 import { ViewLayout } from '../components/layout/ViewLayout';
+import { EmptyState } from '../components/ui/EmptyState';
 
 /** Labels for run_completeness states. The state itself comes from the
  * database (EPOCH-404); this view never derives it from stage rows. */
@@ -36,16 +37,6 @@ interface RunsViewProps {
   onSelectRun: (run: PipelineRunRow) => void;
   onRefreshStages?: (runId: string) => void;
   onRefreshRun?: (runId: string) => void | Promise<void>;
-}
-
-function EmptyState({ icon: Icon, title, detail }: { icon: typeof Inbox; title: string; detail?: string }) {
-  return (
-    <div className="h-full flex flex-col items-center justify-center gap-2 text-muted-foreground py-16">
-      <Icon size="1.5rem" strokeWidth={1.5} />
-      <p className="text-data">{title}</p>
-      {detail && <p className="text-data font-mono opacity-80">{detail}</p>}
-    </div>
-  );
 }
 
 function RunsTableSkeleton() {
@@ -270,7 +261,6 @@ export function RunsView({
       }
       className="overflow-hidden"
     >
-
       {error ? (
         <div className="text-flag bg-flag/10 border border-flag/30 rounded-md px-4 py-3 text-data shrink-0">
           {error}
@@ -280,13 +270,11 @@ export function RunsView({
           <RunsTableSkeleton />
         </div>
       ) : runs.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <EmptyState
-            icon={Inbox}
-            title="No investigations yet"
-            detail="Import an iPhone backup or connect a device from New Run to begin."
-          />
-        </div>
+        <EmptyState
+          icon={Inbox}
+          title="No investigations yet"
+          detail="Import an iPhone backup or connect a device from New Run to begin."
+        />
       ) : (
         <div className="flex-1 overflow-hidden rounded-lg shadow-elevation-1 bg-surface border border-border/40">
           <DataTable

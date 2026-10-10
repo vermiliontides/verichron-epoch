@@ -43,7 +43,7 @@ banner gets both, uniformly.
 ## 2. Type scale — four tiers, by role not by size
 
 Each tier is a **composite** Tailwind v4 utility (`text-display`,
-`text-label`, `text-data`) that carries font-size, line-height, and
+`text-heading`, `text-label`, `text-data`) that carries font-size, line-height, and
 font-weight together — never hand-combine `text-base` + `font-medium`
 to approximate one of these; use the named class.
 
@@ -182,8 +182,11 @@ content edge or the title (EPOCH-464).
   (`components/ui/EmptyState.tsx`): centered in the space it fills, its icon
   (or a spinner while loading) in an accent chip (`bg-accent/10 text-accent`,
   the same chip as New Investigation's panels), the state in one `text-data`
-  line in the foreground color, and an optional muted detail. A view never shows a bare line of text for these. Errors
-  are not empty states: they use the flag banner (§1).
+  line in the foreground color, and an optional muted detail. A view never
+  shows a bare line of text for these. One exception: a view that is loading
+  *into a table* shows a skeleton of that table (as `RunsView` does), so the
+  layout doesn't jump from a centered spinner to a full table when the rows
+  arrive. Errors are not empty states: they use the flag banner (§1).
 
 ## 7. Capitalization and wording — names are Title Case, sentences are not
 

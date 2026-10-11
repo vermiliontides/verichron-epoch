@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Terminal,
   Lock,
+  ShieldCheck,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -19,6 +20,7 @@ import { Loader } from '../../components/ui/Loader';
 import { useDevicePull } from '../../hooks/useDevicePull';
 import { PasswordField } from '../../components/ui/PasswordField';
 import { FieldError } from '../../components/ui/FieldError';
+import { ToolSetup } from './ToolSetup';
  
 interface DevicePullPanelProps {
   onBackupPulled: (destDir: string) => void;
@@ -41,9 +43,17 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
     destDir,
     pullProgress,
     pullError,
+    encryptionConsent,
+    cancelEncryptionConsent,
+    deviceAction,
     runCompileFromSource,
-    runHomebrewInstall,
-    homebrewFallbackAvailable,
+    setupStatus,
+    setupRun,
+    setupSteps,
+    setupOutput,
+    setupFailure,
+    setupNote,
+    runSetup,
     handleSelectDestination,
     handlePull,
     checkAvailability,
@@ -83,18 +93,27 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
     }
   };
 
-  const onPullClick = async () => {
+  const onPullClick = async (enableEncryption = false) => {
     if (!password || password.trim() === '') {
-      setPasswordError('A secure decryption password is required to create an encrypted backup.');
+      setPasswordError('A backup password is required.');
       return;
     }
     setPasswordError(null);
+    let result: 'consent-needed' | 'finished' = 'finished';
     try {
-      await handlePull(password);
+      result = await handlePull(password, enableEncryption);
     } finally {
-      setPassword('');
+      // Kept while the user decides whether to turn on encrypted backups.
+      if (result !== 'consent-needed') setPassword('');
     }
   };
+
+  const onCancelConsent = () => {
+    cancelEncryptionConsent();
+    setPassword('');
+  };
+
+  const pullLocked = phase === 'pulling' || encryptionConsent;
 
   if (!sourceId) return null;
  
@@ -120,13 +139,30 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
         )}
       </div>
  
-      {phase === 'checking' && (
+      {phase === 'checking' && !setupStatus && (
         <p className="text-data text-muted-foreground flex items-center gap-2 py-2">
           <Loader className="text-accent" /> Checking for the required tool…
         </p>
       )}
- 
-      {phase === 'unavailable' && toolStatus && !toolStatus.available && (
+
+      {/* Guided setup (Linux, macOS). Stays on screen through the re-check
+          that follows each run, so progress and failures don't flash away. */}
+      {(phase === 'unavailable' || phase === 'checking') && setupStatus && (
+        <ToolSetup
+          status={setupStatus}
+          running={setupRun}
+          steps={setupSteps}
+          output={setupOutput}
+          failure={setupFailure}
+          note={setupNote}
+          onInstallSystem={() => runSetup('install')}
+          onBuild={() => runSetup('build')}
+          onCheckAgain={checkAvailability}
+        />
+      )}
+
+      {/* Windows: the acquisition actions (WSL build). */}
+      {phase === 'unavailable' && !setupStatus && toolStatus && !toolStatus.available && (
         <div>
           {/* Flag banner, standard 1 of 2 in this file -- see the Setup
            * Error card below. Both now share the same treatment
@@ -148,21 +184,6 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                 <div className="flex-1">
                   <p className="text-flag">Setup failed</p>
                   <p className="text-foreground/90 mt-1 font-mono">{acquisitionError}</p>
-                  {homebrewFallbackAvailable && (
-                    <div className="mt-4 pt-4 shadow-elevation-1">
-                      <p className="text-foreground/80 mb-3">
-                        Homebrew is available on this Mac and can install the required libraries directly instead.
-                      </p>
-                      <Button
-                        variant="outline"
-                        tone="danger"
-                        size="sm"
-                        onClick={() => runHomebrewInstall(['libplist', 'libimobiledevice'])}
-                      >
-                        <Wrench size="0.875rem" /> Try Homebrew Instead
-                      </Button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -177,8 +198,6 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                       ? 'Install the Required System Tools'
                       : action.kind === 'compile-from-source'
                       ? 'Set Up iPhone Import Automatically'
-                      : action.kind === 'homebrew-install'
-                      ? 'Install via Homebrew'
                       : 'Use a Verified Tool Package'}
                   </h3>
                   <p className="text-data text-muted-foreground mt-1">
@@ -186,14 +205,9 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                       ? 'Complete this one-time setup in your terminal, then return here to import a backup directly from your iPhone.'
                       : action.kind === 'compile-from-source'
                       ? 'Epoch can build and configure the required components locally on this computer.'
-                      : action.kind === 'homebrew-install'
-                      ? 'Uses your existing Homebrew installation to install libplist and libimobiledevice — usually faster and more reliable than compiling from source.'
                       : 'A verified package can provide the components needed for direct iPhone import.'}
                   </p>
                 </div>
-                {action.kind === 'homebrew-install' && (
-                  <Badge variant="accent" className="shrink-0">Recommended</Badge>
-                )}
               </div>
               
               {action.kind === 'install-instructions' && (
@@ -235,14 +249,6 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
- 
-              {action.kind === 'homebrew-install' && (
-                <div className="mt-4">
-                  <Button onClick={() => runHomebrewInstall(action.formulas)}>
-                    <Wrench size="1rem" /> Install with Homebrew
-                  </Button>
                 </div>
               )}
  
@@ -337,7 +343,7 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
                   variant="outline"
                   size="sm"
                   onClick={handleSelectDestination}
-                  disabled={phase === 'pulling'}
+                  disabled={pullLocked}
                 >
                   <FolderOpen size="0.875rem" />
                   {destDir ? 'Change Destination' : 'Choose Destination'}
@@ -354,16 +360,18 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
               {/* Secure Backup Password Input */}
               <div className="mt-2 pt-3 shadow-elevation-1">
                 <label className="text-label text-foreground mb-1 flex items-center gap-2">
-                  <Lock size="0.875rem" className="text-accent" /> Backup encryption password (required)
+                  <Lock size="0.875rem" className="text-accent" /> Backup password (required)
                 </label>
                 <p className="text-data text-muted-foreground mb-2">
-                  Unencrypted backups omit sensitive artifacts like Keychain and Health data. Epoch will enforce encryption during creation using this password.
+                  Epoch makes encrypted backups only, because unencrypted ones leave out Keychain and Health data. If
+                  this iPhone already makes encrypted backups, enter its backup password. Otherwise, this becomes its
+                  backup password.
                 </p>
                 <PasswordField
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(null); }}
-                  disabled={phase === 'pulling'}
-                  placeholder="Enter temporary backup password"
+                  disabled={pullLocked}
+                  placeholder="Backup password"
                   invalid={!!passwordError}
                 />
                 <FieldError>{passwordError}</FieldError>
@@ -371,9 +379,34 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
             </div>
           )}
  
-          {selectedDevice && destDir && phase !== 'pulled' && (
+          {selectedDevice && encryptionConsent && (
+            <section className="rounded-lg bg-accent/10 border border-accent/30 shadow-elevation-1 p-5 flex flex-col gap-3">
+              <h3 className="flex items-center gap-2 font-display text-heading text-foreground">
+                <ShieldCheck size="1.125rem" className="text-accent" /> Turn On Encrypted Backups?
+              </h3>
+              <p className="text-data text-foreground">
+                Encrypted backups are off on {selectedDevice.name}. To continue, Epoch will turn them on with the
+                password you entered.
+              </p>
+              <ul className="text-data text-muted-foreground list-disc pl-5 flex flex-col gap-1">
+                <li>You'll unlock {selectedDevice.name} and enter its passcode on it to approve the change.</li>
+                <li>The setting stays on after the backup, and later backups of this iPhone use this password.</li>
+                <li>Epoch records the change with this pull.</li>
+              </ul>
+              <div className="flex items-center gap-3 mt-1">
+                <Button onClick={() => onPullClick(true)}>
+                  <ShieldCheck size="1rem" /> Turn On and Continue
+                </Button>
+                <Button variant="outline" onClick={onCancelConsent}>
+                  Cancel
+                </Button>
+              </div>
+            </section>
+          )}
+
+          {selectedDevice && destDir && phase !== 'pulled' && !encryptionConsent && (
             <Button
-              onClick={onPullClick}
+              onClick={() => onPullClick()}
               disabled={!passwordProvided}
               loading={phase === 'pulling'}
               loadingText="Pulling encrypted backup…"
@@ -383,6 +416,22 @@ export function DevicePullPanel({ onBackupPulled }: DevicePullPanelProps) {
             </Button>
           )}
  
+          {deviceAction && phase === 'pulling' && (
+            <div
+              role="alert"
+              className="flex items-center gap-4 bg-accent/10 border-2 border-accent/60 shadow-elevation-2 rounded-lg p-5 mt-5"
+            >
+              <div className="p-3 rounded-full bg-accent/15 text-accent shrink-0">
+                <Smartphone size="1.5rem" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display text-heading text-accent">Action Needed on {selectedDevice?.name ?? 'the iPhone'}</h3>
+                <p className="text-data text-foreground mt-1">{deviceAction}</p>
+              </div>
+              <Loader className="text-accent" />
+            </div>
+          )}
+
           {pullProgress.length > 0 && (
             <pre className="bg-background/90 shadow-elevation-1 rounded-xl p-4 text-data font-mono whitespace-pre-wrap overflow-auto max-h-48 text-foreground/80 mt-5 leading-relaxed">
               {pullProgress.map((p) => p.message).join('\n')}

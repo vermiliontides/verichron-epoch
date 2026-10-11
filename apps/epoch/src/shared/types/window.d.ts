@@ -11,9 +11,13 @@ import type { Backup } from '@verichron/contracts';
 import type {
   BackupProgress,
   DeviceInfo,
+  PullOptions,
   ToolAcquisitionAction,
   ToolAcquisitionCommand,
   ToolAcquisitionResult,
+  ToolSetupEvent,
+  ToolSetupResult,
+  ToolSetupStatus,
   ToolAvailabilityStatus,
 } from './tools';
  
@@ -110,11 +114,16 @@ declare global {
       checkDeviceBackupToolAvailable: (sourceId: string) => Promise<ToolAvailabilityStatus>;
       listConnectedDevices: (sourceId: string) => Promise<DeviceInfo[]>;
       getToolAcquisitionActions: (sourceId: string) => Promise<ToolAcquisitionAction[]>;
-      ßßpullDeviceBackup: (sourceId: string, device: DeviceInfo, destDir: string, password?: string) => Promise<string>;      runToolAcquisitionSteps: (
+      getBackupEncryption: (sourceId: string, device: DeviceInfo) => Promise<boolean>;
+      pullDeviceBackup: (sourceId: string, device: DeviceInfo, destDir: string, options: PullOptions) => Promise<string>;
+      runToolAcquisitionSteps: (
         steps: ToolAcquisitionCommand[],
         installPrefix: string
       ) => Promise<ToolAcquisitionResult>;
-      runHomebrewInstall: (formulas: string[]) => Promise<{ success: boolean }>;
+      getToolSetupStatus: (sourceId: string) => Promise<ToolSetupStatus | null>;
+      installToolSetupRequirements: (sourceId: string) => Promise<ToolSetupResult>;
+      buildToolSetup: (sourceId: string) => Promise<ToolSetupResult>;
+      onToolSetupEvent: (callback: (event: ToolSetupEvent) => void) => () => void;
       onDeviceBackupProgress: (callback: (progress: BackupProgress) => void) => () => void;
       onToolAcquisitionStepStarted: (callback: (label: string) => void) => () => void;
       onToolAcquisitionOutput: (callback: (entry: { step: string; line: string }) => void) => () => void;
